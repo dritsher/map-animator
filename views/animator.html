@@ -177,6 +177,30 @@
         margin-bottom: 6px;
       }
 
+      .tod-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .tod-row input[type="range"] {
+        flex: 1;
+        margin: 0;
+        padding: 0;
+        width: auto;
+        border: none;
+        background: none;
+      }
+
+      .tod-time {
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+        color: #333;
+        min-width: 42px;
+        text-align: right;
+        flex-shrink: 0;
+      }
+
       #progressBar {
         width: 100%;
         height: 6px;
@@ -211,6 +235,17 @@
             <option value="maptiler-satellite">MapTiler Satellite</option>
             <option value="cesium-night">Earth at Night</option>
           </select>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Time of Day</div>
+          <div class="tod-row">
+            <input type="range" id="todSlider" min="0" max="1440" value="720" step="1" />
+            <span class="tod-time" id="todDisplay">12:00</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:11px; color:#aaa; margin-top:2px;">
+            <span>Midnight</span><span>Noon</span><span>Midnight</span>
+          </div>
         </div>
 
         <div class="section">
@@ -249,9 +284,18 @@
           <div class="section-title">Export</div>
           <label style="margin-bottom: 2px;">Resolution</label>
           <select id="resolutionSelect">
-            <option value="1280x720">1280 × 720</option>
-            <option value="1920x1080" selected>1920 × 1080</option>
-            <option value="3840x2160">3840 × 2160</option>
+            <optgroup label="Landscape">
+              <option value="1280x720">1280 × 720 (720p)</option>
+              <option value="1920x1080" selected>1920 × 1080 (1080p)</option>
+              <option value="3840x2160">3840 × 2160 (4K)</option>
+            </optgroup>
+            <optgroup label="Vertical">
+              <option value="720x1280">720 × 1280 (9:16 720p)</option>
+              <option value="1080x1920">1080 × 1920 (9:16 1080p)</option>
+              <option value="2160x3840">2160 × 3840 (9:16 4K)</option>
+              <option value="1080x1350">1080 × 1350 (4:5 Instagram)</option>
+              <option value="1080x1080">1080 × 1080 (1:1 Square)</option>
+            </optgroup>
           </select>
           <label style="margin-bottom: 2px;">Frame rate</label>
           <select id="framerateSelect">
@@ -559,38 +603,68 @@
         const fps    = parseInt(document.getElementById("framerateSelect").value);
         const dur    = totalDuration();
         const total  = Math.ceil(dur * fps);
+        const btn    = document.getElementById("exportBtn");
 
-        setViewerResolution(w, h);
-
-        setStatus(`Exporting ${total} frames at ${w}×${h}…`);
-        const btn = document.getElementById("exportBtn");
         btn.disabled = true;
+        setViewerResolution(w, h);
+        await new Promise(r => setTimeout(r, 100)); // allow resize repaint
 
-        await new Promise(r => setTimeout(r, 100)); // allow repaint
+        // 1. Start session
+        setStatus("Starting export session…");
+        const startRes = await fetch("/api/export/start", { method: "POST" });
+        const { sessionId } = await startRes.json();
 
+        // 2. Render and upload each frame
         for (let f = 0; f < total; f++) {
           const t = f / fps;
           const state = interpolateCameraAtTime(t);
           if (state) setCameraState(state);
 
+          // Wait for Cesium to finish rendering this frame
           await new Promise(r => viewer.scene.postRender.addEventListener(function once() {
             viewer.scene.postRender.removeEventListener(once);
             r();
           }));
 
-          const canvas = viewer.scene.canvas;
-          const dataUrl = canvas.toDataURL("image/png");
-          const a = document.createElement("a");
-          a.href = dataUrl;
-          a.download = `frame_${String(f).padStart(5, "0")}.png`;
-          a.click();
+          const dataUrl = viewer.scene.canvas.toDataURL("image/png");
 
-          setStatus(`Exporting frame ${f + 1} / ${total}…`);
-          await new Promise(r => setTimeout(r, 16));
+          const res = await fetch("/api/export/frame", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sessionId, frameIndex: f, dataUrl }),
+          });
+          if (!res.ok) {
+            setStatus("Frame upload failed. Export aborted.");
+            btn.disabled = false;
+            return;
+          }
+
+          setStatus(`Capturing frame ${f + 1} / ${total}…`);
         }
 
+        // 3. Run ffmpeg on the server
+        setStatus("Rendering MP4 with ffmpeg…");
+        const renderRes = await fetch("/api/export/render", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId, fps }),
+        });
+        if (!renderRes.ok) {
+          const err = await renderRes.json();
+          setStatus("ffmpeg failed: " + (err.detail || err.error));
+          btn.disabled = false;
+          return;
+        }
+
+        // 4. Download the MP4
+        setStatus("Downloading animation.mp4…");
+        const a = document.createElement("a");
+        a.href = `/api/export/download/${sessionId}`;
+        a.download = "animation.mp4";
+        a.click();
+
         btn.disabled = false;
-        setStatus(`Export complete — ${total} frames.`);
+        setStatus("Export complete.");
       }
 
       function setViewerResolution(w, h) {
@@ -600,8 +674,30 @@
         viewer.resize();
       }
 
+      // ── Time of Day ─────────────────────────────────────────────────────────
+      function setTimeOfDay(totalMinutes) {
+        if (!viewer) return;
+        // Use a fixed reference date (J2000 epoch day) and offset by minutes
+        const baseJd = Cesium.JulianDate.fromIso8601("2024-06-21T00:00:00Z");
+        const jd = Cesium.JulianDate.addSeconds(baseJd, totalMinutes * 60, new Cesium.JulianDate());
+        viewer.clock.currentTime = jd;
+        viewer.clock.shouldAnimate = false;
+      }
+
+      function todMinutesToDisplay(totalMinutes) {
+        const h = Math.floor(totalMinutes / 60) % 24;
+        const m = totalMinutes % 60;
+        return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+      }
+
       // ── Event Listeners ─────────────────────────────────────────────────────
       document.getElementById("basemapSelect").addEventListener("change", e => applyBasemap(e.target.value));
+
+      document.getElementById("todSlider").addEventListener("input", (e) => {
+        const minutes = parseInt(e.target.value);
+        document.getElementById("todDisplay").textContent = todMinutesToDisplay(minutes);
+        setTimeOfDay(minutes);
+      });
 
       document.getElementById("addKeyframeBtn").addEventListener("click", addKeyframe);
 
@@ -632,6 +728,7 @@
       renderKeyframeList();
       updateProgressUI(0);
       initViewer();
+      setTimeOfDay(720); // default noon
     </script>
   </body>
 </html>
