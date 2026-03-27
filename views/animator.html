@@ -91,15 +91,10 @@
         gap: 4px;
       }
 
-      #highlightList li {
+      #highlightList {
         display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 5px 8px;
-        background: #f5f5f5;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        font-size: 12px;
+        flex-direction: column;
+        gap: 4px;
       }
 
       .hl-swatch {
@@ -133,7 +128,63 @@
 
       .hl-remove:hover { color: #e05; background: none; }
 
-      .hl-mode {
+      /* ── Highlight cards ──────────────────────────────────────────────────── */
+      .hl-card {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        overflow: hidden;
+        background: #f5f5f5;
+        font-size: 12px;
+      }
+      .hl-card-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 8px;
+        background: #ececec;
+      }
+      .hl-card-body {
+        padding: 4px 8px 5px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .hl-ctrl-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .hl-ctrl-label {
+        width: 46px;
+        flex-shrink: 0;
+        font-size: 11px;
+        color: #666;
+      }
+      .hl-ctrl-slider {
+        flex: 1;
+        margin: 0;
+        padding: 0;
+        border: none;
+        background: none;
+        accent-color: #667;
+      }
+      .hl-ctrl-pct {
+        width: 28px;
+        text-align: right;
+        flex-shrink: 0;
+        font-size: 11px;
+        color: #888;
+      }
+      /* beats global input[type="number"] specificity (0,1,1) */
+      #highlightList input[type="number"].hl-ctrl-width {
+        width: 42px;
+        flex-shrink: 0;
+        padding: 2px 4px;
+        font-size: 11px;
+        margin: 0;
+        text-align: center;
+      }
+      .hl-toggle {
         font-size: 10px;
         padding: 2px 5px;
         border: 1px solid #bbb;
@@ -145,16 +196,82 @@
         margin: 0;
         color: #444;
       }
-      .hl-mode:hover { background: #dde; border-color: #99b; color: #224; }
-      .hl-mode-active { background: #334; border-color: #667; color: #ddf; }
-      .hl-mode-active:hover { background: #445; border-color: #778; color: #eef; }
+      .hl-toggle:hover { background: #dde; border-color: #99b; color: #224; }
+      .hl-toggle-active { background: #334; border-color: #667; color: #ddf; }
+      .hl-toggle-active:hover { background: #445; border-color: #778; color: #eef; }
 
-      .hl-fill {
-        width: 52px;
-        flex-shrink: 0;
-        cursor: pointer;
-        accent-color: #667;
+      /* ── Region groups ─────────────────────────────────────────────────────── */
+      #groupCreateRow {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      #groupNameInput { flex: 1; margin: 0; }
+      #addGroupBtn    { width: auto; margin: 0; padding: 6px 10px; flex-shrink: 0; }
+
+      .group-card {
+        border: 1px solid #d0d0d0;
+        border-radius: 4px;
+        margin-bottom: 6px;
+        overflow: hidden;
+      }
+      .group-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 8px;
+        background: #ececec;
+        font-size: 12px;
+      }
+      .group-name { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .group-body { padding: 6px 8px; background: #fafafa; }
+      .group-add-row { display: flex; gap: 6px; margin-bottom: 5px; }
+      input.group-region-search { flex: 1; margin: 0; padding: 4px 6px; font-size: 12px; }
+      button.group-add-btn { width: auto; margin: 0; padding: 4px 8px; flex-shrink: 0; font-size: 12px; }
+      .group-members { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+      .group-members li { display: flex; align-items: center; gap: 4px; padding: 2px 4px; font-size: 11px; color: #555; }
+      .group-member-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+      /* ── City list ─────────────────────────────────────────────────────────── */
+      #citySearchRow {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      #citySearch { flex: 1; margin: 0; }
+      #addCityBtn {
+        width: auto;
         margin: 0;
+        padding: 6px 10px;
+        flex-shrink: 0;
+      }
+
+      #cityList {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      #cityList li {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 8px;
+        background: #f5f5f5;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 12px;
+      }
+      /* ID + element + attribute beats the global input[type="number"] rule */
+      #cityList input[type="number"] {
+        width: 38px;
+        flex-shrink: 0;
+        padding: 2px 4px;
+        font-size: 11px;
+        margin: 0;
+        text-align: center;
       }
 
       .section-title {
@@ -235,6 +352,22 @@
         flex-shrink: 0;
       }
 
+      .kf-mode {
+        font-size: 9px;
+        padding: 1px 4px;
+        border: 1px solid #bbb;
+        border-radius: 3px;
+        background: #e8e8e8;
+        color: #555;
+        cursor: pointer;
+        flex-shrink: 0;
+        width: auto;
+        margin: 0;
+        line-height: 1.4;
+      }
+      .kf-mode:hover { background: #dde; border-color: #99b; color: #224; }
+      .kf-mode-change { background: #334; border-color: #667; color: #ddf; }
+
       #keyframeList li .kf-delete {
         color: #aaa;
         cursor: pointer;
@@ -270,6 +403,71 @@
         margin-bottom: 6px;
       }
 
+      /* ── Looks ───────────────────────────────────────────────────────────── */
+      .looks-row {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        margin-bottom: 6px;
+      }
+      #looksSelect { flex: 1; margin: 0; }
+      #saveLookBtn, #deleteLookBtn {
+        width: auto;
+        margin: 0;
+        padding: 5px 8px;
+        flex-shrink: 0;
+        font-size: 12px;
+      }
+      #deleteLookBtn { color: #c00; border-color: #c00; }
+      #deleteLookBtn:hover { background: #fee; }
+      .looks-save-row {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      #lookNameInput { flex: 1; margin: 0; font-size: 12px; padding: 5px 7px; }
+      #confirmSaveLookBtn { width: auto; margin: 0; padding: 5px 10px; flex-shrink: 0; font-size: 12px; }
+      .looks-defaults {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        margin-top: 5px;
+        font-size: 11px;
+        color: #666;
+      }
+      .looks-defaults label { margin: 0; font-size: 11px; color: #666; }
+      .looks-defaults input[type="color"] {
+        width: 28px;
+        height: 22px;
+        padding: 1px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        cursor: pointer;
+        margin: 0;
+      }
+
+      .bm-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 3px;
+      }
+      .bm-row label {
+        width: 54px;
+        flex-shrink: 0;
+        margin: 0;
+        font-size: 11px;
+        color: #666;
+      }
+      .bm-row input[type="range"] { flex: 1; margin: 0; }
+      .bm-row .bm-val {
+        width: 32px;
+        text-align: right;
+        flex-shrink: 0;
+        font-size: 11px;
+        color: #888;
+      }
+
       .tod-row {
         display: flex;
         align-items: center;
@@ -293,6 +491,38 @@
         text-align: right;
         flex-shrink: 0;
       }
+
+      /* ── Scene mode toggle ───────────────────────────────────────────────── */
+      .scene-mode-row {
+        display: flex;
+        gap: 0;
+        margin-top: 8px;
+        border: 1px solid #bbb;
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      .scene-mode-btn {
+        flex: 1;
+        padding: 5px 4px;
+        font-size: 11px;
+        border: none;
+        border-right: 1px solid #bbb;
+        border-radius: 0;
+        background: #eee;
+        color: #444;
+        cursor: pointer;
+        margin: 0;
+        width: auto;
+        text-align: center;
+      }
+      .scene-mode-btn:last-child { border-right: none; }
+      .scene-mode-btn:hover { background: #e0e0e0; }
+      .scene-mode-btn.active {
+        background: #334;
+        color: #ddf;
+        border-right-color: #556;
+      }
+      .scene-mode-btn.active:hover { background: #445; }
 
       #progressBar {
         width: 100%;
@@ -328,6 +558,57 @@
             <option value="maptiler-satellite">MapTiler Satellite</option>
             <option value="cesium-night">Earth at Night</option>
           </select>
+          <div style="margin-top:6px;">
+            <div class="bm-row">
+              <label for="bm-brightness">Brightness</label>
+              <input type="range" id="bm-brightness" min="0" max="200" step="5" value="100" />
+              <span class="bm-val" id="bm-brightness-val">100%</span>
+            </div>
+            <div class="bm-row">
+              <label for="bm-contrast">Contrast</label>
+              <input type="range" id="bm-contrast" min="0" max="200" step="5" value="100" />
+              <span class="bm-val" id="bm-contrast-val">100%</span>
+            </div>
+            <div class="bm-row">
+              <label for="bm-saturation">Saturation</label>
+              <input type="range" id="bm-saturation" min="0" max="200" step="5" value="100" />
+              <span class="bm-val" id="bm-saturation-val">100%</span>
+            </div>
+            <div class="bm-row">
+              <label for="bm-hue">Hue</label>
+              <input type="range" id="bm-hue" min="-180" max="180" step="5" value="0" />
+              <span class="bm-val" id="bm-hue-val">0°</span>
+            </div>
+            <div class="bm-row">
+              <label for="bm-gamma">Gamma</label>
+              <input type="range" id="bm-gamma" min="20" max="200" step="5" value="100" />
+              <span class="bm-val" id="bm-gamma-val">1.00</span>
+            </div>
+            <button id="bm-reset" style="margin-top:4px;font-size:11px;padding:3px 8px;width:auto;margin-bottom:0;">Reset</button>
+          </div>
+          <div class="scene-mode-row" style="margin-top:10px;">
+            <button class="scene-mode-btn active" data-mode="3d">🌐 Globe</button>
+            <button class="scene-mode-btn" data-mode="columbus">◎ Columbus</button>
+            <button class="scene-mode-btn" data-mode="2d">🗺 Flat 2D</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Looks</div>
+          <div class="looks-row">
+            <select id="looksSelect"></select>
+            <button id="deleteLookBtn" title="Delete this look">×</button>
+          </div>
+          <div class="looks-save-row">
+            <input type="text" id="lookNameInput" placeholder="Save current as…" autocomplete="off" />
+            <button id="confirmSaveLookBtn">Save</button>
+          </div>
+          <div class="looks-defaults">
+            <label>Region</label>
+            <input type="color" id="defaultRegionColorPicker" value="#ff9900" title="Default color for new regions" />
+            <label style="margin-left:4px;">City</label>
+            <input type="color" id="defaultCityColorPicker" value="#ffffff" title="Default color for new cities" />
+          </div>
         </div>
 
         <div class="section">
@@ -343,17 +624,38 @@
 
         <div class="section">
           <div class="section-title">Regions</div>
-          <label>
-            <input type="checkbox" id="showBorders" checked />
-            Show all borders
-          </label>
+          <div class="tod-row">
+            <span style="font-size:12px;color:#555;white-space:nowrap;">Borders</span>
+            <input type="range" id="borderOpacity" min="0" max="100" value="70" step="5" />
+            <span id="borderOpacityVal" style="font-size:11px;color:#888;width:28px;text-align:right;">70%</span>
+          </div>
           <div id="regionSearchRow" style="margin-top:8px;">
             <input type="text" id="regionSearch" list="regionDatalist"
               placeholder="Search country or state…" autocomplete="off" />
             <datalist id="regionDatalist"></datalist>
             <button id="addRegionBtn">+</button>
           </div>
-          <ul id="highlightList"></ul>
+          <div id="highlightList"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Region Groups</div>
+          <div id="groupCreateRow">
+            <input type="text" id="groupNameInput" placeholder="Group name…" autocomplete="off" />
+            <button id="addGroupBtn">+ New</button>
+          </div>
+          <div id="groupList"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Cities</div>
+          <div id="citySearchRow">
+            <input type="text" id="citySearch" list="cityDatalist"
+              placeholder="Search city…" autocomplete="off" />
+            <datalist id="cityDatalist"></datalist>
+            <button id="addCityBtn">+</button>
+          </div>
+          <ul id="cityList"></ul>
         </div>
 
         <div class="section">
@@ -481,12 +783,180 @@
         return await Cesium.IonImageryProvider.fromAssetId(2);
       }
 
+      let basemapLayer = null;
+      const bmAdjust = { brightness: 1.0, contrast: 1.0, saturation: 1.0, hue: 0.0, gamma: 1.0 };
+
+      function applyBmAdjust() {
+        if (!basemapLayer) return;
+        basemapLayer.brightness = bmAdjust.brightness;
+        basemapLayer.contrast   = bmAdjust.contrast;
+        basemapLayer.saturation = bmAdjust.saturation;
+        basemapLayer.hue        = Cesium.Math.toRadians(bmAdjust.hue);
+        basemapLayer.gamma      = bmAdjust.gamma;
+      }
+
       async function applyBasemap(basemap) {
         if (!viewer) return;
         const provider = await createImageryProviderForBasemap(basemap);
         viewer.imageryLayers.removeAll();
-        viewer.imageryLayers.addImageryProvider(provider);
+        basemapLayer = viewer.imageryLayers.addImageryProvider(provider);
+        applyBmAdjust();
         currentBasemap = basemap;
+      }
+
+      // ── Looks / Presets ─────────────────────────────────────────────────────
+      // A look captures basemap + adjustments + border opacity + default colors.
+      // Values mirror bmAdjust: brightness/contrast/saturation 0-2, hue in degrees, gamma 0-2.
+
+      let defaultRegionColor = "#ff9900";
+      let defaultCityColor   = "#ffffff";
+      let defaultCityDotSize = 8;
+
+      const BUILT_IN_LOOKS = [
+        {
+          name: "Default",
+          basemap: "cesium-default",
+          brightness: 1.0, contrast: 1.0, saturation: 1.0, hue: 0, gamma: 1.0,
+          borderOpacity: 0.7,
+          regionColor: "#ff9900", cityColor: "#ffffff", cityDotSize: 8,
+        },
+        {
+          name: "Dark",
+          basemap: "cesium-default",
+          brightness: 0.45, contrast: 1.1, saturation: 0.15, hue: 0, gamma: 0.85,
+          borderOpacity: 0.45,
+          regionColor: "#ff9900", cityColor: "#ffffff", cityDotSize: 8,
+        },
+        {
+          name: "Satellite",
+          basemap: "arcgis-satellite",
+          brightness: 1.0, contrast: 1.15, saturation: 1.2, hue: 0, gamma: 1.0,
+          borderOpacity: 0.6,
+          regionColor: "#ffff00", cityColor: "#ffffff", cityDotSize: 8,
+        },
+        {
+          name: "Night",
+          basemap: "cesium-night",
+          brightness: 1.0, contrast: 1.0, saturation: 1.0, hue: 0, gamma: 0.9,
+          borderOpacity: 0.3,
+          regionColor: "#00bfff", cityColor: "#ffee55", cityDotSize: 8,
+        },
+        {
+          name: "Monochrome",
+          basemap: "arcgis-hillshade",
+          brightness: 0.85, contrast: 1.2, saturation: 0.0, hue: 0, gamma: 1.0,
+          borderOpacity: 0.8,
+          regionColor: "#ff3333", cityColor: "#ffffff", cityDotSize: 8,
+        },
+        {
+          name: "Election",
+          basemap: "cesium-default",
+          brightness: 0.55, contrast: 1.3, saturation: 0.1, hue: 0, gamma: 0.9,
+          borderOpacity: 0.6,
+          regionColor: "#4488ff", cityColor: "#ffffff", cityDotSize: 8,
+        },
+      ];
+
+      function loadUserLooks() {
+        try { return JSON.parse(localStorage.getItem("map-animator-looks") || "[]"); }
+        catch (e) { return []; }
+      }
+
+      function saveUserLooks(looks) {
+        localStorage.setItem("map-animator-looks", JSON.stringify(looks));
+      }
+
+      function getAllLooks() {
+        return [...BUILT_IN_LOOKS, ...loadUserLooks()];
+      }
+
+      function isBuiltIn(name) {
+        return BUILT_IN_LOOKS.some(l => l.name === name);
+      }
+
+      function renderLooksSelect() {
+        const sel = document.getElementById("looksSelect");
+        const prev = sel.value;
+        sel.innerHTML = "";
+        const userLooks = loadUserLooks();
+
+        const builtInGroup = document.createElement("optgroup");
+        builtInGroup.label = "Built-in";
+        BUILT_IN_LOOKS.forEach(l => {
+          const o = document.createElement("option");
+          o.value = l.name;
+          o.textContent = l.name;
+          builtInGroup.appendChild(o);
+        });
+        sel.appendChild(builtInGroup);
+
+        if (userLooks.length) {
+          const userGroup = document.createElement("optgroup");
+          userGroup.label = "Saved";
+          userLooks.forEach(l => {
+            const o = document.createElement("option");
+            o.value = l.name;
+            o.textContent = l.name;
+            userGroup.appendChild(o);
+          });
+          sel.appendChild(userGroup);
+        }
+
+        // Restore selection if still present
+        if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+        // Enable/disable delete button
+        document.getElementById("deleteLookBtn").disabled = isBuiltIn(sel.value);
+      }
+
+      function captureLook(name) {
+        return {
+          name,
+          basemap: currentBasemap,
+          brightness: bmAdjust.brightness,
+          contrast:   bmAdjust.contrast,
+          saturation: bmAdjust.saturation,
+          hue:        bmAdjust.hue,
+          gamma:      bmAdjust.gamma,
+          borderOpacity: parseInt(document.getElementById("borderOpacity").value) / 100,
+          regionColor: defaultRegionColor,
+          cityColor:   defaultCityColor,
+          cityDotSize: defaultCityDotSize,
+        };
+      }
+
+      function applyLook(look) {
+        // 1. Basemap
+        document.getElementById("basemapSelect").value = look.basemap;
+        applyBasemap(look.basemap);
+
+        // 2. Adjustments — update bmAdjust and sliders together
+        const sliderMap = [
+          { id: "bm-brightness", key: "brightness", toSlider: v => Math.round(v * 100), fmt: v => Math.round(v * 100) + "%" },
+          { id: "bm-contrast",   key: "contrast",   toSlider: v => Math.round(v * 100), fmt: v => Math.round(v * 100) + "%" },
+          { id: "bm-saturation", key: "saturation", toSlider: v => Math.round(v * 100), fmt: v => Math.round(v * 100) + "%" },
+          { id: "bm-hue",        key: "hue",        toSlider: v => v,                   fmt: v => (v > 0 ? "+" : "") + v + "°" },
+          { id: "bm-gamma",      key: "gamma",      toSlider: v => Math.round(v * 100), fmt: v => (v).toFixed(2) },
+        ];
+        sliderMap.forEach(({ id, key, toSlider, fmt }) => {
+          const raw = look[key];
+          bmAdjust[key] = raw;
+          document.getElementById(id).value = toSlider(raw);
+          document.getElementById(id + "-val").textContent = fmt(raw);
+        });
+        applyBmAdjust();
+
+        // 3. Border opacity
+        const boPct = Math.round((look.borderOpacity ?? 0.7) * 100);
+        document.getElementById("borderOpacity").value = boPct;
+        document.getElementById("borderOpacityVal").textContent = boPct + "%";
+        setBorderOpacity(look.borderOpacity ?? 0.7);
+
+        // 4. Default colors
+        defaultRegionColor = look.regionColor || "#ff9900";
+        defaultCityColor   = look.cityColor   || "#ffffff";
+        defaultCityDotSize = look.cityDotSize  || 8;
+        document.getElementById("defaultRegionColorPicker").value = defaultRegionColor;
+        document.getElementById("defaultCityColorPicker").value   = defaultCityColor;
       }
 
       // ── Cesium Init ─────────────────────────────────────────────────────────
@@ -547,9 +1017,23 @@
       }
 
       // ── Camera Helpers ──────────────────────────────────────────────────────
+      const SCENE_MODE_NAMES = {
+        [Cesium.SceneMode.SCENE3D]:       "3d",
+        [Cesium.SceneMode.SCENE2D]:       "2d",
+        [Cesium.SceneMode.COLUMBUS_VIEW]: "columbus",
+      };
+      const SCENE_MODE_LABELS = { "3d": "3D", "2d": "2D", "columbus": "CV" };
+
+      function getCurrentSceneModeName() {
+        return SCENE_MODE_NAMES[viewer.scene.mode] || "3d";
+      }
+
       function getCameraState() {
         const cam = viewer.camera;
-        const carto = Cesium.Ellipsoid.WGS84.cartesianToCartographic(cam.position);
+        // positionCartographic works correctly in all scene modes (3D, Columbus, 2D).
+        // cam.position in 2D/Columbus is in projection space, not ECEF, so
+        // cartesianToCartographic() would return garbage coordinates.
+        const carto = cam.positionCartographic;
         return {
           lon:        Cesium.Math.toDegrees(carto.longitude),
           lat:        Cesium.Math.toDegrees(carto.latitude),
@@ -558,18 +1042,33 @@
           pitch:      Cesium.Math.toDegrees(cam.pitch),
           roll:       Cesium.Math.toDegrees(cam.roll),
           todMinutes: parseInt(document.getElementById("todSlider").value),
+          sceneMode:  getCurrentSceneModeName(),
         };
       }
 
+      // Shared helper — also updates the scene mode toggle button UI.
+      function triggerSceneMode(mode, duration) {
+        if (mode === "2d")       viewer.scene.morphTo2D(duration);
+        else if (mode === "columbus") viewer.scene.morphToColumbusView(duration);
+        else                     viewer.scene.morphTo3D(duration);
+        document.querySelectorAll(".scene-mode-btn").forEach(b =>
+          b.classList.toggle("active", b.dataset.mode === mode)
+        );
+      }
+
       function setCameraState({ lon, lat, height, heading, pitch, roll, todMinutes }) {
-        viewer.camera.setView({
-          destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
-          orientation: {
-            heading: Cesium.Math.toRadians(heading),
-            pitch:   Cesium.Math.toRadians(pitch),
-            roll:    Cesium.Math.toRadians(roll),
-          },
-        });
+        // camera.setView() calls scene.completeMorph() internally — skip during a
+        // mode transition so the animated morph can play out without snapping.
+        if (viewer.scene.mode !== Cesium.SceneMode.MORPHING) {
+          viewer.camera.setView({
+            destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
+            orientation: {
+              heading: Cesium.Math.toRadians(heading),
+              pitch:   Cesium.Math.toRadians(pitch),
+              roll:    Cesium.Math.toRadians(roll),
+            },
+          });
+        }
         if (todMinutes !== undefined) {
           const rounded = Math.round(todMinutes);
           document.getElementById("todSlider").value = rounded;
@@ -603,6 +1102,8 @@
         renderKeyframeList();
       }
 
+      const SCENE_MODE_CYCLE = { "3d": "columbus", "columbus": "2d", "2d": "3d" };
+
       function renderKeyframeList() {
         const list = document.getElementById("keyframeList");
         list.innerHTML = "";
@@ -610,7 +1111,7 @@
           list.innerHTML = '<li style="color:#aaa;font-size:12px;border:none;background:none;padding:4px 0;">No keyframes yet</li>';
           return;
         }
-        keyframes.forEach(kf => {
+        keyframes.forEach((kf, idx) => {
           const li = document.createElement("li");
           if (kf.id === selectedKfId) li.classList.add("selected");
 
@@ -622,16 +1123,34 @@
           time.className = "kf-time";
           time.textContent = `${kf.time}s`;
 
+          // Scene mode badge — highlighted when different from previous keyframe
+          const prevMode = idx > 0 ? (keyframes[idx - 1].sceneMode || "3d") : null;
+          const kfMode = kf.sceneMode || "3d";
+          const modeBtn = document.createElement("button");
+          modeBtn.className = "kf-mode" + (prevMode !== null && kfMode !== prevMode ? " kf-mode-change" : "");
+          modeBtn.textContent = SCENE_MODE_LABELS[kfMode] || "3D";
+          modeBtn.title = "Scene mode — click to cycle (3D → Columbus → 2D)";
+          modeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            kf.sceneMode = SCENE_MODE_CYCLE[kfMode] || "3d";
+            renderKeyframeList();
+          });
+
           const del = document.createElement("button");
           del.className = "kf-delete";
           del.textContent = "×";
           del.title = "Delete keyframe";
           del.addEventListener("click", (e) => { e.stopPropagation(); deleteKeyframe(kf.id); });
 
-          li.append(label, time, del);
+          li.append(label, time, modeBtn, del);
           li.addEventListener("click", () => {
             selectedKfId = kf.id;
+            playbackT  = kf.time;
+            playStartT = kf.time;
+            syncSceneModeToTime(kf.time);
+            viewer.scene.completeMorph(); // finish instantly when jumping directly
             setCameraState(kf);
+            updateProgressUI(kf.time);
             renderKeyframeList();
           });
           list.appendChild(li);
@@ -639,6 +1158,28 @@
       }
 
       // ── Animation ───────────────────────────────────────────────────────────
+      // Returns the scene mode that should be active at time t (most recent keyframe mode ≤ t).
+      function getSceneModeAtTime(t) {
+        let mode = keyframes[0]?.sceneMode || "3d";
+        for (const kf of keyframes) {
+          if (kf.time <= t) mode = kf.sceneMode || mode;
+          else break;
+        }
+        return mode;
+      }
+
+      let lastPlaybackMode = "3d";
+
+      // Apply the correct scene mode for time t if it differs from what's currently shown.
+      // Call this whenever playbackT is set outside of animationFrame (scrub, stop, jump).
+      function syncSceneModeToTime(t) {
+        const mode = getSceneModeAtTime(t);
+        if (mode !== getCurrentSceneModeName()) {
+          triggerSceneMode(mode, 1.5);
+        }
+        lastPlaybackMode = mode;
+      }
+
       function lerpAngle(a, b, t) {
         // Shortest-path interpolation for angles in degrees
         let diff = ((b - a + 540) % 360) - 180;
@@ -694,8 +1235,15 @@
           document.getElementById("playBtn").textContent = "▶ Play";
         }
 
+        // Trigger morph when playback crosses a keyframe with a new scene mode
+        const activeMode = getSceneModeAtTime(playbackT);
+        if (activeMode !== lastPlaybackMode) {
+          triggerSceneMode(activeMode, 2.0);
+          lastPlaybackMode = activeMode;
+        }
+
         const state = interpolateCameraAtTime(playbackT);
-        if (state) setCameraState(state);
+        if (state) setCameraState(state); // no-ops while MORPHING
         updateProgressUI(playbackT);
 
         if (isPlaying) animRaf = requestAnimationFrame(animationFrame);
@@ -703,10 +1251,14 @@
 
       function startPlayback() {
         if (keyframes.length < 2) { setStatus("Need at least 2 keyframes to play."); return; }
-        if (playbackT >= totalDuration()) playbackT = 0;
+        if (playbackT >= totalDuration()) {
+          playbackT = 0;
+          syncSceneModeToTime(0);
+        }
         isPlaying = true;
         playStartMs = performance.now();
         playStartT  = playbackT;
+        lastPlaybackMode = getSceneModeAtTime(playbackT); // reset so first frame doesn't re-trigger
         document.getElementById("playBtn").textContent = "⏸ Pause";
         animRaf = requestAnimationFrame(animationFrame);
       }
@@ -721,7 +1273,10 @@
         pausePlayback();
         playbackT = 0;
         updateProgressUI(0);
-        if (keyframes.length > 0) setCameraState(interpolateCameraAtTime(0));
+        if (keyframes.length > 0) {
+          syncSceneModeToTime(0);
+          setCameraState(interpolateCameraAtTime(0));
+        }
       }
 
       // ── Export ──────────────────────────────────────────────────────────────
@@ -738,16 +1293,48 @@
         setViewerResolution(w, h);
         await new Promise(r => setTimeout(r, 100)); // allow resize repaint
 
+        // Apply starting scene mode instantly before capture begins
+        const initMode = getSceneModeAtTime(0);
+        triggerSceneMode(initMode, 0);
+        viewer.scene.completeMorph();
+        await new Promise(r => setTimeout(r, 50));
+
         // 1. Start session
         setStatus("Starting export session…");
         const startRes = await fetch("/api/export/start", { method: "POST" });
         const { sessionId } = await startRes.json();
 
         // 2. Render and upload each frame
+        let exportMode = initMode;
+        let morphFramesLeft = 0; // frames remaining in active export morph
+
         for (let f = 0; f < total; f++) {
           const t = f / fps;
+
+          // Detect scene mode change — trigger a morph spanning the gap to the next keyframe.
+          // We set a conservatively long duration (8× the nominal gap) because frame capture
+          // takes real wall-clock time that's much slower than frame rate.  After all desired
+          // morph frames are done we force-complete to avoid an open-ended transition.
+          const activeMode = getSceneModeAtTime(t);
+          if (activeMode !== exportMode && morphFramesLeft === 0) {
+            exportMode = activeMode;
+            // Count frames until next keyframe (or default 2s worth)
+            const modeKf  = [...keyframes].reverse().find(kf => kf.time <= t);
+            const nextKf  = keyframes.find(kf => kf.time > (modeKf?.time ?? t));
+            const gapSecs = nextKf ? Math.min(nextKf.time - (modeKf?.time ?? t), 5) : 2;
+            morphFramesLeft = Math.round(gapSecs * fps);
+            // Conservative morph duration: each frame typically takes ~150-300ms in practice.
+            // 8× gives enough headroom for the animation to still be mid-transition during capture.
+            triggerSceneMode(activeMode, morphFramesLeft / fps * 8);
+          }
+
+          if (morphFramesLeft > 0) {
+            morphFramesLeft--;
+            if (morphFramesLeft === 0) viewer.scene.completeMorph();
+          }
+
           const state = interpolateCameraAtTime(t);
-          if (state) setCameraState(state);
+          if (state) setCameraState(state); // no-ops while MORPHING
 
           // Wait for Cesium to finish rendering this frame
           await new Promise(r => viewer.scene.postRender.addEventListener(function once() {
@@ -782,6 +1369,7 @@
           const err = await renderRes.json();
           setStatus("ffmpeg failed: " + (err.detail || err.error));
           btn.disabled = false;
+          setViewerResolution(null);
           return;
         }
 
@@ -793,13 +1381,35 @@
         a.click();
 
         btn.disabled = false;
+        setViewerResolution(null); // restore grid-fill layout after export
         setStatus("Export complete.");
       }
 
+      // Apply an explicit export resolution to the viewport so the user sees
+      // exactly what will be captured (WYSIWYG).  Pass null to restore the
+      // default grid-fill behaviour.
       function setViewerResolution(w, h) {
         const pane = document.getElementById("cesiumPane");
-        pane.style.width  = w + "px";
-        pane.style.height = h + "px";
+        if (w === null) {
+          pane.style.width  = "";
+          pane.style.height = "";
+          const badge = document.getElementById("resPreviewBadge");
+          if (badge) badge.remove();
+        } else {
+          pane.style.width  = w + "px";
+          pane.style.height = h + "px";
+          // Show a small badge so the user knows they're in preview mode
+          let badge = document.getElementById("resPreviewBadge");
+          if (!badge) {
+            badge = document.createElement("div");
+            badge.id = "resPreviewBadge";
+            badge.style.cssText = "position:absolute;top:6px;left:6px;z-index:10;" +
+              "background:rgba(0,0,0,0.55);color:#fff;font-size:11px;padding:3px 7px;" +
+              "border-radius:4px;pointer-events:none;font-family:Arial,sans-serif;";
+            pane.appendChild(badge);
+          }
+          badge.textContent = `Preview: ${w} × ${h}`;
+        }
         viewer.resize();
       }
 
@@ -823,7 +1433,7 @@
       let countryDataSource = null;
       let stateDataSource   = null;
       let regionLookup      = new Map(); // displayStr → { key, name, polygons[] }
-      let highlights        = [];        // [{ key, name, type, mode, entities[], color }]
+      let highlights        = [];        // [{ key, name, type, color, outlineEntities[], outlineOpacity, outlineWidth, subregionEntities[], subregionOpacity, subregionWidth, fillEntities[], fillOpacity, invert }]
 
       const DEFAULT_OUTLINE = Cesium.Color.WHITE.withAlpha(0.7);
       const DEFAULT_WIDTH   = 1.5;
@@ -889,15 +1499,12 @@
       }
 
       async function loadRegionData() {
-        const showBorders = document.getElementById("showBorders").checked;
-
         countryDataSource = await Cesium.GeoJsonDataSource.load("/data/countries.geojson", {
           fill:        Cesium.Color.WHITE.withAlpha(0.0),
           stroke:      DEFAULT_OUTLINE,
           strokeWidth: DEFAULT_WIDTH,
         });
         patchDataSourceEntities(countryDataSource, DEFAULT_WIDTH);
-        countryDataSource.show = showBorders;
         viewer.dataSources.add(countryDataSource);
 
         stateDataSource = await Cesium.GeoJsonDataSource.load("/data/states.geojson", {
@@ -906,7 +1513,6 @@
           strokeWidth: DEFAULT_WIDTH * 0.6,
         });
         patchDataSourceEntities(stateDataSource, DEFAULT_WIDTH * 0.6);
-        stateDataSource.show = showBorders;
         viewer.dataSources.add(stateDataSource);
 
         // Build unified lookup covering all countries and states.
@@ -955,12 +1561,13 @@
         setStatus("Region data loaded.");
       }
 
-      function makeHighlightEntities(polygons, color, width) {
+      function makePolylineEntities(polygons, color, width, opacity) {
+        const alpha = (opacity === undefined) ? 1.0 : opacity;
         return polygons.map(pts => viewer.entities.add({
           polyline: new Cesium.PolylineGraphics({
             positions: [...pts, pts[0]],
             width,
-            material: new Cesium.ColorMaterialProperty(hexToColor(color)),
+            material: new Cesium.ColorMaterialProperty(hexToColor(color).withAlpha(alpha)),
             arcType:  Cesium.ArcType.NONE,
           }),
         }));
@@ -1092,26 +1699,21 @@
         }
       }
 
-      function getHighlightPolygons(h) {
-        if (h.type === "state" || h.mode === "outline") {
-          return regionLookup.get(h.name)?.polygons || [];
-        }
-        // country "states" mode — all subregion polygons
-        const all = [];
-        getCountryStates(h.name).forEach(e => all.push(...e.polygons));
-        return all;
-      }
-
       function addHighlight(displayStr) {
         const entry = regionLookup.get(displayStr);
         if (!entry || !entry.polygons.length) return;
         if (highlights.some(h => h.key === entry.key)) return; // no duplicates
 
-        const type    = entry.key.startsWith("country||") ? "country" : "state";
-        const color   = "#ff9900";
-        const entities = makeHighlightEntities(entry.polygons, color, 3.0);
+        const type  = entry.key.startsWith("country||") ? "country" : "state";
+        const color = defaultRegionColor;
+        const outlineEntities = makePolylineEntities(entry.polygons, color, 2.0, 1.0);
 
-        highlights.push({ key: entry.key, name: entry.name, type, mode: "outline", entities, fillEntities: [], fillOpacity: 0, invert: false, color });
+        highlights.push({
+          key: entry.key, name: entry.name, type, color,
+          outlineEntities, outlineOpacity: 1.0, outlineWidth: 2.0,
+          subregionEntities: [], subregionOpacity: 0.0, subregionWidth: 1.0,
+          fillEntities: [], fillOpacity: 0, invert: false,
+        });
         renderHighlightList();
       }
 
@@ -1119,7 +1721,8 @@
         const idx = highlights.findIndex(h => h.key === key);
         if (idx === -1) return;
         const h = highlights[idx];
-        h.entities.forEach(e => viewer.entities.remove(e));
+        h.outlineEntities.forEach(e => viewer.entities.remove(e));
+        h.subregionEntities.forEach(e => viewer.entities.remove(e));
         h.fillEntities.forEach(removeFillItem);
         highlights.splice(idx, 1);
         renderHighlightList();
@@ -1130,14 +1733,14 @@
         if (!h) return;
         h.fillEntities.forEach(removeFillItem);
         h.fillOpacity = opacity;
-        h.fillEntities = opacity > 0 ? makeFillEntities(getHighlightPolygons(h), h.color, opacity, h.invert) : [];
+        const polygons = regionLookup.get(h.name)?.polygons || [];
+        h.fillEntities = opacity > 0 ? makeFillEntities(polygons, h.color, opacity, h.invert) : [];
       }
 
       function setFillInvert(key, invert) {
         const h = highlights.find(h => h.key === key);
         if (!h) return;
         h.invert = invert;
-        // Default to 50% opacity the first time mask is enabled so something visible appears
         if (invert && h.fillOpacity === 0) h.fillOpacity = 0.5;
         setFillOpacity(key, h.fillOpacity);
         renderHighlightList();
@@ -1152,48 +1755,105 @@
         return results;
       }
 
-      function setHighlightMode(key, mode) {
-        const h = highlights.find(h => h.key === key);
-        if (!h || h.type !== "country") return;
-        h.entities.forEach(e => viewer.entities.remove(e));
-        h.fillEntities.forEach(removeFillItem);
-        h.mode = mode;
-        const polygons = getHighlightPolygons(h);
-        const width = mode === "outline" ? 3.0 : 2.0;
-        h.entities = makeHighlightEntities(polygons, h.color, width);
-        h.fillEntities = h.fillOpacity > 0 ? makeFillEntities(polygons, h.color, h.fillOpacity, h.invert) : [];
-        renderHighlightList();
+      function refreshOutlineEntities(h) {
+        h.outlineEntities.forEach(e => viewer.entities.remove(e));
+        const polygons = regionLookup.get(h.name)?.polygons || [];
+        h.outlineEntities = h.outlineOpacity > 0
+          ? makePolylineEntities(polygons, h.color, h.outlineWidth, h.outlineOpacity)
+          : [];
+      }
+
+      function refreshSubregionEntities(h) {
+        h.subregionEntities.forEach(e => viewer.entities.remove(e));
+        if (h.type !== "country") { h.subregionEntities = []; return; }
+        const polygons = [];
+        getCountryStates(h.name).forEach(e => polygons.push(...e.polygons));
+        h.subregionEntities = h.subregionOpacity > 0
+          ? makePolylineEntities(polygons, h.color, h.subregionWidth, h.subregionOpacity)
+          : [];
+      }
+
+      function makeCtrlRow(labelText, opacity, width, onOpacityChange, onWidthChange) {
+        const row = document.createElement("div");
+        row.className = "hl-ctrl-row";
+
+        const lbl = document.createElement("span");
+        lbl.className = "hl-ctrl-label";
+        lbl.textContent = labelText;
+
+        const slider = document.createElement("input");
+        slider.type = "range";
+        slider.min = "0";
+        slider.max = "100";
+        slider.step = "5";
+        slider.value = String(Math.round(opacity * 100));
+        slider.className = "hl-ctrl-slider";
+
+        const pct = document.createElement("span");
+        pct.className = "hl-ctrl-pct";
+        pct.textContent = Math.round(opacity * 100) + "%";
+
+        slider.addEventListener("input", (e) => {
+          pct.textContent = e.target.value + "%";
+          onOpacityChange(parseInt(e.target.value) / 100);
+        });
+
+        const widthInput = document.createElement("input");
+        widthInput.type = "number";
+        widthInput.min = "0.5";
+        widthInput.max = "10";
+        widthInput.step = "0.5";
+        widthInput.value = String(width);
+        widthInput.className = "hl-ctrl-width";
+        widthInput.title = "Line width (px)";
+        widthInput.addEventListener("change", (e) => {
+          const w = Math.max(0.5, parseFloat(e.target.value) || 1.0);
+          e.target.value = w;
+          onWidthChange(w);
+        });
+
+        row.appendChild(lbl);
+        row.appendChild(slider);
+        row.appendChild(pct);
+        row.appendChild(widthInput);
+        return row;
       }
 
       function renderHighlightList() {
-        const ul = document.getElementById("highlightList");
-        ul.innerHTML = "";
+        const container = document.getElementById("highlightList");
+        container.innerHTML = "";
         highlights.forEach(h => {
-          const li = document.createElement("li");
+          const card = document.createElement("div");
+          card.className = "hl-card";
+
+          // ── Header ──────────────────────────────────────────────────────────
+          const header = document.createElement("div");
+          header.className = "hl-card-header";
 
           const swatch = document.createElement("div");
           swatch.className = "hl-swatch";
           swatch.style.background = h.color;
-
           const colorInput = document.createElement("input");
           colorInput.type = "color";
           colorInput.value = h.color;
           colorInput.style.cssText = "position:absolute;width:0;height:0;opacity:0;pointer-events:none;";
           swatch.appendChild(colorInput);
-
           swatch.addEventListener("click", () => colorInput.click());
           colorInput.addEventListener("input", (e) => {
             h.color = e.target.value;
             swatch.style.background = h.color;
-            h.entities.forEach(ent => {
-              if (ent?.polyline) ent.polyline.material = new Cesium.ColorMaterialProperty(hexToColor(h.color));
+            const col = hexToColor(h.color);
+            h.outlineEntities.forEach(ent => {
+              if (ent?.polyline) ent.polyline.material = new Cesium.ColorMaterialProperty(col.withAlpha(h.outlineOpacity));
+            });
+            h.subregionEntities.forEach(ent => {
+              if (ent?.polyline) ent.polyline.material = new Cesium.ColorMaterialProperty(col.withAlpha(h.subregionOpacity));
             });
             if (h.invert && h.fillOpacity > 0) {
-              // Imagery layer can't be updated in-place — rebuild with new colour.
               setFillOpacity(h.key, h.fillOpacity);
             } else {
               h.fillEntities.forEach(ent => {
-                if (ent?.polygon) ent.polygon.material = new Cesium.ColorMaterialProperty(hexToColor(h.color).withAlpha(h.fillOpacity));
+                if (ent?.polygon) ent.polygon.material = new Cesium.ColorMaterialProperty(col.withAlpha(h.fillOpacity));
               });
             }
           });
@@ -1203,54 +1863,174 @@
           nameEl.textContent = h.name;
           nameEl.title = h.name;
 
-          li.appendChild(swatch);
-          li.appendChild(nameEl);
-
-          if (h.type === "country") {
-            const modeBtn = document.createElement("button");
-            modeBtn.className = "hl-mode";
-            modeBtn.textContent = h.mode === "outline" ? "outline" : "regions";
-            modeBtn.title = "Toggle outline / regions";
-            modeBtn.addEventListener("click", () =>
-              setHighlightMode(h.key, h.mode === "outline" ? "states" : "outline")
-            );
-            li.appendChild(modeBtn);
-          }
-
-          const fillSlider = document.createElement("input");
-          fillSlider.type = "range";
-          fillSlider.min = "0";
-          fillSlider.max = "100";
-          fillSlider.step = "10";
-          fillSlider.value = String(Math.round(h.fillOpacity * 100));
-          fillSlider.className = "hl-fill";
-          fillSlider.title = "Fill opacity";
-          fillSlider.addEventListener("input", (e) => setFillOpacity(h.key, parseInt(e.target.value) / 100));
-          li.appendChild(fillSlider);
-
-          const invertBtn = document.createElement("button");
-          invertBtn.className = "hl-mode" + (h.invert ? " hl-mode-active" : "");
-          invertBtn.textContent = h.invert ? "mask" : "fill";
-          invertBtn.title = "Toggle fill region / mask everything else";
-          invertBtn.addEventListener("click", () => setFillInvert(h.key, !h.invert));
-          li.appendChild(invertBtn);
-
           const removeBtn = document.createElement("button");
           removeBtn.className = "hl-remove";
           removeBtn.textContent = "×";
           removeBtn.addEventListener("click", () => removeHighlight(h.key));
 
-          li.appendChild(removeBtn);
-          ul.appendChild(li);
+          header.appendChild(swatch);
+          header.appendChild(nameEl);
+          header.appendChild(removeBtn);
+
+          // ── Body ────────────────────────────────────────────────────────────
+          const body = document.createElement("div");
+          body.className = "hl-card-body";
+
+          body.appendChild(makeCtrlRow(
+            "Outline", h.outlineOpacity, h.outlineWidth,
+            (opacity) => { h.outlineOpacity = opacity; refreshOutlineEntities(h); },
+            (width)   => { h.outlineWidth   = width;   if (h.outlineOpacity > 0) refreshOutlineEntities(h); }
+          ));
+
+          if (h.type === "country") {
+            body.appendChild(makeCtrlRow(
+              "Regions", h.subregionOpacity, h.subregionWidth,
+              (opacity) => { h.subregionOpacity = opacity; refreshSubregionEntities(h); },
+              (width)   => { h.subregionWidth   = width;   if (h.subregionOpacity > 0) refreshSubregionEntities(h); }
+            ));
+          }
+
+          // Fill row
+          const fillRow = document.createElement("div");
+          fillRow.className = "hl-ctrl-row";
+
+          const fillLabel = document.createElement("span");
+          fillLabel.className = "hl-ctrl-label";
+          fillLabel.textContent = "Fill";
+
+          const fillSlider = document.createElement("input");
+          fillSlider.type = "range";
+          fillSlider.min = "0";
+          fillSlider.max = "100";
+          fillSlider.step = "5";
+          fillSlider.value = String(Math.round(h.fillOpacity * 100));
+          fillSlider.className = "hl-ctrl-slider";
+
+          const fillPct = document.createElement("span");
+          fillPct.className = "hl-ctrl-pct";
+          fillPct.textContent = Math.round(h.fillOpacity * 100) + "%";
+
+          fillSlider.addEventListener("input", (e) => {
+            fillPct.textContent = e.target.value + "%";
+            setFillOpacity(h.key, parseInt(e.target.value) / 100);
+          });
+
+          const invertBtn = document.createElement("button");
+          invertBtn.className = "hl-toggle" + (h.invert ? " hl-toggle-active" : "");
+          invertBtn.textContent = h.invert ? "mask" : "fill";
+          invertBtn.title = "Toggle fill region / mask everything else";
+          invertBtn.addEventListener("click", () => setFillInvert(h.key, !h.invert));
+
+          fillRow.appendChild(fillLabel);
+          fillRow.appendChild(fillSlider);
+          fillRow.appendChild(fillPct);
+          fillRow.appendChild(invertBtn);
+          body.appendChild(fillRow);
+
+          card.appendChild(header);
+          card.appendChild(body);
+          container.appendChild(card);
         });
       }
 
       // ── Event Listeners ─────────────────────────────────────────────────────
       document.getElementById("basemapSelect").addEventListener("change", e => applyBasemap(e.target.value));
 
-      document.getElementById("showBorders").addEventListener("change", (e) => {
-        if (countryDataSource) countryDataSource.show = e.target.checked;
-        if (stateDataSource)   stateDataSource.show   = e.target.checked;
+      // ── Scene mode ───────────────────────────────────────────────────────────
+      document.querySelectorAll(".scene-mode-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          if (!viewer) return;
+          const mode = btn.dataset.mode;
+          triggerSceneMode(mode, 1.5);
+          lastPlaybackMode = mode; // prevent playback from re-triggering this transition
+        });
+      });
+
+      // ── Looks event listeners ────────────────────────────────────────────────
+      document.getElementById("looksSelect").addEventListener("change", (e) => {
+        const look = getAllLooks().find(l => l.name === e.target.value);
+        if (look) applyLook(look);
+        document.getElementById("deleteLookBtn").disabled = isBuiltIn(e.target.value);
+      });
+
+      document.getElementById("deleteLookBtn").addEventListener("click", () => {
+        const name = document.getElementById("looksSelect").value;
+        if (isBuiltIn(name)) return;
+        const updated = loadUserLooks().filter(l => l.name !== name);
+        saveUserLooks(updated);
+        renderLooksSelect();
+      });
+
+      document.getElementById("confirmSaveLookBtn").addEventListener("click", () => {
+        const nameInput = document.getElementById("lookNameInput");
+        const name = nameInput.value.trim();
+        if (!name) return;
+        const look = captureLook(name);
+        const existing = loadUserLooks();
+        const idx = existing.findIndex(l => l.name === name);
+        if (idx >= 0) existing[idx] = look; else existing.push(look);
+        saveUserLooks(existing);
+        renderLooksSelect();
+        document.getElementById("looksSelect").value = name;
+        document.getElementById("deleteLookBtn").disabled = false;
+        nameInput.value = "";
+      });
+
+      document.getElementById("lookNameInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") document.getElementById("confirmSaveLookBtn").click();
+      });
+
+      document.getElementById("defaultRegionColorPicker").addEventListener("input", (e) => {
+        defaultRegionColor = e.target.value;
+      });
+
+      document.getElementById("defaultCityColorPicker").addEventListener("input", (e) => {
+        defaultCityColor = e.target.value;
+      });
+
+      // Basemap adjustment sliders
+      [
+        { id: "bm-brightness", key: "brightness", scale: v => v / 100,         fmt: v => v + "%"               },
+        { id: "bm-contrast",   key: "contrast",   scale: v => v / 100,         fmt: v => v + "%"               },
+        { id: "bm-saturation", key: "saturation", scale: v => v / 100,         fmt: v => v + "%"               },
+        { id: "bm-hue",        key: "hue",        scale: v => v,               fmt: v => (v > 0 ? "+" : "") + v + "°" },
+        { id: "bm-gamma",      key: "gamma",      scale: v => v / 100,         fmt: v => (v / 100).toFixed(2)  },
+      ].forEach(({ id, key, scale, fmt }) => {
+        document.getElementById(id).addEventListener("input", e => {
+          const raw = parseInt(e.target.value);
+          bmAdjust[key] = scale(raw);
+          document.getElementById(id + "-val").textContent = fmt(raw);
+          applyBmAdjust();
+        });
+      });
+
+      document.getElementById("bm-reset").addEventListener("click", () => {
+        const defaults = { brightness: 100, contrast: 100, saturation: 100, hue: 0, gamma: 100 };
+        const fmts     = { brightness: "100%", contrast: "100%", saturation: "100%", hue: "0°", gamma: "1.00" };
+        for (const [key, val] of Object.entries(defaults)) {
+          document.getElementById("bm-" + key).value = val;
+          document.getElementById("bm-" + key + "-val").textContent = fmts[key];
+        }
+        Object.assign(bmAdjust, { brightness: 1, contrast: 1, saturation: 1, hue: 0, gamma: 1 });
+        applyBmAdjust();
+      });
+
+      function setBorderOpacity(ratio) { // ratio 0–1
+        const alpha = ratio;
+        const mat   = new Cesium.ColorMaterialProperty(Cesium.Color.WHITE.withAlpha(alpha));
+        for (const ds of [countryDataSource, stateDataSource]) {
+          if (!ds) continue;
+          ds.show = alpha > 0;
+          for (const entity of ds.entities.values) {
+            if (entity.polyline) entity.polyline.material = mat;
+          }
+        }
+      }
+
+      document.getElementById("borderOpacity").addEventListener("input", (e) => {
+        const val = parseInt(e.target.value);
+        document.getElementById("borderOpacityVal").textContent = val + "%";
+        setBorderOpacity(val / 100);
       });
 
       document.getElementById("addRegionBtn").addEventListener("click", () => {
@@ -1268,6 +2048,371 @@
         e.target.value = "";
       });
 
+      // ── Region Groups ───────────────────────────────────────────────────────
+      let regionGroups = [];
+      let nextGroupId  = 1;
+
+      function getGroupPolygons(group) {
+        const all = [];
+        for (const m of group.members) {
+          const entry = regionLookup.get(m.name);
+          if (entry) all.push(...entry.polygons);
+        }
+        return all;
+      }
+
+      function refreshGroupEntities(group) {
+        group.entities.forEach(e => viewer.entities.remove(e));
+        group.fillEntities.forEach(removeFillItem);
+        const polygons = getGroupPolygons(group);
+        group.entities    = makePolylineEntities(polygons, group.color, 2.0, 1.0);
+        group.fillEntities = group.fillOpacity > 0
+          ? makeFillEntities(polygons, group.color, group.fillOpacity, group.invert)
+          : [];
+      }
+
+      function createGroup(name) {
+        if (!name) return;
+        regionGroups.push({
+          id: nextGroupId++,
+          name,
+          color: "#3388ff",
+          fillOpacity: 0,
+          invert: false,
+          members: [],
+          entities: [],
+          fillEntities: [],
+        });
+        renderGroupList();
+      }
+
+      function deleteGroup(id) {
+        const idx = regionGroups.findIndex(g => g.id === id);
+        if (idx === -1) return;
+        const g = regionGroups[idx];
+        g.entities.forEach(e => viewer.entities.remove(e));
+        g.fillEntities.forEach(removeFillItem);
+        regionGroups.splice(idx, 1);
+        renderGroupList();
+      }
+
+      function addMemberToGroup(groupId, displayStr) {
+        const group = regionGroups.find(g => g.id === groupId);
+        if (!group) return;
+        const entry = regionLookup.get(displayStr);
+        if (!entry) return;
+        if (group.members.some(m => m.key === entry.key)) return;
+        group.members.push({ key: entry.key, name: entry.name });
+        refreshGroupEntities(group);
+        renderGroupList();
+      }
+
+      function removeMemberFromGroup(groupId, memberKey) {
+        const group = regionGroups.find(g => g.id === groupId);
+        if (!group) return;
+        group.members = group.members.filter(m => m.key !== memberKey);
+        refreshGroupEntities(group);
+        renderGroupList();
+      }
+
+      function renderGroupList() {
+        const container = document.getElementById("groupList");
+        container.innerHTML = "";
+
+        for (const group of regionGroups) {
+          const card = document.createElement("div");
+          card.className = "group-card";
+
+          // ── Header ──────────────────────────────────────────────────────────
+          const header = document.createElement("div");
+          header.className = "group-header";
+
+          // Color swatch
+          const swatch = document.createElement("div");
+          swatch.className = "hl-swatch";
+          swatch.style.background = group.color;
+          const colorInput = document.createElement("input");
+          colorInput.type = "color";
+          colorInput.value = group.color;
+          colorInput.style.cssText = "position:absolute;width:0;height:0;opacity:0;pointer-events:none;";
+          swatch.appendChild(colorInput);
+          swatch.addEventListener("click", () => colorInput.click());
+          colorInput.addEventListener("input", e => {
+            group.color = e.target.value;
+            swatch.style.background = group.color;
+            refreshGroupEntities(group);
+          });
+
+          // Name
+          const nameEl = document.createElement("span");
+          nameEl.className = "group-name";
+          nameEl.textContent = group.name;
+
+          // Fill opacity slider
+          const fillSlider = document.createElement("input");
+          fillSlider.type = "range";
+          fillSlider.min = "0"; fillSlider.max = "100"; fillSlider.step = "10";
+          fillSlider.value = String(Math.round(group.fillOpacity * 100));
+          fillSlider.className = "hl-ctrl-slider";
+          fillSlider.addEventListener("input", e => {
+            group.fillOpacity = parseInt(e.target.value) / 100;
+            refreshGroupEntities(group);
+          });
+
+          // Fill / mask toggle
+          const invertBtn = document.createElement("button");
+          invertBtn.className = "hl-toggle" + (group.invert ? " hl-toggle-active" : "");
+          invertBtn.textContent = group.invert ? "mask" : "fill";
+          invertBtn.addEventListener("click", () => {
+            group.invert = !group.invert;
+            if (group.invert && group.fillOpacity === 0) group.fillOpacity = 0.5;
+            fillSlider.value = String(Math.round(group.fillOpacity * 100));
+            invertBtn.className = "hl-toggle" + (group.invert ? " hl-toggle-active" : "");
+            invertBtn.textContent = group.invert ? "mask" : "fill";
+            refreshGroupEntities(group);
+          });
+
+          // Delete group
+          const delBtn = document.createElement("button");
+          delBtn.className = "hl-remove";
+          delBtn.textContent = "×";
+          delBtn.addEventListener("click", () => deleteGroup(group.id));
+
+          header.append(swatch, nameEl, fillSlider, invertBtn, delBtn);
+          card.appendChild(header);
+
+          // ── Body ────────────────────────────────────────────────────────────
+          const body = document.createElement("div");
+          body.className = "group-body";
+
+          // Member add row (reuses the shared regionDatalist)
+          const addRow = document.createElement("div");
+          addRow.className = "group-add-row";
+          const searchInput = document.createElement("input");
+          searchInput.type = "text";
+          searchInput.className = "group-region-search";
+          searchInput.setAttribute("list", "regionDatalist");
+          searchInput.placeholder = "Add country or state…";
+          searchInput.autocomplete = "off";
+          const addBtn = document.createElement("button");
+          addBtn.className = "group-add-btn";
+          addBtn.textContent = "+";
+          const doAdd = () => {
+            const val = searchInput.value.trim();
+            if (!val) return;
+            addMemberToGroup(group.id, val);
+            searchInput.value = "";
+          };
+          addBtn.addEventListener("click", doAdd);
+          searchInput.addEventListener("keydown", e => { if (e.key === "Enter") doAdd(); });
+          addRow.append(searchInput, addBtn);
+          body.appendChild(addRow);
+
+          // Member list
+          const ul = document.createElement("ul");
+          ul.className = "group-members";
+          for (const m of group.members) {
+            const li = document.createElement("li");
+            const label = document.createElement("span");
+            label.className = "group-member-name";
+            label.textContent = m.name;
+            label.title = m.name;
+            const rmBtn = document.createElement("button");
+            rmBtn.className = "hl-remove";
+            rmBtn.textContent = "×";
+            rmBtn.addEventListener("click", () => removeMemberFromGroup(group.id, m.key));
+            li.append(label, rmBtn);
+            ul.appendChild(li);
+          }
+          body.appendChild(ul);
+
+          card.appendChild(body);
+          container.appendChild(card);
+        }
+      }
+
+      document.getElementById("addGroupBtn").addEventListener("click", () => {
+        const input = document.getElementById("groupNameInput");
+        const name = input.value.trim();
+        if (!name) return;
+        createGroup(name);
+        input.value = "";
+      });
+
+      document.getElementById("groupNameInput").addEventListener("keydown", e => {
+        if (e.key !== "Enter") return;
+        const name = e.target.value.trim();
+        if (!name) return;
+        createGroup(name);
+        e.target.value = "";
+      });
+
+      // ── Cities ──────────────────────────────────────────────────────────────
+      let cityData    = [];  // [{name, country, lat, lon}]
+      let cityMarkers = [];  // [{id, name, country, lat, lon, color, dotSize, showLabel, entity}]
+      let nextCityId  = 1;
+
+      async function loadCityData() {
+        try {
+          const res = await fetch("/data/cities.json");
+          cityData = await res.json();
+          const dl = document.getElementById("cityDatalist");
+          cityData.forEach(c => {
+            const opt = document.createElement("option");
+            opt.value = `${c.name} (${c.country})`;
+            dl.appendChild(opt);
+          });
+        } catch (e) { console.warn("Could not load cities.json", e); }
+      }
+      loadCityData();
+
+      function makeCityEntity(c) {
+        const pos = Cesium.Cartesian3.fromDegrees(c.lon, c.lat);
+        const col = Cesium.Color.fromCssColorString(c.color);
+        return viewer.entities.add({
+          position: pos,
+          point: new Cesium.PointGraphics({
+            pixelSize: c.dotSize,
+            color: col,
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 1,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          }),
+          label: new Cesium.LabelGraphics({
+            text: c.name,
+            font: "13px Arial",
+            fillColor: Cesium.Color.WHITE,
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            pixelOffset: new Cesium.Cartesian2(c.dotSize / 2 + 4, 0),
+            horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+            verticalOrigin: Cesium.VerticalOrigin.CENTER,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            show: c.showLabel,
+          }),
+        });
+      }
+
+      function addCity(displayStr) {
+        // displayStr is "Name (Country)"
+        const match = displayStr.match(/^(.+)\s\((.+)\)$/);
+        if (!match) return;
+        const [, name, country] = match;
+        const found = cityData.find(c => c.name === name && c.country === country);
+        if (!found) return;
+        if (cityMarkers.some(m => m.name === name && m.country === country)) return;
+        const marker = {
+          id: nextCityId++,
+          name: found.name,
+          country: found.country,
+          lat: found.lat,
+          lon: found.lon,
+          color: defaultCityColor,
+          dotSize: defaultCityDotSize,
+          showLabel: true,
+        };
+        marker.entity = makeCityEntity(marker);
+        cityMarkers.push(marker);
+        renderCityList();
+      }
+
+      function removeCity(id) {
+        const idx = cityMarkers.findIndex(m => m.id === id);
+        if (idx === -1) return;
+        viewer.entities.remove(cityMarkers[idx].entity);
+        cityMarkers.splice(idx, 1);
+        renderCityList();
+      }
+
+      function updateCityEntity(marker) {
+        viewer.entities.remove(marker.entity);
+        marker.entity = makeCityEntity(marker);
+      }
+
+      function renderCityList() {
+        const ul = document.getElementById("cityList");
+        ul.innerHTML = "";
+        cityMarkers.forEach(marker => {
+          const li = document.createElement("li");
+
+          // Color swatch
+          const swatch = document.createElement("div");
+          swatch.className = "hl-swatch";
+          swatch.style.background = marker.color;
+          const colorInput = document.createElement("input");
+          colorInput.type = "color";
+          colorInput.value = marker.color;
+          colorInput.style.cssText = "position:absolute;width:0;height:0;opacity:0;pointer-events:none;";
+          swatch.appendChild(colorInput);
+          swatch.addEventListener("click", () => colorInput.click());
+          colorInput.addEventListener("input", e => {
+            marker.color = e.target.value;
+            swatch.style.background = marker.color;
+            updateCityEntity(marker);
+          });
+          li.appendChild(swatch);
+
+          // Dot size input
+          const sizeInput = document.createElement("input");
+          sizeInput.type = "number";
+          sizeInput.className = "";
+          sizeInput.min = "2"; sizeInput.max = "30"; sizeInput.step = "1";
+          sizeInput.value = String(marker.dotSize);
+          sizeInput.title = "Dot size (px)";
+          sizeInput.addEventListener("change", e => {
+            marker.dotSize = Math.max(2, Math.min(30, parseInt(e.target.value) || 8));
+            updateCityEntity(marker);
+          });
+          li.appendChild(sizeInput);
+
+          // Name
+          const nameSpan = document.createElement("span");
+          nameSpan.className = "hl-name";
+          nameSpan.title = `${marker.name}, ${marker.country}`;
+          nameSpan.textContent = marker.name;
+          li.appendChild(nameSpan);
+
+          // Label toggle
+          const labelBtn = document.createElement("button");
+          labelBtn.className = "hl-toggle" + (marker.showLabel ? "" : " hl-toggle-active");
+          labelBtn.textContent = marker.showLabel ? "label" : "dot";
+          labelBtn.title = "Toggle label";
+          labelBtn.addEventListener("click", () => {
+            marker.showLabel = !marker.showLabel;
+            marker.entity.label.show = marker.showLabel;
+            labelBtn.className = "hl-toggle" + (marker.showLabel ? "" : " hl-toggle-active");
+            labelBtn.textContent = marker.showLabel ? "label" : "dot";
+          });
+          li.appendChild(labelBtn);
+
+          // Remove
+          const rmBtn = document.createElement("button");
+          rmBtn.className = "hl-remove";
+          rmBtn.textContent = "×";
+          rmBtn.addEventListener("click", () => removeCity(marker.id));
+          li.appendChild(rmBtn);
+
+          ul.appendChild(li);
+        });
+      }
+
+      document.getElementById("addCityBtn").addEventListener("click", () => {
+        const val = document.getElementById("citySearch").value.trim();
+        if (!val) return;
+        addCity(val);
+        document.getElementById("citySearch").value = "";
+      });
+
+      document.getElementById("citySearch").addEventListener("keydown", e => {
+        if (e.key !== "Enter") return;
+        const val = e.target.value.trim();
+        if (!val) return;
+        addCity(val);
+        e.target.value = "";
+      });
+
+      // ── Time of day ─────────────────────────────────────────────────────────
       document.getElementById("todSlider").addEventListener("input", (e) => {
         const minutes = parseInt(e.target.value);
         document.getElementById("todDisplay").textContent = todMinutesToDisplay(minutes);
@@ -1292,6 +2437,7 @@
         playbackT = ratio * totalDuration();
         playStartT  = playbackT;
         playStartMs = performance.now();
+        syncSceneModeToTime(playbackT);
         const state = interpolateCameraAtTime(playbackT);
         if (state) setCameraState(state);
         updateProgressUI(playbackT);
@@ -1299,10 +2445,24 @@
 
       document.getElementById("exportBtn").addEventListener("click", exportFrames);
 
+      // WYSIWYG preview: resize the viewport immediately when resolution changes
+      document.getElementById("resolutionSelect").addEventListener("change", (e) => {
+        if (!viewer) return;
+        const [w, h] = e.target.value.split("x").map(Number);
+        setViewerResolution(w, h);
+      });
+
       // ── Boot ─────────────────────────────────────────────────────────────────
+      renderLooksSelect();
       renderKeyframeList();
       updateProgressUI(0);
       initViewer();
+      // Apply the currently-selected export resolution so the viewport is WYSIWYG from the start
+      (() => {
+        const sel = document.getElementById("resolutionSelect");
+        const [w, h] = sel.value.split("x").map(Number);
+        setViewerResolution(w, h);
+      })();
       setTimeOfDay(720);
       loadRegionData();
     </script>
