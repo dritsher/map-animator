@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- CONFIG_PLACEHOLDER -->
+    <meta charset="utf-8" />
+    <title>Map Animator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Cesium.js"></script>
+    <link
+      href="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Widgets/widgets.css"
+      rel="stylesheet"
+    />
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+      }
+
+      #app {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        grid-template-columns: 320px minmax(0, 1fr);
+      }
+
+      #sidebar {
+        border-right: 1px solid #ccc;
+        padding: 16px;
+        overflow: auto;
+        background: #fafafa;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      #cesiumPane {
+        min-width: 0;
+        min-height: 0;
+        position: relative;
+      }
+
+      #cesiumContainer {
+        position: absolute;
+        inset: 0;
+      }
+
+      h2 {
+        margin: 0 0 4px 0;
+        font-size: 16px;
+        color: #222;
+      }
+
+      .section {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 10px 12px;
+        background: #fff;
+      }
+
+      .section-title {
+        font-weight: bold;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #888;
+        margin-bottom: 8px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 13px;
+        color: #444;
+      }
+
+      select, button, input[type="text"], input[type="number"] {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        font-size: 13px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: #fff;
+        margin-bottom: 8px;
+      }
+
+      button {
+        cursor: pointer;
+        background: #eee;
+        border-color: #bbb;
+      }
+
+      button:hover { background: #e0e0e0; }
+      button.primary { background: #2a7aef; color: #fff; border-color: #2a7aef; }
+      button.primary:hover { background: #1d6bd8; }
+      button.danger { background: #e05; color: #fff; border-color: #e05; }
+
+      #keyframeList {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      #keyframeList li {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 8px;
+        background: #f5f5f5;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      #keyframeList li.selected {
+        background: #dbeafe;
+        border-color: #93c5fd;
+      }
+
+      #keyframeList li .kf-label {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      #keyframeList li .kf-time {
+        color: #888;
+        font-size: 11px;
+        flex-shrink: 0;
+      }
+
+      #keyframeList li .kf-delete {
+        color: #aaa;
+        cursor: pointer;
+        font-size: 14px;
+        line-height: 1;
+        flex-shrink: 0;
+        border: none;
+        background: none;
+        padding: 0;
+        width: auto;
+        margin: 0;
+      }
+
+      #keyframeList li .kf-delete:hover { color: #e05; }
+
+      #status {
+        font-size: 12px;
+        color: #888;
+        min-height: 16px;
+      }
+
+      .row {
+        display: flex;
+        gap: 6px;
+      }
+
+      .row > * { flex: 1; }
+
+      #playheadDisplay {
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+        color: #333;
+        margin-bottom: 6px;
+      }
+
+      #progressBar {
+        width: 100%;
+        height: 6px;
+        background: #ddd;
+        border-radius: 3px;
+        overflow: hidden;
+        margin-bottom: 8px;
+        cursor: pointer;
+      }
+
+      #progressFill {
+        height: 100%;
+        background: cyan;
+        border-radius: 3px;
+        width: 0%;
+        transition: width 0.1s linear;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="sidebar">
+        <h2>Map Animator</h2>
+
+        <div class="section">
+          <div class="section-title">Basemap</div>
+          <select id="basemapSelect">
+            <option value="cesium-default">Cesium Default</option>
+            <option value="arcgis-satellite">ArcGIS Satellite</option>
+            <option value="arcgis-hillshade">ArcGIS Hillshade</option>
+            <option value="maptiler-streets">MapTiler Streets</option>
+            <option value="maptiler-satellite">MapTiler Satellite</option>
+            <option value="cesium-night">Earth at Night</option>
+          </select>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Keyframes</div>
+          <ul id="keyframeList"></ul>
+          <div style="margin-top: 8px;">
+            <button id="addKeyframeBtn" class="primary">+ Add Keyframe Here</button>
+          </div>
+          <div style="margin-top: 4px;">
+            <label style="margin-bottom: 2px;">Duration (seconds)</label>
+            <input type="number" id="totalDuration" value="10" min="1" max="300" step="1" />
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Playback</div>
+          <div id="playheadDisplay">0.0s / 10.0s</div>
+          <div id="progressBar"><div id="progressFill"></div></div>
+          <div class="row">
+            <button id="playBtn">▶ Play</button>
+            <button id="stopBtn">■ Stop</button>
+          </div>
+          <div style="margin-top: 4px;">
+            <label style="margin-bottom: 2px;">Speed</label>
+            <select id="speedSelect">
+              <option value="0.25">0.25x</option>
+              <option value="0.5">0.5x</option>
+              <option value="1" selected>1x</option>
+              <option value="2">2x</option>
+              <option value="4">4x</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Export</div>
+          <label style="margin-bottom: 2px;">Resolution</label>
+          <select id="resolutionSelect">
+            <option value="1280x720">1280 × 720</option>
+            <option value="1920x1080" selected>1920 × 1080</option>
+            <option value="3840x2160">3840 × 2160</option>
+          </select>
+          <label style="margin-bottom: 2px;">Frame rate</label>
+          <select id="framerateSelect">
+            <option value="24">24 fps</option>
+            <option value="30" selected>30 fps</option>
+            <option value="60">60 fps</option>
+          </select>
+          <button id="exportBtn">Export Frames</button>
+        </div>
+
+        <div id="status"></div>
+      </div>
+
+      <div id="cesiumPane">
+        <div id="cesiumContainer"></div>
+      </div>
+    </div>
+
+    <script>
+      // ── Config ──────────────────────────────────────────────────────────────
+      const CESIUM_TOKEN   = window.__config.cesiumToken;
+      const MAPTILER_KEY   = window.__config.maptilerApiKey;
+
+      // ── State ───────────────────────────────────────────────────────────────
+      let viewer = null;
+      let currentBasemap = "cesium-default";
+
+      // Keyframe: { id, label, time, position: {lon, lat, height}, heading, pitch, roll }
+      let keyframes = [];
+      let selectedKfId = null;
+      let nextKfId = 1;
+
+      let isPlaying = false;
+      let playStartMs = null;
+      let playStartT  = 0;
+      let playbackT   = 0;  // current playback time in seconds
+      let animRaf = null;
+
+      // ── Helpers ─────────────────────────────────────────────────────────────
+      function setStatus(text) {
+        document.getElementById("status").textContent = text;
+      }
+
+      function totalDuration() {
+        return parseFloat(document.getElementById("totalDuration").value) || 10;
+      }
+
+      function playbackSpeed() {
+        return parseFloat(document.getElementById("speedSelect").value) || 1;
+      }
+
+      // ── Basemap ─────────────────────────────────────────────────────────────
+      async function createImageryProviderForBasemap(basemap) {
+        if (basemap === "maptiler-streets") {
+          return new Cesium.UrlTemplateImageryProvider({
+            url: "https://api.maptiler.com/maps/streets-v2/256/{z}/{x}/{y}.png?key=" + encodeURIComponent(MAPTILER_KEY),
+            credit: "© MapTiler © OpenStreetMap contributors",
+          });
+        }
+        if (basemap === "maptiler-satellite") {
+          return new Cesium.UrlTemplateImageryProvider({
+            url: "https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key=" + encodeURIComponent(MAPTILER_KEY),
+            credit: "© MapTiler",
+          });
+        }
+        if (basemap === "cesium-night") {
+          return await Cesium.IonImageryProvider.fromAssetId(3812);
+        }
+        if (basemap === "arcgis-satellite") {
+          return await Cesium.ArcGisMapServerImageryProvider.fromBasemapType(Cesium.ArcGisBaseMapType.SATELLITE);
+        }
+        if (basemap === "arcgis-hillshade") {
+          return await Cesium.ArcGisMapServerImageryProvider.fromBasemapType(Cesium.ArcGisBaseMapType.HILLSHADE);
+        }
+        return await Cesium.IonImageryProvider.fromAssetId(2);
+      }
+
+      async function applyBasemap(basemap) {
+        if (!viewer) return;
+        const provider = await createImageryProviderForBasemap(basemap);
+        viewer.imageryLayers.removeAll();
+        viewer.imageryLayers.addImageryProvider(provider);
+        currentBasemap = basemap;
+      }
+
+      // ── Cesium Init ─────────────────────────────────────────────────────────
+      function initViewer() {
+        Cesium.Ion.defaultAccessToken = CESIUM_TOKEN;
+
+        viewer = new Cesium.Viewer("cesiumContainer", {
+          animation: false,
+          timeline: false,
+          baseLayerPicker: false,
+          geocoder: false,
+          homeButton: false,
+          sceneModePicker: false,
+          navigationHelpButton: false,
+          fullscreenButton: false,
+          terrain: Cesium.Terrain.fromWorldTerrain({
+            requestVertexNormals: true,
+            requestWaterMask: true,
+          }),
+          contextOptions: {
+            webgl: { preserveDrawingBuffer: true },
+          },
+        });
+
+        viewer.scene.fog.enabled = true;
+        viewer.scene.fog.density = 0.0002;
+        viewer.scene.fog.minimumBrightness = 0.85;
+        viewer.scene.globe.maximumScreenSpaceError = 2;
+        viewer.scene.globe.preloadSiblings = true;
+        viewer.scene.globe.preloadAncestors = true;
+        viewer.scene.globe.enableLighting = true;
+        viewer.scene.light = new Cesium.SunLight({ color: Cesium.Color.WHITE, intensity: 3.0 });
+        viewer.scene.skyAtmosphere.show = true;
+        viewer.scene.globe.showGroundAtmosphere = true;
+        viewer.shadows = true;
+        viewer.scene.shadowMap.enabled = true;
+        viewer.scene.shadowMap.softShadows = true;
+        viewer.scene.moon.show = true;
+        viewer.scene.sun.show = true;
+        viewer.scene.skyBox.show = true;
+
+        setTimeout(() => applyBasemap(currentBasemap), 0);
+
+        setStatus("Ready. Add keyframes to build an animation.");
+      }
+
+      // ── Camera Helpers ──────────────────────────────────────────────────────
+      function getCameraState() {
+        const cam = viewer.camera;
+        const carto = Cesium.Ellipsoid.WGS84.cartesianToCartographic(cam.position);
+        return {
+          lon:     Cesium.Math.toDegrees(carto.longitude),
+          lat:     Cesium.Math.toDegrees(carto.latitude),
+          height:  carto.height,
+          heading: Cesium.Math.toDegrees(cam.heading),
+          pitch:   Cesium.Math.toDegrees(cam.pitch),
+          roll:    Cesium.Math.toDegrees(cam.roll),
+        };
+      }
+
+      function setCameraState({ lon, lat, height, heading, pitch, roll }) {
+        viewer.camera.setView({
+          destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
+          orientation: {
+            heading: Cesium.Math.toRadians(heading),
+            pitch:   Cesium.Math.toRadians(pitch),
+            roll:    Cesium.Math.toRadians(roll),
+          },
+        });
+      }
+
+      // ── Keyframes ───────────────────────────────────────────────────────────
+      function addKeyframe() {
+        if (!viewer) return;
+        const state = getCameraState();
+        const t = keyframes.length === 0 ? 0 : totalDuration();
+        const kf = {
+          id: nextKfId++,
+          label: `Keyframe ${nextKfId - 1}`,
+          time: parseFloat(t.toFixed(2)),
+          ...state,
+        };
+        // Insert sorted by time
+        keyframes.push(kf);
+        keyframes.sort((a, b) => a.time - b.time);
+        selectedKfId = kf.id;
+        renderKeyframeList();
+        setStatus(`Keyframe added at t=${kf.time}s`);
+      }
+
+      function deleteKeyframe(id) {
+        keyframes = keyframes.filter(k => k.id !== id);
+        if (selectedKfId === id) selectedKfId = keyframes[0]?.id ?? null;
+        renderKeyframeList();
+      }
+
+      function renderKeyframeList() {
+        const list = document.getElementById("keyframeList");
+        list.innerHTML = "";
+        if (keyframes.length === 0) {
+          list.innerHTML = '<li style="color:#aaa;font-size:12px;border:none;background:none;padding:4px 0;">No keyframes yet</li>';
+          return;
+        }
+        keyframes.forEach(kf => {
+          const li = document.createElement("li");
+          if (kf.id === selectedKfId) li.classList.add("selected");
+
+          const label = document.createElement("span");
+          label.className = "kf-label";
+          label.textContent = kf.label;
+
+          const time = document.createElement("span");
+          time.className = "kf-time";
+          time.textContent = `${kf.time}s`;
+
+          const del = document.createElement("button");
+          del.className = "kf-delete";
+          del.textContent = "×";
+          del.title = "Delete keyframe";
+          del.addEventListener("click", (e) => { e.stopPropagation(); deleteKeyframe(kf.id); });
+
+          li.append(label, time, del);
+          li.addEventListener("click", () => {
+            selectedKfId = kf.id;
+            setCameraState(kf);
+            renderKeyframeList();
+          });
+          list.appendChild(li);
+        });
+      }
+
+      // ── Animation ───────────────────────────────────────────────────────────
+      function lerpAngle(a, b, t) {
+        // Shortest-path interpolation for angles in degrees
+        let diff = ((b - a + 540) % 360) - 180;
+        return a + diff * t;
+      }
+
+      function interpolateCameraAtTime(t) {
+        if (keyframes.length === 0) return null;
+        if (keyframes.length === 1) return { ...keyframes[0] };
+
+        const clampedT = Math.max(keyframes[0].time, Math.min(keyframes[keyframes.length - 1].time, t));
+
+        // Find surrounding keyframes
+        let i = keyframes.length - 2;
+        for (let j = 0; j < keyframes.length - 1; j++) {
+          if (clampedT <= keyframes[j + 1].time) { i = j; break; }
+        }
+
+        const a = keyframes[i];
+        const b = keyframes[i + 1];
+        const span = b.time - a.time;
+        const alpha = span > 0 ? (clampedT - a.time) / span : 1;
+
+        return {
+          lon:     a.lon     + (b.lon     - a.lon)     * alpha,
+          lat:     a.lat     + (b.lat     - a.lat)     * alpha,
+          height:  a.height  + (b.height  - a.height)  * alpha,
+          heading: lerpAngle(a.heading, b.heading, alpha),
+          pitch:   lerpAngle(a.pitch,   b.pitch,   alpha),
+          roll:    lerpAngle(a.roll,    b.roll,    alpha),
+        };
+      }
+
+      function updateProgressUI(t) {
+        const dur = totalDuration();
+        document.getElementById("playheadDisplay").textContent =
+          `${t.toFixed(1)}s / ${dur.toFixed(1)}s`;
+        document.getElementById("progressFill").style.width =
+          `${Math.min(100, (t / dur) * 100)}%`;
+      }
+
+      function animationFrame(nowMs) {
+        if (!isPlaying) return;
+
+        const elapsed = (nowMs - playStartMs) / 1000 * playbackSpeed();
+        playbackT = playStartT + elapsed;
+
+        const dur = totalDuration();
+        if (playbackT >= dur) {
+          playbackT = dur;
+          isPlaying = false;
+          document.getElementById("playBtn").textContent = "▶ Play";
+        }
+
+        const state = interpolateCameraAtTime(playbackT);
+        if (state) setCameraState(state);
+        updateProgressUI(playbackT);
+
+        if (isPlaying) animRaf = requestAnimationFrame(animationFrame);
+      }
+
+      function startPlayback() {
+        if (keyframes.length < 2) { setStatus("Need at least 2 keyframes to play."); return; }
+        if (playbackT >= totalDuration()) playbackT = 0;
+        isPlaying = true;
+        playStartMs = performance.now();
+        playStartT  = playbackT;
+        document.getElementById("playBtn").textContent = "⏸ Pause";
+        animRaf = requestAnimationFrame(animationFrame);
+      }
+
+      function pausePlayback() {
+        isPlaying = false;
+        if (animRaf) cancelAnimationFrame(animRaf);
+        document.getElementById("playBtn").textContent = "▶ Play";
+      }
+
+      function stopPlayback() {
+        pausePlayback();
+        playbackT = 0;
+        updateProgressUI(0);
+        if (keyframes.length > 0) setCameraState(interpolateCameraAtTime(0));
+      }
+
+      // ── Export ──────────────────────────────────────────────────────────────
+      async function exportFrames() {
+        if (keyframes.length < 2) { setStatus("Need at least 2 keyframes to export."); return; }
+
+        const [w, h] = document.getElementById("resolutionSelect").value.split("x").map(Number);
+        const fps    = parseInt(document.getElementById("framerateSelect").value);
+        const dur    = totalDuration();
+        const total  = Math.ceil(dur * fps);
+
+        setViewerResolution(w, h);
+
+        setStatus(`Exporting ${total} frames at ${w}×${h}…`);
+        const btn = document.getElementById("exportBtn");
+        btn.disabled = true;
+
+        await new Promise(r => setTimeout(r, 100)); // allow repaint
+
+        for (let f = 0; f < total; f++) {
+          const t = f / fps;
+          const state = interpolateCameraAtTime(t);
+          if (state) setCameraState(state);
+
+          await new Promise(r => viewer.scene.postRender.addEventListener(function once() {
+            viewer.scene.postRender.removeEventListener(once);
+            r();
+          }));
+
+          const canvas = viewer.scene.canvas;
+          const dataUrl = canvas.toDataURL("image/png");
+          const a = document.createElement("a");
+          a.href = dataUrl;
+          a.download = `frame_${String(f).padStart(5, "0")}.png`;
+          a.click();
+
+          setStatus(`Exporting frame ${f + 1} / ${total}…`);
+          await new Promise(r => setTimeout(r, 16));
+        }
+
+        btn.disabled = false;
+        setStatus(`Export complete — ${total} frames.`);
+      }
+
+      function setViewerResolution(w, h) {
+        const pane = document.getElementById("cesiumPane");
+        pane.style.width  = w + "px";
+        pane.style.height = h + "px";
+        viewer.resize();
+      }
+
+      // ── Event Listeners ─────────────────────────────────────────────────────
+      document.getElementById("basemapSelect").addEventListener("change", e => applyBasemap(e.target.value));
+
+      document.getElementById("addKeyframeBtn").addEventListener("click", addKeyframe);
+
+      document.getElementById("totalDuration").addEventListener("change", () => {
+        updateProgressUI(playbackT);
+      });
+
+      document.getElementById("playBtn").addEventListener("click", () => {
+        if (isPlaying) pausePlayback(); else startPlayback();
+      });
+
+      document.getElementById("stopBtn").addEventListener("click", stopPlayback);
+
+      document.getElementById("progressBar").addEventListener("click", (e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const ratio = (e.clientX - rect.left) / rect.width;
+        playbackT = ratio * totalDuration();
+        playStartT  = playbackT;
+        playStartMs = performance.now();
+        const state = interpolateCameraAtTime(playbackT);
+        if (state) setCameraState(state);
+        updateProgressUI(playbackT);
+      });
+
+      document.getElementById("exportBtn").addEventListener("click", exportFrames);
+
+      // ── Boot ─────────────────────────────────────────────────────────────────
+      renderKeyframeList();
+      updateProgressUI(0);
+      initViewer();
+    </script>
+  </body>
+</html>
