@@ -56,6 +56,9 @@ server {
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_cache_bypass $http_upgrade;
+        client_max_body_size 30m;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
     }
 }
 ```

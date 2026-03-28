@@ -722,10 +722,24 @@
 
         <div class="section">
           <div class="section-title">Regions</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
+            <span style="font-size:12px;color:#555;">Borders</span>
+            <button id="borderRatioLockBtn" title="Lock ratio between border layers" style="font-size:13px;background:none;border:none;cursor:pointer;padding:0 2px;width:auto;color:#888;">🔓</button>
+          </div>
           <div class="tod-row">
-            <span style="font-size:12px;color:#555;white-space:nowrap;">Borders</span>
-            <input type="range" id="borderOpacity" min="0" max="100" value="70" step="5" />
-            <span id="borderOpacityVal" style="font-size:11px;color:#888;width:28px;text-align:right;">70%</span>
+            <span style="font-size:11px;color:#777;width:52px;flex-shrink:0;">Countries</span>
+            <input type="range" id="countryBorderOpacity" min="0" max="100" value="70" step="5" style="flex:1;" />
+            <span id="countryBorderOpacityVal" style="font-size:11px;color:#888;width:28px;text-align:right;">70%</span>
+          </div>
+          <div class="tod-row">
+            <span style="font-size:11px;color:#777;width:52px;flex-shrink:0;">States</span>
+            <input type="range" id="stateBorderOpacity" min="0" max="100" value="50" step="5" style="flex:1;" />
+            <span id="stateBorderOpacityVal" style="font-size:11px;color:#888;width:28px;text-align:right;">50%</span>
+          </div>
+          <div class="tod-row" style="opacity:0.4;" title="County borders — coming soon">
+            <span style="font-size:11px;color:#777;width:52px;flex-shrink:0;">Counties</span>
+            <input type="range" id="countyBorderOpacity" min="0" max="100" value="30" step="5" style="flex:1;" disabled />
+            <span id="countyBorderOpacityVal" style="font-size:11px;color:#888;width:28px;text-align:right;">30%</span>
           </div>
           <div id="regionSearchRow" style="margin-top:8px;">
             <input type="text" id="regionSearch" list="regionDatalist"
@@ -949,42 +963,42 @@
           name: "Default",
           basemap: "cesium-default",
           brightness: 1.0, contrast: 1.0, saturation: 1.0, hue: 0, gamma: 1.0,
-          borderOpacity: 0.7,
+          countryOpacity: 0.7, stateOpacity: 0.5,
           regionColor: "#ff9900", cityColor: "#ffffff", cityDotSize: 8,
         },
         {
           name: "Dark",
           basemap: "cesium-default",
           brightness: 0.45, contrast: 1.1, saturation: 0.15, hue: 0, gamma: 0.85,
-          borderOpacity: 0.45,
+          countryOpacity: 0.45, stateOpacity: 0.3,
           regionColor: "#ff9900", cityColor: "#ffffff", cityDotSize: 8,
         },
         {
           name: "Satellite",
           basemap: "arcgis-satellite",
           brightness: 1.0, contrast: 1.15, saturation: 1.2, hue: 0, gamma: 1.0,
-          borderOpacity: 0.6,
+          countryOpacity: 0.6, stateOpacity: 0.4,
           regionColor: "#ffff00", cityColor: "#ffffff", cityDotSize: 8,
         },
         {
           name: "Night",
           basemap: "cesium-night",
           brightness: 1.0, contrast: 1.0, saturation: 1.0, hue: 0, gamma: 0.9,
-          borderOpacity: 0.3,
+          countryOpacity: 0.3, stateOpacity: 0.2,
           regionColor: "#00bfff", cityColor: "#ffee55", cityDotSize: 8,
         },
         {
           name: "Monochrome",
           basemap: "arcgis-hillshade",
           brightness: 0.85, contrast: 1.2, saturation: 0.0, hue: 0, gamma: 1.0,
-          borderOpacity: 0.8,
+          countryOpacity: 0.8, stateOpacity: 0.55,
           regionColor: "#ff3333", cityColor: "#ffffff", cityDotSize: 8,
         },
         {
           name: "Election",
           basemap: "cesium-default",
           brightness: 0.55, contrast: 1.3, saturation: 0.1, hue: 0, gamma: 0.9,
-          borderOpacity: 0.6,
+          countryOpacity: 0.6, stateOpacity: 0.4,
           regionColor: "#4488ff", cityColor: "#ffffff", cityDotSize: 8,
         },
       ];
@@ -1049,7 +1063,8 @@
           saturation: bmAdjust.saturation,
           hue:        bmAdjust.hue,
           gamma:      bmAdjust.gamma,
-          borderOpacity: parseInt(document.getElementById("borderOpacity").value) / 100,
+          countryOpacity: parseInt(document.getElementById("countryBorderOpacity").value) / 100,
+          stateOpacity:   parseInt(document.getElementById("stateBorderOpacity").value) / 100,
           regionColor: defaultRegionColor,
           cityColor:   defaultCityColor,
           cityDotSize: defaultCityDotSize,
@@ -1077,11 +1092,16 @@
         });
         applyBmAdjust();
 
-        // 3. Border opacity
-        const boPct = Math.round((look.borderOpacity ?? 0.7) * 100);
-        document.getElementById("borderOpacity").value = boPct;
-        document.getElementById("borderOpacityVal").textContent = boPct + "%";
-        setBorderOpacity(look.borderOpacity ?? 0.7);
+        // 3. Border opacities (backward-compat: old looks have a single borderOpacity)
+        const legacyBo = look.borderOpacity;
+        const coPct = Math.round((look.countryOpacity ?? legacyBo ?? 0.7) * 100);
+        const soPct = Math.round((look.stateOpacity   ?? legacyBo ?? 0.5) * 100);
+        document.getElementById("countryBorderOpacity").value = coPct;
+        document.getElementById("countryBorderOpacityVal").textContent = coPct + "%";
+        document.getElementById("stateBorderOpacity").value = soPct;
+        document.getElementById("stateBorderOpacityVal").textContent = soPct + "%";
+        setCountryBorderOpacity(coPct / 100);
+        setStateBorderOpacity(soPct / 100);
 
         // 4. Default colors
         defaultRegionColor = look.regionColor || "#ff9900";
@@ -1178,7 +1198,10 @@
           return { todMinutes: parseInt(document.getElementById('todSlider').value) };
         }
         if (trackId === 'borders') {
-          return { borderOpacity: parseInt(document.getElementById('borderOpacity').value) / 100 };
+          return {
+            countryOpacity: parseInt(document.getElementById('countryBorderOpacity').value) / 100,
+            stateOpacity:   parseInt(document.getElementById('stateBorderOpacity').value) / 100,
+          };
         }
         if (trackId.startsWith('hl_')) {
           const h = highlights.find(h => h.key === trackId.slice(3));
@@ -1234,14 +1257,21 @@
       // Apply animated scene overlay state (border opacity, highlight/group/city states).
       // Updates Cesium entities in-place where possible to avoid full rebuilds each frame.
       function applySceneState(state) {
-        // Border opacity — update Cesium visual every frame, but sync the slider
-        // only when stopped to avoid unnecessary DOM thrashing during playback.
-        if (state.borderOpacity !== undefined) {
-          setBorderOpacity(state.borderOpacity);
+        // Border opacities — update Cesium visual every frame, sync sliders only when stopped.
+        if (state.countryOpacity !== undefined) {
+          setCountryBorderOpacity(state.countryOpacity);
           if (!isPlaying) {
-            const pct = Math.round(state.borderOpacity * 100);
-            document.getElementById("borderOpacity").value = pct;
-            document.getElementById("borderOpacityVal").textContent = pct + "%";
+            const pct = Math.round(state.countryOpacity * 100);
+            document.getElementById("countryBorderOpacity").value = pct;
+            document.getElementById("countryBorderOpacityVal").textContent = pct + "%";
+          }
+        }
+        if (state.stateOpacity !== undefined) {
+          setStateBorderOpacity(state.stateOpacity);
+          if (!isPlaying) {
+            const pct = Math.round(state.stateOpacity * 100);
+            document.getElementById("stateBorderOpacity").value = pct;
+            document.getElementById("stateBorderOpacityVal").textContent = pct + "%";
           }
         }
 
@@ -1491,7 +1521,15 @@
           return { todMinutes: a.todMinutes + (b.todMinutes - a.todMinutes) * alpha };
         }
         if (trackId === 'borders') {
-          return { borderOpacity: a.borderOpacity + (b.borderOpacity - a.borderOpacity) * alpha };
+          // backward-compat: old keyframes may have a single borderOpacity
+          const co = a.countryOpacity ?? a.borderOpacity ?? 0.7;
+          const so = a.stateOpacity   ?? a.borderOpacity ?? 0.5;
+          const co2 = b.countryOpacity ?? b.borderOpacity ?? 0.7;
+          const so2 = b.stateOpacity   ?? b.borderOpacity ?? 0.5;
+          return {
+            countryOpacity: co + (co2 - co) * alpha,
+            stateOpacity:   so + (so2 - so) * alpha,
+          };
         }
         if (trackId.startsWith('hl_')) {
           return {
@@ -1530,7 +1568,7 @@
         const tod = interpolateTrack('tod', t);
         if (tod) state.todMinutes = tod.todMinutes;
         const brd = interpolateTrack('borders', t);
-        if (brd) state.borderOpacity = brd.borderOpacity;
+        if (brd) { state.countryOpacity = brd.countryOpacity; state.stateOpacity = brd.stateOpacity; }
 
         // Only include entity states if their track has keyframes — avoids calling
         // applySceneState on every entity every animation frame when nothing is animating.
@@ -1619,10 +1657,15 @@
       // Sync sidebar controls to the current animated state — called on pause/stop
       // so sliders reflect the correct value without updating them every frame.
       function syncControlsToState(state) {
-        if (state.borderOpacity !== undefined) {
-          const pct = Math.round(state.borderOpacity * 100);
-          document.getElementById("borderOpacity").value = pct;
-          document.getElementById("borderOpacityVal").textContent = pct + "%";
+        if (state.countryOpacity !== undefined) {
+          const pct = Math.round(state.countryOpacity * 100);
+          document.getElementById("countryBorderOpacity").value = pct;
+          document.getElementById("countryBorderOpacityVal").textContent = pct + "%";
+        }
+        if (state.stateOpacity !== undefined) {
+          const pct = Math.round(state.stateOpacity * 100);
+          document.getElementById("stateBorderOpacity").value = pct;
+          document.getElementById("stateBorderOpacityVal").textContent = pct + "%";
         }
       }
 
@@ -1916,6 +1959,9 @@
           dl.appendChild(opt);
         });
 
+        // Apply initial slider values to the newly loaded data sources.
+        setCountryBorderOpacity(parseInt(document.getElementById('countryBorderOpacity').value) / 100);
+        setStateBorderOpacity(parseInt(document.getElementById('stateBorderOpacity').value) / 100);
         setStatus("Region data loaded.");
       }
 
@@ -2382,37 +2428,76 @@
         applyBmAdjust();
       });
 
-      // Shared material for all border polylines — update in-place to avoid per-entity
-      // re-assignment (which triggers Cesium dirty-marking on thousands of entities every frame).
-      let borderMat = null;
+      // Per-layer border materials — update in-place to avoid per-entity re-assignment.
+      let countryBorderMat = null;
+      let stateBorderMat   = null;
 
-      function setBorderOpacity(ratio) { // ratio 0–1
-        for (const ds of [countryDataSource, stateDataSource]) {
-          if (!ds) continue;
-          ds.show = ratio > 0;
-        }
-        if (!borderMat) {
-          // First call: create the shared material.
-          borderMat = new Cesium.ColorMaterialProperty(Cesium.Color.WHITE.withAlpha(ratio));
+      function setCountryBorderOpacity(ratio) {
+        if (!countryDataSource) return;
+        countryDataSource.show = ratio > 0;
+        if (!countryBorderMat) {
+          countryBorderMat = new Cesium.ColorMaterialProperty(Cesium.Color.WHITE.withAlpha(ratio));
         } else {
-          // Subsequent calls: update colour in-place — no entity iteration needed.
-          borderMat.color.setValue(Cesium.Color.WHITE.withAlpha(ratio));
+          countryBorderMat.color.setValue(Cesium.Color.WHITE.withAlpha(ratio));
         }
-        // Assign borderMat to any entity that doesn't already reference it
-        // (first load, or if data sources are refreshed).
-        for (const ds of [countryDataSource, stateDataSource]) {
-          if (!ds) continue;
-          for (const entity of ds.entities.values) {
-            if (entity.polyline && entity.polyline.material !== borderMat)
-              entity.polyline.material = borderMat;
-          }
+        for (const entity of countryDataSource.entities.values) {
+          if (entity.polyline && entity.polyline.material !== countryBorderMat)
+            entity.polyline.material = countryBorderMat;
         }
       }
 
-      document.getElementById("borderOpacity").addEventListener("input", (e) => {
-        const val = parseInt(e.target.value);
-        document.getElementById("borderOpacityVal").textContent = val + "%";
-        setBorderOpacity(val / 100);
+      function setStateBorderOpacity(ratio) {
+        if (!stateDataSource) return;
+        stateDataSource.show = ratio > 0;
+        if (!stateBorderMat) {
+          stateBorderMat = new Cesium.ColorMaterialProperty(Cesium.Color.WHITE.withAlpha(ratio));
+        } else {
+          stateBorderMat.color.setValue(Cesium.Color.WHITE.withAlpha(ratio));
+        }
+        for (const entity of stateDataSource.entities.values) {
+          if (entity.polyline && entity.polyline.material !== stateBorderMat)
+            entity.polyline.material = stateBorderMat;
+        }
+      }
+
+      // Ratio lock — when enabled, moving any slider scales the others proportionally.
+      let borderRatioLocked = false;
+
+      function onBorderSliderInput(changedId, valId, setterFn) {
+        return function(e) {
+          const newVal = parseInt(e.target.value);
+          document.getElementById(valId).textContent = newVal + "%";
+          setterFn(newVal / 100);
+
+          if (borderRatioLocked) {
+            const oldVal = parseInt(e.target.dataset.prev ?? newVal);
+            const factor = oldVal > 0 ? newVal / oldVal : 0;
+            for (const [sid, vid, fn] of [
+              ['countryBorderOpacity', 'countryBorderOpacityVal', setCountryBorderOpacity],
+              ['stateBorderOpacity',   'stateBorderOpacityVal',   setStateBorderOpacity],
+            ]) {
+              if (sid === changedId) continue;
+              const el = document.getElementById(sid);
+              const scaled = Math.min(100, Math.round(parseInt(el.value) * factor));
+              el.value = scaled;
+              document.getElementById(vid).textContent = scaled + "%";
+              fn(scaled / 100);
+              el.dataset.prev = scaled;
+            }
+          }
+          e.target.dataset.prev = newVal;
+        };
+      }
+
+      document.getElementById("countryBorderOpacity").addEventListener("input",
+        onBorderSliderInput("countryBorderOpacity", "countryBorderOpacityVal", setCountryBorderOpacity));
+      document.getElementById("stateBorderOpacity").addEventListener("input",
+        onBorderSliderInput("stateBorderOpacity", "stateBorderOpacityVal", setStateBorderOpacity));
+
+      document.getElementById("borderRatioLockBtn").addEventListener("click", () => {
+        borderRatioLocked = !borderRatioLocked;
+        document.getElementById("borderRatioLockBtn").textContent = borderRatioLocked ? "🔒" : "🔓";
+        document.getElementById("borderRatioLockBtn").style.color = borderRatioLocked ? "#4a9eff" : "#888";
       });
 
       document.getElementById("addRegionBtn").addEventListener("click", () => {
