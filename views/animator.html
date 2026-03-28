@@ -25,7 +25,7 @@
         position: fixed;
         inset: 0;
         display: grid;
-        grid-template-columns: 320px minmax(0, 1fr);
+        grid-template-columns: 340px minmax(0, 1fr);
         grid-template-rows: minmax(0, 1fr) auto;
       }
 
@@ -60,7 +60,16 @@
         background: #1c1c1e;
         border-top: 1px solid #444;
         user-select: none;
+        min-height: 0;
       }
+      #tlResizeHandle {
+        height: 5px;
+        flex-shrink: 0;
+        cursor: ns-resize;
+        background: transparent;
+        transition: background 0.15s;
+      }
+      #tlResizeHandle:hover, #tlResizeHandle.dragging { background: #4a9eff55; }
       #tlBar {
         display: flex;
         align-items: center;
@@ -134,6 +143,9 @@
       .tl-lbl:hover { background: #2a2a2c; }
       .tl-lbl-sel { background: #1a2a3a !important; border-left: 2px solid #4a9eff; padding-left: 4px; color: #ddf; }
       .tl-sel-dot { width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; flex-shrink: 0; display: inline-block; }
+      .tl-lbl-sub { padding-left: 18px; font-size: 10px; color: #666; background: #1e1e20; cursor: default; }
+      .tl-lbl-sub:hover { background: #222224; }
+      .tl-collapse-btn { font-size: 8px; margin-right: 3px; flex-shrink: 0; color: #666; line-height: 1; }
       #tlCanvasWrap {
         flex: 1;
         overflow: hidden;
@@ -354,14 +366,17 @@
       }
       #cityList li {
         display: flex;
-        align-items: center;
-        gap: 6px;
+        flex-direction: column;
+        gap: 4px;
         padding: 5px 8px;
         background: #f5f5f5;
         border: 1px solid #ddd;
         border-radius: 4px;
         font-size: 12px;
       }
+      .city-main-row { display: flex; align-items: center; gap: 6px; }
+      .city-style-row { display: flex; align-items: center; gap: 5px; padding-left: 2px; }
+      .city-style-row select { font-size: 11px; padding: 1px 3px; border-radius: 3px; border: 1px solid #bbb; background: #fff; margin: 0; height: auto; }
       /* ID + element + attribute beats the global input[type="number"] rule */
       #cityList input[type="number"] {
         width: 38px;
@@ -836,6 +851,7 @@
       </div>
 
       <div id="tlFooter">
+        <div id="tlResizeHandle"></div>
         <div id="tlBar">
           <button id="tlToggleBtn">▾ Timeline</button>
           <div class="tl-bar-sep"></div>
@@ -1207,7 +1223,10 @@
           const h = highlights.find(h => h.key === trackId.slice(3));
           return h ? { color:h.color, outlineOpacity:h.outlineOpacity, outlineWidth:h.outlineWidth,
                        subregionOpacity:h.subregionOpacity, subregionWidth:h.subregionWidth,
-                       fillOpacity:h.fillOpacity, invert:h.invert } : null;
+                       fillOpacity:h.fillOpacity, invert:h.invert, showLabel:h.showLabel,
+                       labelOpacity:h.labelOpacity??1, labelFontSize:h.labelFontSize??14,
+                       labelFontWeight:h.labelFontWeight??'normal', labelFontFamily:h.labelFontFamily??'Arial',
+                       labelOffsetX:h.labelOffsetX??0, labelOffsetY:h.labelOffsetY??0 } : null;
         }
         if (trackId.startsWith('group_')) {
           const g = regionGroups.find(g => g.id === parseInt(trackId.slice(6)));
@@ -1215,7 +1234,18 @@
         }
         if (trackId.startsWith('city_')) {
           const m = cityMarkers.find(m => m.id === parseInt(trackId.slice(5)));
-          return m ? { color:m.color, dotSize:m.dotSize, showLabel:m.showLabel } : null;
+          return m ? {
+            color:        m.color,
+            dotSize:      m.dotSize,
+            showLabel:    m.showLabel,
+            dotOpacity:   m.dotOpacity   ?? 1.0,
+            labelOpacity: m.labelOpacity ?? 1.0,
+            fontSize:     m.fontSize     ?? 13,
+            fontWeight:   m.fontWeight   ?? 'normal',
+            fontFamily:   m.fontFamily   ?? 'Arial',
+            offsetX:      m.offsetX      ?? 0,
+            offsetY:      m.offsetY      ?? 0,
+          } : null;
         }
         return null;
       }
@@ -1321,6 +1351,18 @@
           } else if (hs.fillOpacity !== oldFillOpacity || colorChanged || invertChanged) {
             setFillOpacity(h.key, hs.fillOpacity); // uses updated h.color + h.invert
           }
+
+          // Label visibility and style
+          if (hs.showLabel !== undefined && hs.showLabel !== h.showLabel) {
+            setHighlightLabel(h.key, hs.showLabel);
+          }
+          h.labelOpacity    = hs.labelOpacity    ?? h.labelOpacity;
+          h.labelFontSize   = hs.labelFontSize   ?? h.labelFontSize;
+          h.labelFontWeight = hs.labelFontWeight ?? h.labelFontWeight;
+          h.labelFontFamily = hs.labelFontFamily ?? h.labelFontFamily;
+          h.labelOffsetX    = hs.labelOffsetX    ?? h.labelOffsetX;
+          h.labelOffsetY    = hs.labelOffsetY    ?? h.labelOffsetY;
+          if (h.labelEntity) updateHighlightLabelStyle(h.key);
         });
 
         // Group states
@@ -1351,11 +1393,18 @@
           const m = cityMarkers.find(m => m.id === cs.id);
           if (!m) return;
           const needRebuild = cs.color !== m.color || Math.round(cs.dotSize) !== m.dotSize;
-          m.color     = cs.color;
-          m.dotSize   = Math.round(cs.dotSize);
-          m.showLabel = cs.showLabel;
+          m.color        = cs.color;
+          m.dotSize      = Math.round(cs.dotSize);
+          m.showLabel    = cs.showLabel;
+          m.dotOpacity   = cs.dotOpacity   ?? m.dotOpacity;
+          m.labelOpacity = cs.labelOpacity ?? m.labelOpacity;
+          m.fontSize     = cs.fontSize      ?? m.fontSize;
+          m.fontWeight   = cs.fontWeight   ?? m.fontWeight;
+          m.fontFamily   = cs.fontFamily   ?? m.fontFamily;
+          m.offsetX      = cs.offsetX      ?? m.offsetX;
+          m.offsetY      = cs.offsetY      ?? m.offsetY;
           if (needRebuild) updateCityEntity(m);
-          else             m.entity.label.show = cs.showLabel;
+          else             updateCityLabelStyle(m);
         });
       }
 
@@ -1539,7 +1588,14 @@
             subregionOpacity: a.subregionOpacity + (b.subregionOpacity - a.subregionOpacity) * alpha,
             subregionWidth:   a.subregionWidth   + (b.subregionWidth   - a.subregionWidth)   * alpha,
             fillOpacity:      a.fillOpacity      + (b.fillOpacity      - a.fillOpacity)      * alpha,
-            invert: alpha < 0.5 ? a.invert : b.invert,
+            invert:           alpha < 0.5 ? a.invert           : b.invert,
+            showLabel:        alpha < 0.5 ? a.showLabel        : b.showLabel,
+            labelOpacity:     (a.labelOpacity??1)  + ((b.labelOpacity??1)  - (a.labelOpacity??1))  * alpha,
+            labelFontSize:    (a.labelFontSize??14) + ((b.labelFontSize??14) - (a.labelFontSize??14)) * alpha,
+            labelFontWeight:  alpha < 0.5 ? (a.labelFontWeight??'normal') : (b.labelFontWeight??'normal'),
+            labelFontFamily:  alpha < 0.5 ? (a.labelFontFamily??'Arial')  : (b.labelFontFamily??'Arial'),
+            labelOffsetX:     (a.labelOffsetX??0)  + ((b.labelOffsetX??0)  - (a.labelOffsetX??0))  * alpha,
+            labelOffsetY:     (a.labelOffsetY??0)  + ((b.labelOffsetY??0)  - (a.labelOffsetY??0))  * alpha,
           };
         }
         if (trackId.startsWith('group_')) {
@@ -1551,9 +1607,16 @@
         }
         if (trackId.startsWith('city_')) {
           return {
-            color:     lerpColor(a.color, b.color, alpha),
-            dotSize:   a.dotSize + (b.dotSize - a.dotSize) * alpha,
-            showLabel: alpha < 0.5 ? a.showLabel : b.showLabel,
+            color:        lerpColor(a.color, b.color, alpha),
+            dotSize:      a.dotSize      + (b.dotSize      - a.dotSize)      * alpha,
+            showLabel:    alpha < 0.5 ? a.showLabel  : b.showLabel,
+            dotOpacity:   a.dotOpacity   + (b.dotOpacity   - a.dotOpacity)   * alpha,
+            labelOpacity: a.labelOpacity + (b.labelOpacity - a.labelOpacity) * alpha,
+            fontSize:     a.fontSize + (b.fontSize - a.fontSize) * alpha,
+            fontWeight:   alpha < 0.5 ? a.fontWeight : b.fontWeight,
+            fontFamily:   alpha < 0.5 ? a.fontFamily : b.fontFamily,
+            offsetX:      a.offsetX + (b.offsetX - a.offsetX) * alpha,
+            offsetY:      a.offsetY + (b.offsetY - a.offsetY) * alpha,
           };
         }
         return null;
@@ -1866,7 +1929,7 @@
         return new Cesium.Color(r, g, b, 1.0);
       }
 
-      function patchDataSourceEntities(ds, borderWidth) {
+      function patchDataSourceEntities(ds, borderWidth, zIndex = 0) {
         const now = Cesium.JulianDate.now();
         const toRemove = [];
 
@@ -1884,14 +1947,30 @@
           // Disable polygon fill entirely — polygon tessellation crashes on some Natural Earth features
           entity.polygon.show = false;
 
-          // Polyline border
           try {
-            const closed = [...hierarchy.positions, hierarchy.positions[0]];
+            const raw = [...hierarchy.positions, hierarchy.positions[0]];
+            // Strip consecutive duplicate vertices — some GeoJSON features (e.g. Alaska)
+            // have repeated points that produce zero-length degenerate segments causing
+            // GroundPolylinePrimitive to glitch at those locations.
+            const positions = [raw[0]];
+            for (let i = 1; i < raw.length; i++) {
+              const p = raw[i], q = positions[positions.length - 1];
+              if (Math.abs(p.x - q.x) > 1 || Math.abs(p.y - q.y) > 1 || Math.abs(p.z - q.z) > 1) {
+                positions.push(p);
+              }
+            }
+            if (positions.length < 2) continue;
+            // clampToGround: true uses GroundPolylinePrimitive, which correctly handles
+            // globe-limb depth testing so segments never disappear at any camera angle.
+            // All entities in the same layer share the same zIndex so they batch into
+            // a single draw call (good performance). Within a batch the draw order is
+            // deterministic, so shared borders (e.g. US-Canada Alaska) never flicker.
             entity.polyline = new Cesium.PolylineGraphics({
-              positions: closed,
-              width:     borderWidth || DEFAULT_WIDTH,
-              material:  new Cesium.ColorMaterialProperty(DEFAULT_OUTLINE),
-              arcType:   Cesium.ArcType.NONE,
+              positions:     positions,
+              width:         borderWidth || DEFAULT_WIDTH,
+              material:      new Cesium.ColorMaterialProperty(DEFAULT_OUTLINE),
+              clampToGround: true,
+              zIndex:        zIndex,
             });
           } catch (e) {}
         }
@@ -1905,7 +1984,7 @@
           stroke:      DEFAULT_OUTLINE,
           strokeWidth: DEFAULT_WIDTH,
         });
-        patchDataSourceEntities(countryDataSource, DEFAULT_WIDTH);
+        patchDataSourceEntities(countryDataSource, DEFAULT_WIDTH, 2);
         viewer.dataSources.add(countryDataSource);
 
         stateDataSource = await Cesium.GeoJsonDataSource.load("/data/states.geojson", {
@@ -1913,7 +1992,7 @@
           stroke:      DEFAULT_OUTLINE,
           strokeWidth: DEFAULT_WIDTH * 0.6,
         });
-        patchDataSourceEntities(stateDataSource, DEFAULT_WIDTH * 0.6);
+        patchDataSourceEntities(stateDataSource, DEFAULT_WIDTH * 0.6, 1);
         viewer.dataSources.add(stateDataSource);
 
         // Build unified lookup covering all countries and states.
@@ -1967,14 +2046,25 @@
 
       function makePolylineEntities(polygons, color, width, opacity) {
         const alpha = (opacity === undefined) ? 1.0 : opacity;
-        return polygons.map(pts => viewer.entities.add({
-          polyline: new Cesium.PolylineGraphics({
-            positions: [...pts, pts[0]],
-            width,
-            material: new Cesium.ColorMaterialProperty(hexToColor(color).withAlpha(alpha)),
-            arcType:  Cesium.ArcType.NONE,
-          }),
-        }));
+        return polygons.map(pts => {
+          const raw = [...pts, pts[0]];
+          // Deduplicate consecutive identical vertices (some GeoJSON features have
+          // duplicate points that create zero-length segments causing rendering glitches).
+          const positions = [raw[0]];
+          for (let i = 1; i < raw.length; i++) {
+            const p = raw[i], q = positions[positions.length - 1];
+            if (Math.abs(p.x - q.x) > 1 || Math.abs(p.y - q.y) > 1 || Math.abs(p.z - q.z) > 1)
+              positions.push(p);
+          }
+          return viewer.entities.add({
+            polyline: new Cesium.PolylineGraphics({
+              positions,
+              width,
+              material:      new Cesium.ColorMaterialProperty(hexToColor(color).withAlpha(alpha)),
+              clampToGround: true,
+            }),
+          });
+        });
       }
 
       function toSurfacePositions(pts) {
@@ -2104,6 +2194,60 @@
         }
       }
 
+      function getPolygonCentroid(polygons) {
+        const positions = polygons[0];
+        if (!positions?.length) return null;
+        let sumLon = 0, sumLat = 0;
+        for (const pos of positions) {
+          const c = Cesium.Cartographic.fromCartesian(pos);
+          sumLon += Cesium.Math.toDegrees(c.longitude);
+          sumLat += Cesium.Math.toDegrees(c.latitude);
+        }
+        return { lon: sumLon / positions.length, lat: sumLat / positions.length };
+      }
+
+      function updateHighlightLabelStyle(key) {
+        const h = highlights.find(h => h.key === key);
+        if (!h?.labelEntity) return;
+        const la = h.labelOpacity ?? 1.0;
+        const fontStr = `${h.labelFontWeight === 'bold' ? 'bold ' : ''}${h.labelFontSize ?? 14}px ${h.labelFontFamily ?? 'Arial'}`;
+        h.labelEntity.label.font         = fontStr;
+        h.labelEntity.label.fillColor    = hexToColor(h.color).withAlpha(la);
+        h.labelEntity.label.outlineColor = Cesium.Color.BLACK.withAlpha(la);
+        h.labelEntity.label.pixelOffset  = new Cesium.Cartesian2(h.labelOffsetX ?? 0, h.labelOffsetY ?? 0);
+        if (h.showLabel) h.labelEntity.label.show = la > 0;
+      }
+
+      function setHighlightLabel(key, show) {
+        const h = highlights.find(h => h.key === key);
+        if (!h) return;
+        h.showLabel = show;
+        if (!show) {
+          if (h.labelEntity) { viewer.entities.remove(h.labelEntity); h.labelEntity = null; }
+          return;
+        }
+        if (!h.centroid) return;
+        if (h.labelEntity) viewer.entities.remove(h.labelEntity);
+        const la = h.labelOpacity ?? 1.0;
+        const fontStr = `${h.labelFontWeight === 'bold' ? 'bold ' : ''}${h.labelFontSize ?? 14}px ${h.labelFontFamily ?? 'Arial'}`;
+        h.labelEntity = viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(h.centroid.lon, h.centroid.lat),
+          label: new Cesium.LabelGraphics({
+            text: h.labelText,
+            font: fontStr,
+            fillColor: hexToColor(h.color).withAlpha(la),
+            outlineColor: Cesium.Color.BLACK.withAlpha(la),
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            pixelOffset: new Cesium.Cartesian2(h.labelOffsetX ?? 0, h.labelOffsetY ?? 0),
+            show: la > 0,
+          }),
+        });
+      }
+
       function addHighlight(displayStr) {
         const entry = regionLookup.get(displayStr);
         if (!entry || !entry.polygons.length) return;
@@ -2118,9 +2262,13 @@
           outlineEntities, outlineOpacity: 1.0, outlineWidth: 2.0,
           subregionEntities: [], subregionOpacity: 0.0, subregionWidth: 1.0,
           fillEntities: [], fillOpacity: 0, invert: false,
+          showLabel: false, labelText: entry.name.split(' (')[0], labelEntity: null,
+          labelFontSize: 14, labelFontWeight: 'normal', labelFontFamily: 'Arial',
+          labelOffsetX: 0, labelOffsetY: 0, labelOpacity: 1.0,
+          centroid: getPolygonCentroid(entry.polygons),
         });
         tracks['hl_' + entry.key] = { id:'hl_'+entry.key, label:entry.name, category:'highlight',
-          color, h:22, keyframes:[] };
+          color, h:22, keyframes:[], collapsed:true };
         selectedTrackIds.add('hl_' + entry.key);
         tlBuildLabels();
         renderHighlightList();
@@ -2134,6 +2282,7 @@
         h.outlineEntities.forEach(e => viewer.entities.remove(e));
         h.subregionEntities.forEach(e => viewer.entities.remove(e));
         h.fillEntities.forEach(removeFillItem);
+        if (h.labelEntity) viewer.entities.remove(h.labelEntity);
         highlights.splice(idx, 1);
         delete tracks['hl_' + hlKey];
         selectedTrackIds.delete('hl_' + hlKey);
@@ -2269,12 +2418,35 @@
                 if (ent?.polygon) ent.polygon.material = new Cesium.ColorMaterialProperty(col.withAlpha(h.fillOpacity));
               });
             }
+            if (h.labelEntity) updateHighlightLabelStyle(h.key);
           });
 
           const nameEl = document.createElement("span");
           nameEl.className = "hl-name";
           nameEl.textContent = h.name;
           nameEl.title = h.name;
+
+          // Label toggle
+          const labelBtn = document.createElement("button");
+          labelBtn.className = "hl-toggle" + (h.showLabel ? " hl-toggle-active" : "");
+          labelBtn.textContent = "label";
+          labelBtn.title = "Show label on map";
+          labelBtn.addEventListener("click", () => {
+            setHighlightLabel(h.key, !h.showLabel);
+            labelBtn.className = "hl-toggle" + (h.showLabel ? " hl-toggle-active" : "");
+            labelTextInput.style.display = h.showLabel ? "inline-block" : "none";
+          });
+
+          // Editable label text (shown only when label is on)
+          const labelTextInput = document.createElement("input");
+          labelTextInput.type = "text";
+          labelTextInput.value = h.labelText;
+          labelTextInput.title = "Label text";
+          labelTextInput.style.cssText = `display:${h.showLabel ? 'inline-block' : 'none'};width:70px;font-size:11px;padding:1px 4px;margin:0;`;
+          labelTextInput.addEventListener("input", e => {
+            h.labelText = e.target.value;
+            if (h.labelEntity) h.labelEntity.label.text = h.labelText;
+          });
 
           const removeBtn = document.createElement("button");
           removeBtn.className = "hl-remove";
@@ -2283,6 +2455,8 @@
 
           header.appendChild(swatch);
           header.appendChild(nameEl);
+          header.appendChild(labelBtn);
+          header.appendChild(labelTextInput);
           header.appendChild(removeBtn);
 
           // ── Body ────────────────────────────────────────────────────────────
@@ -2339,6 +2513,68 @@
           fillRow.appendChild(fillPct);
           fillRow.appendChild(invertBtn);
           body.appendChild(fillRow);
+
+          // ── Collapsible label style section ─────────────────────────────
+          const labelStyleToggle = document.createElement("button");
+          labelStyleToggle.style.cssText = "width:100%;text-align:left;background:#eef;border:none;border-top:1px solid #ddd;padding:3px 6px;font-size:11px;color:#669;cursor:pointer;margin-top:4px;";
+          labelStyleToggle.textContent = "▸ Label Style";
+          body.appendChild(labelStyleToggle);
+
+          const labelStylePanel = document.createElement("div");
+          labelStylePanel.style.cssText = "display:none;flex-direction:column;gap:4px;padding:4px 2px 2px;";
+          body.appendChild(labelStylePanel);
+
+          labelStyleToggle.addEventListener("click", () => {
+            const open = labelStylePanel.style.display === "none";
+            labelStylePanel.style.display = open ? "flex" : "none";
+            labelStyleToggle.textContent = (open ? "▼" : "▸") + " Label Style";
+          });
+
+          // Font row
+          const lsFontRow = document.createElement("div");
+          lsFontRow.className = "city-style-row";
+          const lsSizeLbl = document.createElement("span"); lsSizeLbl.textContent = "Size"; lsSizeLbl.style.cssText = "font-size:10px;color:#888;";
+          const lsSizeIn = document.createElement("input"); lsSizeIn.type="number"; lsSizeIn.min="8"; lsSizeIn.max="40"; lsSizeIn.step="1";
+          lsSizeIn.value = String(h.labelFontSize??14); lsSizeIn.style.cssText = "width:38px;font-size:11px;padding:1px 3px;margin:0;text-align:center;";
+          lsSizeIn.addEventListener("change", e => { h.labelFontSize = parseFloat(e.target.value)||14; updateHighlightLabelStyle(h.key); });
+          const lsBoldBtn = document.createElement("button");
+          lsBoldBtn.className = "hl-toggle" + (h.labelFontWeight==='bold' ? " hl-toggle-active" : "");
+          lsBoldBtn.textContent = "B"; lsBoldBtn.title = "Bold"; lsBoldBtn.style.cssText = "font-weight:bold;min-width:24px;";
+          lsBoldBtn.addEventListener("click", () => {
+            h.labelFontWeight = h.labelFontWeight==='bold' ? 'normal' : 'bold';
+            lsBoldBtn.className = "hl-toggle" + (h.labelFontWeight==='bold' ? " hl-toggle-active" : "");
+            updateHighlightLabelStyle(h.key);
+          });
+          const lsFontSel = document.createElement("select"); lsFontSel.title = "Font family"; lsFontSel.style.cssText = "font-size:11px;padding:1px 3px;border-radius:3px;border:1px solid #bbb;background:#fff;margin:0;";
+          ['Arial','Helvetica','Verdana','Georgia','Times New Roman','Courier','Impact'].forEach(f => {
+            const o = document.createElement("option"); o.value=f; o.textContent=f; if(f===h.labelFontFamily) o.selected=true; lsFontSel.appendChild(o);
+          });
+          lsFontSel.addEventListener("change", e => { h.labelFontFamily = e.target.value; updateHighlightLabelStyle(h.key); });
+          lsFontRow.append(lsSizeLbl, lsSizeIn, lsBoldBtn, lsFontSel);
+          labelStylePanel.appendChild(lsFontRow);
+
+          // Offset row
+          const lsOffRow = document.createElement("div"); lsOffRow.className = "city-style-row";
+          const lsXLbl = document.createElement("span"); lsXLbl.textContent = "X"; lsXLbl.style.cssText = "font-size:10px;color:#888;";
+          const lsXIn = document.createElement("input"); lsXIn.type="number"; lsXIn.min="-60"; lsXIn.max="60"; lsXIn.step="1";
+          lsXIn.value = String(h.labelOffsetX??0); lsXIn.style.cssText = "width:38px;font-size:11px;padding:1px 3px;margin:0;text-align:center;";
+          lsXIn.addEventListener("change", e => { h.labelOffsetX = parseInt(e.target.value)||0; updateHighlightLabelStyle(h.key); });
+          const lsYLbl = document.createElement("span"); lsYLbl.textContent = "Y"; lsYLbl.style.cssText = "font-size:10px;color:#888;";
+          const lsYIn = document.createElement("input"); lsYIn.type="number"; lsYIn.min="-60"; lsYIn.max="60"; lsYIn.step="1";
+          lsYIn.value = String(h.labelOffsetY??0); lsYIn.style.cssText = "width:38px;font-size:11px;padding:1px 3px;margin:0;text-align:center;";
+          lsYIn.addEventListener("change", e => { h.labelOffsetY = parseInt(e.target.value)||0; updateHighlightLabelStyle(h.key); });
+          lsOffRow.append(lsXLbl, lsXIn, lsYLbl, lsYIn);
+          labelStylePanel.appendChild(lsOffRow);
+
+          // Opacity row
+          const lsOpRow = document.createElement("div"); lsOpRow.className = "city-style-row";
+          const lsOpLbl = document.createElement("span"); lsOpLbl.textContent = "Opacity"; lsOpLbl.style.cssText = "font-size:10px;color:#888;";
+          const lsOpSlider = document.createElement("input"); lsOpSlider.type="range"; lsOpSlider.min="0"; lsOpSlider.max="100"; lsOpSlider.step="5";
+          lsOpSlider.value = String(Math.round((h.labelOpacity??1)*100)); lsOpSlider.style.cssText = "flex:1;min-width:40px;";
+          const lsOpPct = document.createElement("span"); lsOpPct.textContent = Math.round((h.labelOpacity??1)*100)+"%"; lsOpPct.style.cssText = "font-size:10px;color:#888;width:28px;text-align:right;";
+          lsOpSlider.addEventListener("input", e => { h.labelOpacity = parseInt(e.target.value)/100; lsOpPct.textContent = e.target.value+"%"; updateHighlightLabelStyle(h.key); });
+          lsOpRow.append(lsOpLbl, lsOpSlider, lsOpPct);
+          labelStylePanel.appendChild(lsOpRow);
 
           card.appendChild(header);
           card.appendChild(body);
@@ -2552,7 +2788,7 @@
         });
         const newGroup = regionGroups[regionGroups.length - 1];
         tracks['group_'+newGroup.id] = { id:'group_'+newGroup.id, label:'Group: '+name, category:'group',
-          color:'#3388ff', h:22, keyframes:[] };
+          color:'#3388ff', h:22, keyframes:[], collapsed:true };
         selectedTrackIds.add('group_'+newGroup.id);
         tlBuildLabels();
         renderGroupList();
@@ -2749,19 +2985,19 @@
           position: pos,
           point: new Cesium.PointGraphics({
             pixelSize: c.dotSize,
-            color: col,
+            color: col.withAlpha(c.dotOpacity ?? 1.0),
             outlineColor: Cesium.Color.BLACK,
             outlineWidth: 1,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
           }),
           label: new Cesium.LabelGraphics({
             text: c.name,
-            font: "13px Arial",
-            fillColor: Cesium.Color.WHITE,
+            font: `${c.fontWeight === 'bold' ? 'bold ' : ''}${c.fontSize ?? 13}px ${c.fontFamily ?? 'Arial'}`,
+            fillColor: Cesium.Color.fromCssColorString(c.color).withAlpha(c.labelOpacity ?? 1.0),
             outlineColor: Cesium.Color.BLACK,
             outlineWidth: 2,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-            pixelOffset: new Cesium.Cartesian2(c.dotSize / 2 + 4, 0),
+            pixelOffset: new Cesium.Cartesian2(c.dotSize / 2 + 4 + (c.offsetX ?? 0), c.offsetY ?? 0),
             horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
             verticalOrigin: Cesium.VerticalOrigin.CENTER,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -2787,11 +3023,13 @@
           color: defaultCityColor,
           dotSize: defaultCityDotSize,
           showLabel: true,
+          fontSize: 13, fontWeight: 'normal', fontFamily: 'Arial', offsetX: 0, offsetY: 0,
+          dotOpacity: 1.0, labelOpacity: 1.0,
         };
         marker.entity = makeCityEntity(marker);
         cityMarkers.push(marker);
         tracks['city_'+marker.id] = { id:'city_'+marker.id, label:marker.name, category:'city',
-          color: defaultCityColor, h:22, keyframes:[] };
+          color: defaultCityColor, h:22, keyframes:[], collapsed:true };
         selectedTrackIds.add('city_'+marker.id);
         tlBuildLabels();
         renderCityList();
@@ -2813,11 +3051,37 @@
         marker.entity = makeCityEntity(marker);
       }
 
+      function updateCityLabelStyle(marker) {
+        if (!marker.entity) return;
+        const col = Cesium.Color.fromCssColorString(marker.color);
+        const dotOpacity   = marker.dotOpacity   ?? 1.0;
+        const labelOpacity = marker.labelOpacity ?? 1.0;
+
+        if (marker.entity.point) {
+          marker.entity.point.show         = dotOpacity > 0;
+          marker.entity.point.color        = col.withAlpha(dotOpacity);
+          marker.entity.point.outlineColor = Cesium.Color.BLACK.withAlpha(dotOpacity);
+        }
+        if (marker.entity.label) {
+          const fontStr = `${marker.fontWeight === 'bold' ? 'bold ' : ''}${marker.fontSize}px ${marker.fontFamily}`;
+          marker.entity.label.font         = fontStr;
+          marker.entity.label.fillColor    = col.withAlpha(labelOpacity);
+          marker.entity.label.outlineColor = Cesium.Color.BLACK.withAlpha(labelOpacity);
+          marker.entity.label.pixelOffset  = new Cesium.Cartesian2(marker.dotSize / 2 + 4 + (marker.offsetX ?? 0), marker.offsetY ?? 0);
+          // Only control show via opacity when the label is toggled on
+          if (marker.showLabel) marker.entity.label.show = labelOpacity > 0;
+        }
+      }
+
       function renderCityList() {
         const ul = document.getElementById("cityList");
         ul.innerHTML = "";
         cityMarkers.forEach(marker => {
           const li = document.createElement("li");
+
+          // ── Main row ──────────────────────────────────────────────────────
+          const mainRow = document.createElement("div");
+          mainRow.className = "city-main-row";
 
           // Color swatch
           const swatch = document.createElement("div");
@@ -2832,14 +3096,13 @@
           colorInput.addEventListener("input", e => {
             marker.color = e.target.value;
             swatch.style.background = marker.color;
-            updateCityEntity(marker);
+            updateCityLabelStyle(marker);
           });
-          li.appendChild(swatch);
+          mainRow.appendChild(swatch);
 
           // Dot size input
           const sizeInput = document.createElement("input");
           sizeInput.type = "number";
-          sizeInput.className = "";
           sizeInput.min = "2"; sizeInput.max = "30"; sizeInput.step = "1";
           sizeInput.value = String(marker.dotSize);
           sizeInput.title = "Dot size (px)";
@@ -2847,35 +3110,168 @@
             marker.dotSize = Math.max(2, Math.min(30, parseInt(e.target.value) || 8));
             updateCityEntity(marker);
           });
-          li.appendChild(sizeInput);
+          mainRow.appendChild(sizeInput);
 
           // Name
           const nameSpan = document.createElement("span");
           nameSpan.className = "hl-name";
           nameSpan.title = `${marker.name}, ${marker.country}`;
           nameSpan.textContent = marker.name;
-          li.appendChild(nameSpan);
+          mainRow.appendChild(nameSpan);
 
           // Label toggle
           const labelBtn = document.createElement("button");
           labelBtn.className = "hl-toggle" + (marker.showLabel ? "" : " hl-toggle-active");
           labelBtn.textContent = marker.showLabel ? "label" : "dot";
-          labelBtn.title = "Toggle label";
+          labelBtn.title = "Toggle label visibility";
           labelBtn.addEventListener("click", () => {
             marker.showLabel = !marker.showLabel;
-            marker.entity.label.show = marker.showLabel;
+            marker.entity.label.show = marker.showLabel && (marker.labelOpacity ?? 1) > 0;
             labelBtn.className = "hl-toggle" + (marker.showLabel ? "" : " hl-toggle-active");
             labelBtn.textContent = marker.showLabel ? "label" : "dot";
           });
-          li.appendChild(labelBtn);
+          mainRow.appendChild(labelBtn);
+
+          // Style expand toggle
+          const styleToggle = document.createElement("button");
+          styleToggle.className = "hl-toggle";
+          styleToggle.textContent = "▸";
+          styleToggle.title = "Label styling";
+          styleToggle.style.cssText = "min-width:20px;padding:1px 4px;font-size:10px;";
+          mainRow.appendChild(styleToggle);
 
           // Remove
           const rmBtn = document.createElement("button");
           rmBtn.className = "hl-remove";
           rmBtn.textContent = "×";
           rmBtn.addEventListener("click", () => removeCity(marker.id));
-          li.appendChild(rmBtn);
+          mainRow.appendChild(rmBtn);
 
+          li.appendChild(mainRow);
+
+          // ── Style row ─────────────────────────────────────────────────────
+          const styleRow = document.createElement("div");
+          styleRow.className = "city-style-row";
+
+          const sizeLabel = document.createElement("span");
+          sizeLabel.textContent = "Size";
+          sizeLabel.style.cssText = "font-size:10px;color:#888;";
+          styleRow.appendChild(sizeLabel);
+
+          const fontSizeInput = document.createElement("input");
+          fontSizeInput.type = "number";
+          fontSizeInput.min = "8"; fontSizeInput.max = "30"; fontSizeInput.step = "1";
+          fontSizeInput.value = String(marker.fontSize);
+          fontSizeInput.title = "Font size (px)";
+          fontSizeInput.style.cssText = "width:38px;font-size:11px;padding:1px 3px;margin:0;text-align:center;";
+          fontSizeInput.addEventListener("change", e => {
+            marker.fontSize = Math.max(8, Math.min(30, parseInt(e.target.value) || 13));
+            fontSizeInput.value = String(marker.fontSize);
+            updateCityLabelStyle(marker);
+          });
+          styleRow.appendChild(fontSizeInput);
+
+          const boldBtn = document.createElement("button");
+          boldBtn.className = "hl-toggle" + (marker.fontWeight === 'bold' ? " hl-toggle-active" : "");
+          boldBtn.textContent = "B";
+          boldBtn.title = "Bold";
+          boldBtn.style.cssText = "font-weight:bold;min-width:24px;";
+          boldBtn.addEventListener("click", () => {
+            marker.fontWeight = marker.fontWeight === 'bold' ? 'normal' : 'bold';
+            boldBtn.className = "hl-toggle" + (marker.fontWeight === 'bold' ? " hl-toggle-active" : "");
+            updateCityLabelStyle(marker);
+          });
+          styleRow.appendChild(boldBtn);
+
+          const fontSelect = document.createElement("select");
+          fontSelect.title = "Font family";
+          ['Arial', 'Helvetica', 'Verdana', 'Georgia', 'Times New Roman', 'Courier', 'Impact'].forEach(f => {
+            const opt = document.createElement("option");
+            opt.value = f; opt.textContent = f;
+            if (f === marker.fontFamily) opt.selected = true;
+            fontSelect.appendChild(opt);
+          });
+          fontSelect.addEventListener("change", e => {
+            marker.fontFamily = e.target.value;
+            updateCityLabelStyle(marker);
+          });
+          styleRow.appendChild(fontSelect);
+
+          const offsetXLabel = document.createElement("span");
+          offsetXLabel.textContent = "X";
+          offsetXLabel.style.cssText = "font-size:10px;color:#888;margin-left:4px;";
+          styleRow.appendChild(offsetXLabel);
+
+          const offsetXInput = document.createElement("input");
+          offsetXInput.type = "number";
+          offsetXInput.min = "-60"; offsetXInput.max = "60"; offsetXInput.step = "1";
+          offsetXInput.value = String(marker.offsetX ?? 0);
+          offsetXInput.title = "Label horizontal offset (px, added to dot spacing)";
+          offsetXInput.style.cssText = "width:38px;font-size:11px;padding:1px 3px;margin:0;text-align:center;";
+          offsetXInput.addEventListener("change", e => {
+            marker.offsetX = parseInt(e.target.value) || 0;
+            updateCityLabelStyle(marker);
+          });
+          styleRow.appendChild(offsetXInput);
+
+          const offsetYLabel = document.createElement("span");
+          offsetYLabel.textContent = "Y";
+          offsetYLabel.style.cssText = "font-size:10px;color:#888;";
+          styleRow.appendChild(offsetYLabel);
+
+          const offsetInput = document.createElement("input");
+          offsetInput.type = "number";
+          offsetInput.min = "-60"; offsetInput.max = "60"; offsetInput.step = "1";
+          offsetInput.value = String(marker.offsetY ?? 0);
+          offsetInput.title = "Label vertical offset (px, negative = up)";
+          offsetInput.style.cssText = "width:38px;font-size:11px;padding:1px 3px;margin:0;text-align:center;";
+          offsetInput.addEventListener("change", e => {
+            marker.offsetY = parseInt(e.target.value) || 0;
+            updateCityLabelStyle(marker);
+          });
+          styleRow.appendChild(offsetInput);
+
+          // ── Opacity row ───────────────────────────────────────────────────
+          const opacityRow = document.createElement("div");
+          opacityRow.className = "city-style-row";
+
+          const makeOpacityControl = (labelText, getValue, setValue) => {
+            const lbl = document.createElement("span");
+            lbl.textContent = labelText;
+            lbl.style.cssText = "font-size:10px;color:#888;";
+            const slider = document.createElement("input");
+            slider.type = "range";
+            slider.min = "0"; slider.max = "100"; slider.step = "5";
+            slider.value = String(Math.round(getValue() * 100));
+            slider.style.cssText = "flex:1;min-width:40px;";
+            const pct = document.createElement("span");
+            pct.textContent = Math.round(getValue() * 100) + "%";
+            pct.style.cssText = "font-size:10px;color:#888;width:28px;text-align:right;";
+            slider.addEventListener("input", e => {
+              const val = parseInt(e.target.value) / 100;
+              setValue(val);
+              pct.textContent = e.target.value + "%";
+              updateCityLabelStyle(marker);
+            });
+            opacityRow.appendChild(lbl);
+            opacityRow.appendChild(slider);
+            opacityRow.appendChild(pct);
+          };
+
+          makeOpacityControl("Dot",   () => marker.dotOpacity,   v => { marker.dotOpacity   = v; });
+          makeOpacityControl("Label", () => marker.labelOpacity, v => { marker.labelOpacity = v; });
+
+          styleRow.style.display  = "none";
+          opacityRow.style.display = "none";
+          styleToggle.addEventListener("click", () => {
+            const open = styleRow.style.display === "none";
+            styleRow.style.display   = open ? "flex" : "none";
+            opacityRow.style.display = open ? "flex" : "none";
+            styleToggle.textContent  = open ? "▼" : "▸";
+          });
+
+          li.appendChild(styleRow);
+          li.appendChild(opacityRow);
           ul.appendChild(li);
         });
       }
@@ -2939,14 +3335,43 @@
 
       const TL_RULER_H = 24;
 
+      function tlGetSubRows(track) {
+        if (track.category === 'highlight') return [
+          { id:track.id+'/fill',    parentId:track.id, label:'Fill',    prop:'fillOpacity',    h:14, isSub:true, color:track.color,
+            getValue: t => interpolateTrack(track.id, t)?.fillOpacity    ?? 0 },
+          { id:track.id+'/outline', parentId:track.id, label:'Outline', prop:'outlineOpacity', h:14, isSub:true, color:track.color,
+            getValue: t => interpolateTrack(track.id, t)?.outlineOpacity ?? 0 },
+        ];
+        if (track.category === 'group') return [
+          { id:track.id+'/fill', parentId:track.id, label:'Fill', prop:'fillOpacity', h:14, isSub:true, color:track.color,
+            getValue: t => interpolateTrack(track.id, t)?.fillOpacity ?? 0 },
+        ];
+        if (track.category === 'city') return [
+          { id:track.id+'/dot',          parentId:track.id, label:'Dot Size',    prop:'dotSize',      h:14, isSub:true, color:track.color,
+            getValue: t => { const s = interpolateTrack(track.id, t); return s ? Math.min(1, s.dotSize / 16) : 0; } },
+          { id:track.id+'/dotOpacity',   parentId:track.id, label:'Dot Opacity', prop:'dotOpacity',   h:14, isSub:true, color:track.color,
+            getValue: t => interpolateTrack(track.id, t)?.dotOpacity   ?? 1 },
+          { id:track.id+'/labelOpacity', parentId:track.id, label:'Lbl Opacity', prop:'labelOpacity', h:14, isSub:true, color:track.color,
+            getValue: t => interpolateTrack(track.id, t)?.labelOpacity ?? 1 },
+          { id:track.id+'/fontSize',     parentId:track.id, label:'Font Size',   prop:'fontSize',     h:14, isSub:true, color:track.color,
+            getValue: t => { const s = interpolateTrack(track.id, t); return s ? Math.min(1, s.fontSize / 30) : 0; } },
+        ];
+        return [];
+      }
+
       function tlGetRows() {
         const rows = [];
         for (const id of ['camera', 'tod', 'borders']) {
           if (tracks[id]) rows.push(tracks[id]);
         }
-        for (const h of highlights) { const t = tracks['hl_'+h.key]; if (t) rows.push(t); }
-        for (const g of regionGroups) { const t = tracks['group_'+g.id]; if (t) rows.push(t); }
-        for (const m of cityMarkers) { const t = tracks['city_'+m.id]; if (t) rows.push(t); }
+        const addEntity = (track) => {
+          if (!track) return;
+          rows.push(track);
+          if (!track.collapsed) for (const sub of tlGetSubRows(track)) rows.push(sub);
+        };
+        for (const h of highlights)   addEntity(tracks['hl_'+h.key]);
+        for (const g of regionGroups) addEntity(tracks['group_'+g.id]);
+        for (const m of cityMarkers)  addEntity(tracks['city_'+m.id]);
         return rows;
       }
       function tlTotalH() { return TL_RULER_H + tlGetRows().reduce((s, r) => s + r.h, 0); }
@@ -2979,22 +3404,41 @@
         [...panel.querySelectorAll('.tl-lbl')].forEach(el => el.remove());
         for (const row of tlGetRows()) {
           const d = document.createElement('div');
-          d.className = 'tl-lbl' + (selectedTrackIds.has(row.id) ? ' tl-lbl-sel' : '');
           d.style.height = row.h + 'px';
-          d.dataset.trackId = row.id;
-          const dot = document.createElement('span');
-          dot.className = 'tl-sel-dot';
-          dot.style.background = row.color;
-          d.appendChild(dot);
-          const lbl = document.createElement('span');
-          lbl.textContent = row.label;
-          d.appendChild(lbl);
-          d.title = 'Click to toggle keyframe capture for this track';
-          d.addEventListener('click', () => {
-            if (selectedTrackIds.has(row.id)) selectedTrackIds.delete(row.id);
-            else selectedTrackIds.add(row.id);
-            tlBuildLabels();
-          });
+          if (row.isSub) {
+            d.className = 'tl-lbl tl-lbl-sub';
+            const lbl = document.createElement('span');
+            lbl.textContent = row.label;
+            d.appendChild(lbl);
+          } else {
+            d.className = 'tl-lbl' + (selectedTrackIds.has(row.id) ? ' tl-lbl-sel' : '');
+            d.dataset.trackId = row.id;
+            const subs = tlGetSubRows(row);
+            if (subs.length > 0) {
+              const toggle = document.createElement('span');
+              toggle.className = 'tl-collapse-btn';
+              toggle.textContent = row.collapsed ? '▶' : '▼';
+              toggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                row.collapsed = !row.collapsed;
+                tlBuildLabels();
+              });
+              d.appendChild(toggle);
+            }
+            const dot = document.createElement('span');
+            dot.className = 'tl-sel-dot';
+            dot.style.background = row.color;
+            d.appendChild(dot);
+            const lbl = document.createElement('span');
+            lbl.textContent = row.label;
+            d.appendChild(lbl);
+            d.title = 'Click to toggle keyframe capture; ▶/▼ to expand sub-tracks';
+            d.addEventListener('click', () => {
+              if (selectedTrackIds.has(row.id)) selectedTrackIds.delete(row.id);
+              else selectedTrackIds.add(row.id);
+              tlBuildLabels();
+            });
+          }
           panel.appendChild(d);
         }
       }
@@ -3071,7 +3515,8 @@
             ctx.fillStyle = 'rgba(74,158,255,0.07)';
             ctx.fillRect(0, y, W, row.h - 1);
           }
-          if (row.id === 'camera')  tlDrawCameraTrack(ctx, y, row.h, W);
+          if (row.isSub)            tlDrawSubRow(ctx, row, y, row.h, W);
+          else if (row.id === 'camera')  tlDrawCameraTrack(ctx, y, row.h, W);
           else if (row.id === 'tod') tlDrawTodTrack(ctx, y, row.h, W);
           else                       tlDrawGenericTrack(ctx, row, y, row.h, W);
           y += row.h;
@@ -3096,6 +3541,38 @@
         // Update time display
         const tlTime = document.getElementById('tlCurrentTime');
         if (tlTime) tlTime.textContent = tlFormatTime(playbackT);
+      }
+
+      function tlDrawSubRow(ctx, row, y, h, W) {
+        const parent = tracks[row.parentId];
+        ctx.fillStyle = '#1e1e20';
+        ctx.fillRect(0, y, W, h);
+        if (!parent || parent.keyframes.length === 0) return;
+
+        const kfs = parent.keyframes;
+        const x1 = Math.max(0, tlTimeToX(kfs[0].time));
+        const x2 = Math.min(W, tlTimeToX(kfs[kfs.length - 1].time));
+        if (x2 <= x1) return;
+
+        // Sample property value and draw vertical bars forming a waveform
+        const steps = Math.max(2, Math.min(Math.round(x2 - x1), 180));
+        const barW  = Math.ceil((x2 - x1) / steps) + 1;
+        const usableH = h - 4;
+        for (let i = 0; i <= steps; i++) {
+          const px = x1 + (x2 - x1) * i / steps;
+          const val = Math.max(0, Math.min(1, row.getValue(tlXToTime(px))));
+          const barH = Math.max(1, Math.round(usableH * val));
+          ctx.fillStyle = row.color + (val > 0.01 ? '88' : '22');
+          ctx.fillRect(Math.floor(px), y + h - 2 - barH, barW, barH);
+        }
+
+        // Thin tick at each parent keyframe time
+        for (const kf of kfs) {
+          const x = Math.round(tlTimeToX(kf.time));
+          if (x < 0 || x > W) continue;
+          ctx.fillStyle = '#ffffff44';
+          ctx.fillRect(x, y + 1, 1, h - 2);
+        }
       }
 
       function tlDrawCameraTrack(ctx, y, h, W) {
@@ -3233,20 +3710,26 @@
           let ty = TL_RULER_H;
           for (const row of rows) {
             if (my >= ty && my < ty + row.h) {
-              const cy = ty + row.h / 2;
-              const kfs = row.keyframes || [];
-              let hit = null;
-              for (const kf of kfs) {
-                if (Math.abs(tlTimeToX(kf.time) - mx) < 8 && Math.abs(cy - my) < 10) { hit = kf; break; }
-              }
-              if (hit) {
-                tlSelectedKf = { trackId: row.id, kfId: hit.id };
-                tlDrag = { type: 'kf', trackId: row.id, kfId: hit.id, startX: mx, startT: hit.time };
-                tlSeekTo(hit.time);
-                if (row.id === 'camera') { selectedKfId = hit.id; renderKeyframeList(); }
-              } else {
+              if (row.isSub) {
+                // Sub-rows: seek only, no keyframe interaction
                 tlSeekTo(Math.max(0, tlXToTime(mx)));
                 tlDrag = { type: 'playhead' };
+              } else {
+                const cy = ty + row.h / 2;
+                const kfs = row.keyframes || [];
+                let hit = null;
+                for (const kf of kfs) {
+                  if (Math.abs(tlTimeToX(kf.time) - mx) < 8 && Math.abs(cy - my) < 10) { hit = kf; break; }
+                }
+                if (hit) {
+                  tlSelectedKf = { trackId: row.id, kfId: hit.id };
+                  tlDrag = { type: 'kf', trackId: row.id, kfId: hit.id, startX: mx, startT: hit.time };
+                  tlSeekTo(hit.time);
+                  if (row.id === 'camera') { selectedKfId = hit.id; renderKeyframeList(); }
+                } else {
+                  tlSeekTo(Math.max(0, tlXToTime(mx)));
+                  tlDrag = { type: 'playhead' };
+                }
               }
               break;
             }
@@ -3322,6 +3805,35 @@
         requestAnimationFrame(tlRenderLoop);
       }
 
+      // ── Timeline resize handle ───────────────────────────────────────────────
+      (() => {
+        const handle = document.getElementById('tlResizeHandle');
+        const footer = document.getElementById('tlFooter');
+        let resizing = false, startY = 0, startH = 0;
+
+        handle.addEventListener('mousedown', (e) => {
+          resizing = true;
+          startY = e.clientY;
+          startH = footer.getBoundingClientRect().height;
+          handle.classList.add('dragging');
+          e.preventDefault();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+          if (!resizing) return;
+          const delta  = startY - e.clientY; // drag up = positive delta = taller
+          const minH   = 33; // just the bar
+          const maxH   = Math.round(window.innerHeight * 0.7);
+          footer.style.height = Math.max(minH, Math.min(maxH, startH + delta)) + 'px';
+        });
+
+        window.addEventListener('mouseup', () => {
+          if (!resizing) return;
+          resizing = false;
+          handle.classList.remove('dragging');
+        });
+      })();
+
       // ── Timeline button wiring ───────────────────────────────────────────────
       document.getElementById('tlToggleBtn').addEventListener('click', () => tlSetOpen(!tlOpen));
       document.getElementById('tlZoomIn').addEventListener('click', () => {
@@ -3345,7 +3857,7 @@
       });
 
       document.getElementById('tlSelectAll').addEventListener('click', () => {
-        for (const row of tlGetRows()) selectedTrackIds.add(row.id);
+        for (const row of tlGetRows()) if (!row.isSub) selectedTrackIds.add(row.id);
         tlBuildLabels();
       });
       document.getElementById('tlSelectNone').addEventListener('click', () => {
