@@ -1250,6 +1250,7 @@
           return h ? { color:h.color, outlineOpacity:h.outlineOpacity, outlineWidth:h.outlineWidth,
                        subregionOpacity:h.subregionOpacity, subregionWidth:h.subregionWidth,
                        fillOpacity:h.fillOpacity, invert:h.invert, showLabel:h.showLabel,
+                       labelColor:h.labelColor??h.color,
                        labelOpacity:h.labelOpacity??1, labelFontSize:h.labelFontSize??14,
                        labelFontWeight:h.labelFontWeight??'normal', labelFontFamily:h.labelFontFamily??'Arial',
                        labelOffsetX:h.labelOffsetX??0, labelOffsetY:h.labelOffsetY??0 } : null;
@@ -1262,6 +1263,7 @@
           const m = cityMarkers.find(m => m.id === parseInt(trackId.slice(5)));
           return m ? {
             color:        m.color,
+            labelColor:   m.labelColor   ?? m.color,
             dotSize:      m.dotSize,
             showLabel:    m.showLabel,
             dotOpacity:   m.dotOpacity   ?? 1.0,
@@ -1382,6 +1384,7 @@
           if (hs.showLabel !== undefined && hs.showLabel !== h.showLabel) {
             setHighlightLabel(h.key, hs.showLabel);
           }
+          h.labelColor      = hs.labelColor      ?? h.labelColor;
           h.labelOpacity    = hs.labelOpacity    ?? h.labelOpacity;
           h.labelFontSize   = hs.labelFontSize   ?? h.labelFontSize;
           h.labelFontWeight = hs.labelFontWeight ?? h.labelFontWeight;
@@ -1420,6 +1423,7 @@
           if (!m) return;
           const needRebuild = cs.color !== m.color || Math.round(cs.dotSize) !== m.dotSize;
           m.color        = cs.color;
+          m.labelColor   = cs.labelColor   ?? m.labelColor;
           m.dotSize      = Math.round(cs.dotSize);
           m.showLabel    = cs.showLabel;
           m.dotOpacity   = cs.dotOpacity   ?? m.dotOpacity;
@@ -1616,6 +1620,7 @@
             fillOpacity:      a.fillOpacity      + (b.fillOpacity      - a.fillOpacity)      * alpha,
             invert:           alpha < 0.5 ? a.invert           : b.invert,
             showLabel:        alpha < 0.5 ? a.showLabel        : b.showLabel,
+            labelColor:       lerpColor(a.labelColor ?? a.color, b.labelColor ?? b.color, alpha),
             labelOpacity:     (a.labelOpacity??1)  + ((b.labelOpacity??1)  - (a.labelOpacity??1))  * alpha,
             labelFontSize:    (a.labelFontSize??14) + ((b.labelFontSize??14) - (a.labelFontSize??14)) * alpha,
             labelFontWeight:  alpha < 0.5 ? (a.labelFontWeight??'normal') : (b.labelFontWeight??'normal'),
@@ -1634,6 +1639,7 @@
         if (trackId.startsWith('city_')) {
           return {
             color:        lerpColor(a.color, b.color, alpha),
+            labelColor:   lerpColor(a.labelColor ?? a.color, b.labelColor ?? b.color, alpha),
             dotSize:      a.dotSize      + (b.dotSize      - a.dotSize)      * alpha,
             showLabel:    alpha < 0.5 ? a.showLabel  : b.showLabel,
             dotOpacity:   a.dotOpacity   + (b.dotOpacity   - a.dotOpacity)   * alpha,
@@ -2238,7 +2244,7 @@
         const la = h.labelOpacity ?? 1.0;
         const fontStr = `${h.labelFontWeight === 'bold' ? 'bold ' : ''}${h.labelFontSize ?? 14}px ${h.labelFontFamily ?? 'Arial'}`;
         h.labelEntity.label.font         = fontStr;
-        h.labelEntity.label.fillColor    = hexToColor(h.color).withAlpha(la);
+        h.labelEntity.label.fillColor    = hexToColor(h.labelColor ?? h.color).withAlpha(la);
         h.labelEntity.label.outlineColor = Cesium.Color.BLACK.withAlpha(la);
         h.labelEntity.label.pixelOffset  = new Cesium.Cartesian2(h.labelOffsetX ?? 0, h.labelOffsetY ?? 0);
         if (h.showLabel) h.labelEntity.label.show = la > 0;
@@ -2289,6 +2295,7 @@
           subregionEntities: [], subregionOpacity: 0.0, subregionWidth: 1.0,
           fillEntities: [], fillOpacity: 0, invert: false,
           showLabel: false, labelText: entry.name.split(' (')[0], labelEntity: null,
+          labelColor: color,
           labelFontSize: 14, labelFontWeight: 'normal', labelFontFamily: 'Arial',
           labelOffsetX: 0, labelOffsetY: 0, labelOpacity: 1.0,
           centroid: getPolygonCentroid(entry.polygons),
@@ -2555,6 +2562,27 @@
             labelStylePanel.style.display = open ? "flex" : "none";
             labelStyleToggle.textContent = (open ? "▼" : "▸") + " Label Style";
           });
+
+          // Label color row
+          const lsColorRow = document.createElement("div");
+          lsColorRow.className = "city-style-row";
+          const lsColorLbl = document.createElement("span"); lsColorLbl.textContent = "Color"; lsColorLbl.style.cssText = "font-size:10px;color:#888;";
+          const lsColorSwatch = document.createElement("span");
+          lsColorSwatch.title = "Label text color";
+          lsColorSwatch.style.cssText = `display:inline-block;width:20px;height:14px;border-radius:3px;border:1px solid #aaa;background:${h.labelColor ?? h.color};cursor:pointer;`;
+          const lsColorInput = document.createElement("input");
+          lsColorInput.type = "color";
+          lsColorInput.value = h.labelColor ?? h.color;
+          lsColorInput.style.cssText = "position:absolute;width:0;height:0;opacity:0;pointer-events:none;";
+          lsColorSwatch.appendChild(lsColorInput);
+          lsColorSwatch.addEventListener("click", () => lsColorInput.click());
+          lsColorInput.addEventListener("input", e => {
+            h.labelColor = e.target.value;
+            lsColorSwatch.style.background = h.labelColor;
+            updateHighlightLabelStyle(h.key);
+          });
+          lsColorRow.append(lsColorLbl, lsColorSwatch);
+          labelStylePanel.appendChild(lsColorRow);
 
           // Font row
           const lsFontRow = document.createElement("div");
@@ -3041,6 +3069,7 @@
           lat: found.lat,
           lon: found.lon,
           color: defaultCityColor,
+          labelColor: defaultCityColor,
           dotSize: defaultCityDotSize,
           showLabel: true,
           fontSize: 13, fontWeight: 'normal', fontFamily: 'Arial', offsetX: 0, offsetY: 0,
@@ -3135,19 +3164,20 @@
 
       function updateCityLabelStyle(marker) {
         if (!marker.entity) return;
-        const col = Cesium.Color.fromCssColorString(marker.color);
+        const dotCol   = Cesium.Color.fromCssColorString(marker.color);
+        const labelCol = Cesium.Color.fromCssColorString(marker.labelColor ?? marker.color);
         const dotOpacity   = marker.dotOpacity   ?? 1.0;
         const labelOpacity = marker.labelOpacity ?? 1.0;
 
         if (marker.entity.point) {
           marker.entity.point.show         = dotOpacity > 0;
-          marker.entity.point.color        = col.withAlpha(dotOpacity);
+          marker.entity.point.color        = dotCol.withAlpha(dotOpacity);
           marker.entity.point.outlineColor = Cesium.Color.BLACK.withAlpha(dotOpacity);
         }
         if (marker.entity.label) {
           const fontStr = `${marker.fontWeight === 'bold' ? 'bold ' : ''}${marker.fontSize}px ${marker.fontFamily}`;
           marker.entity.label.font         = fontStr;
-          marker.entity.label.fillColor    = col.withAlpha(labelOpacity);
+          marker.entity.label.fillColor    = labelCol.withAlpha(labelOpacity);
           marker.entity.label.outlineColor = Cesium.Color.BLACK.withAlpha(labelOpacity);
           marker.entity.label.pixelOffset  = new Cesium.Cartesian2(marker.dotSize / 2 + 4 + (marker.offsetX ?? 0), marker.offsetY ?? 0);
           // Only control show via opacity when the label is toggled on
@@ -3234,6 +3264,23 @@
           // ── Style row ─────────────────────────────────────────────────────
           const styleRow = document.createElement("div");
           styleRow.className = "city-style-row";
+
+          // Label color swatch
+          const lblColorSwatch = document.createElement("span");
+          lblColorSwatch.title = "Label text color";
+          lblColorSwatch.style.cssText = `display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid #666;background:${marker.labelColor ?? marker.color};cursor:pointer;flex-shrink:0;`;
+          const lblColorInput = document.createElement("input");
+          lblColorInput.type = "color";
+          lblColorInput.value = marker.labelColor ?? marker.color;
+          lblColorInput.style.cssText = "position:absolute;width:0;height:0;opacity:0;pointer-events:none;";
+          lblColorSwatch.appendChild(lblColorInput);
+          lblColorSwatch.addEventListener("click", () => lblColorInput.click());
+          lblColorInput.addEventListener("input", e => {
+            marker.labelColor = e.target.value;
+            lblColorSwatch.style.background = marker.labelColor;
+            updateCityLabelStyle(marker);
+          });
+          styleRow.appendChild(lblColorSwatch);
 
           const sizeLabel = document.createElement("span");
           sizeLabel.textContent = "Size";
