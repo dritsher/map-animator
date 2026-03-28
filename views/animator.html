@@ -26,9 +26,12 @@
         inset: 0;
         display: grid;
         grid-template-columns: 320px minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) auto;
       }
 
       #sidebar {
+        grid-column: 1;
+        grid-row: 1 / 3;
         border-right: 1px solid #ccc;
         padding: 16px;
         overflow: auto;
@@ -41,9 +44,104 @@
       }
 
       #cesiumPane {
+        grid-column: 2;
+        grid-row: 1;
         min-width: 0;
         min-height: 0;
         position: relative;
+      }
+
+      /* ── Timeline footer ─────────────────────────────────────────────────── */
+      #tlFooter {
+        grid-column: 2;
+        grid-row: 2;
+        display: flex;
+        flex-direction: column;
+        background: #1c1c1e;
+        border-top: 1px solid #444;
+        user-select: none;
+      }
+      #tlBar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 8px;
+        height: 28px;
+        flex-shrink: 0;
+        border-bottom: 1px solid #333;
+      }
+      #tlToggleBtn {
+        font-size: 11px;
+        color: #aaa;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+        width: auto;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      #tlToggleBtn:hover { color: #fff; background: none; }
+      .tl-bar-sep { width: 1px; height: 14px; background: #444; flex-shrink: 0; }
+      .tl-bar-btn {
+        font-size: 13px;
+        color: #aaa;
+        background: none;
+        border: 1px solid #444;
+        border-radius: 3px;
+        cursor: pointer;
+        padding: 1px 6px;
+        width: auto;
+        margin: 0;
+        line-height: 1.4;
+      }
+      .tl-bar-btn:hover { color: #fff; background: #333; border-color: #666; }
+      #tlZoomLabel {
+        font-size: 11px;
+        color: #888;
+        min-width: 28px;
+        text-align: center;
+      }
+      #tlCurrentTime {
+        font-size: 11px;
+        color: #aaa;
+        font-variant-numeric: tabular-nums;
+        margin-left: auto;
+      }
+
+      #tlBody {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+        min-height: 0;
+      }
+      #tlLabels {
+        width: 110px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid #333;
+        background: #252527;
+      }
+      .tl-ruler-spacer {
+        height: 24px; /* matches TL_RULER_H */
+        flex-shrink: 0;
+        border-bottom: 1px solid #333;
+      }
+      .tl-lbl { cursor: pointer; user-select: none; display: flex; align-items: center; padding: 0 6px; box-sizing: border-box; font-size: 11px; color: #aaa; border-bottom: 1px solid #2a2a2c; flex-shrink: 0; }
+      .tl-lbl:hover { background: #2a2a2c; }
+      .tl-lbl-sel { background: #1a2a3a !important; border-left: 2px solid #4a9eff; padding-left: 4px; color: #ddf; }
+      .tl-sel-dot { width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; flex-shrink: 0; display: inline-block; }
+      #tlCanvasWrap {
+        flex: 1;
+        overflow: hidden;
+        position: relative;
+        cursor: default;
+      }
+      #tlCanvas {
+        display: block;
       }
 
       #cesiumContainer {
@@ -662,7 +760,7 @@
           <div class="section-title">Keyframes</div>
           <ul id="keyframeList"></ul>
           <div style="margin-top: 8px;">
-            <button id="addKeyframeBtn" class="primary">+ Add Keyframe Here</button>
+            <button id="addKeyframeBtn" class="primary">+ Add Keyframe at Playhead</button>
           </div>
           <div style="margin-top: 4px;">
             <label style="margin-bottom: 2px;">Duration (seconds)</label>
@@ -722,6 +820,31 @@
       <div id="cesiumPane">
         <div id="cesiumContainer"></div>
       </div>
+
+      <div id="tlFooter">
+        <div id="tlBar">
+          <button id="tlToggleBtn">▾ Timeline</button>
+          <div class="tl-bar-sep"></div>
+          <button class="tl-bar-btn" id="tlZoomOut" title="Zoom out">−</button>
+          <span id="tlZoomLabel">1×</span>
+          <button class="tl-bar-btn" id="tlZoomIn"  title="Zoom in">+</button>
+          <div class="tl-bar-sep"></div>
+          <button class="tl-bar-btn" id="tlFitBtn"  title="Fit all keyframes">Fit</button>
+          <div class="tl-bar-sep"></div>
+          <button class="tl-bar-btn" id="tlSelectAll"  title="Select all tracks for keyframe capture">All</button>
+          <button class="tl-bar-btn" id="tlSelectNone" title="Deselect all tracks">None</button>
+          <span id="tlCurrentTime">0.0s</span>
+        </div>
+        <div id="tlBody">
+          <div id="tlLabels">
+            <div class="tl-ruler-spacer"></div>
+            <!-- labels injected by tlBuildLabels() -->
+          </div>
+          <div id="tlCanvasWrap">
+            <canvas id="tlCanvas"></canvas>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script>
@@ -733,16 +856,25 @@
       let viewer = null;
       let currentBasemap = "cesium-default";
 
-      // Keyframe: { id, label, time, position: {lon, lat, height}, heading, pitch, roll }
-      let keyframes = [];
-      let selectedKfId = null;
-      let nextKfId = 1;
+      // Per-track keyframe system. Built-in: 'camera', 'tod', 'borders'.
+      // Dynamic: 'hl_{key}' (highlights), 'group_{id}', 'city_{id}'.
+      const tracks = {};
+      let selectedKfId     = null;   // camera-track kf id selected in sidebar
+      let nextKfId         = 1;
+      let selectedTrackIds = new Set(['camera']); // tracks that receive "Add Keyframe"
 
       let isPlaying = false;
       let playStartMs = null;
       let playStartT  = 0;
       let playbackT   = 0;  // current playback time in seconds
       let animRaf = null;
+
+      // ── Built-in track initialisation ───────────────────────────────────────
+      function initBuiltinTracks() {
+        tracks['camera']  = { id:'camera',  label:'Camera',      category:'builtin', color:'#4a9eff', h:28, keyframes:[] };
+        tracks['tod']     = { id:'tod',     label:'Time of Day', category:'builtin', color:'#ffaa44', h:22, keyframes:[] };
+        tracks['borders'] = { id:'borders', label:'Borders',     category:'builtin', color:'#88cc88', h:22, keyframes:[] };
+      }
 
       // ── Helpers ─────────────────────────────────────────────────────────────
       function setStatus(text) {
@@ -1028,22 +1160,41 @@
         return SCENE_MODE_NAMES[viewer.scene.mode] || "3d";
       }
 
-      function getCameraState() {
-        const cam = viewer.camera;
-        // positionCartographic works correctly in all scene modes (3D, Columbus, 2D).
-        // cam.position in 2D/Columbus is in projection space, not ECEF, so
-        // cartesianToCartographic() would return garbage coordinates.
-        const carto = cam.positionCartographic;
-        return {
-          lon:        Cesium.Math.toDegrees(carto.longitude),
-          lat:        Cesium.Math.toDegrees(carto.latitude),
-          height:     carto.height,
-          heading:    Cesium.Math.toDegrees(cam.heading),
-          pitch:      Cesium.Math.toDegrees(cam.pitch),
-          roll:       Cesium.Math.toDegrees(cam.roll),
-          todMinutes: parseInt(document.getElementById("todSlider").value),
-          sceneMode:  getCurrentSceneModeName(),
-        };
+      function captureTrackState(trackId) {
+        if (trackId === 'camera') {
+          const cam = viewer.camera;
+          const carto = cam.positionCartographic;
+          return {
+            lon: Cesium.Math.toDegrees(carto.longitude),
+            lat: Cesium.Math.toDegrees(carto.latitude),
+            height: carto.height,
+            heading: Cesium.Math.toDegrees(cam.heading),
+            pitch:   Cesium.Math.toDegrees(cam.pitch),
+            roll:    Cesium.Math.toDegrees(cam.roll),
+            sceneMode: getCurrentSceneModeName(),
+          };
+        }
+        if (trackId === 'tod') {
+          return { todMinutes: parseInt(document.getElementById('todSlider').value) };
+        }
+        if (trackId === 'borders') {
+          return { borderOpacity: parseInt(document.getElementById('borderOpacity').value) / 100 };
+        }
+        if (trackId.startsWith('hl_')) {
+          const h = highlights.find(h => h.key === trackId.slice(3));
+          return h ? { color:h.color, outlineOpacity:h.outlineOpacity, outlineWidth:h.outlineWidth,
+                       subregionOpacity:h.subregionOpacity, subregionWidth:h.subregionWidth,
+                       fillOpacity:h.fillOpacity, invert:h.invert } : null;
+        }
+        if (trackId.startsWith('group_')) {
+          const g = regionGroups.find(g => g.id === parseInt(trackId.slice(6)));
+          return g ? { color:g.color, fillOpacity:g.fillOpacity, invert:g.invert } : null;
+        }
+        if (trackId.startsWith('city_')) {
+          const m = cityMarkers.find(m => m.id === parseInt(trackId.slice(5)));
+          return m ? { color:m.color, dotSize:m.dotSize, showLabel:m.showLabel } : null;
+        }
+        return null;
       }
 
       // Shared helper — also updates the scene mode toggle button UI.
@@ -1056,10 +1207,12 @@
         );
       }
 
-      function setCameraState({ lon, lat, height, heading, pitch, roll, todMinutes }) {
+      function setCameraState(state) {
+        const { lon, lat, height, heading, pitch, roll, todMinutes } = state;
+        // Only move camera if position data is present (camera track may have no keyframes).
         // camera.setView() calls scene.completeMorph() internally — skip during a
         // mode transition so the animated morph can play out without snapping.
-        if (viewer.scene.mode !== Cesium.SceneMode.MORPHING) {
+        if (lon !== undefined && viewer.scene.mode !== Cesium.SceneMode.MORPHING) {
           viewer.camera.setView({
             destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
             orientation: {
@@ -1075,56 +1228,171 @@
           document.getElementById("todDisplay").textContent = todMinutesToDisplay(rounded);
           setTimeOfDay(rounded);
         }
+        applySceneState(state);
+      }
+
+      // Apply animated scene overlay state (border opacity, highlight/group/city states).
+      // Updates Cesium entities in-place where possible to avoid full rebuilds each frame.
+      function applySceneState(state) {
+        // Border opacity — update Cesium visual every frame, but sync the slider
+        // only when stopped to avoid unnecessary DOM thrashing during playback.
+        if (state.borderOpacity !== undefined) {
+          setBorderOpacity(state.borderOpacity);
+          if (!isPlaying) {
+            const pct = Math.round(state.borderOpacity * 100);
+            document.getElementById("borderOpacity").value = pct;
+            document.getElementById("borderOpacityVal").textContent = pct + "%";
+          }
+        }
+
+        // Highlight states
+        (state.highlightStates || []).forEach(hs => {
+          const h = highlights.find(h => h.key === hs.key);
+          if (!h) return;
+          const oldColor = h.color, oldInvert = h.invert, oldFillOpacity = h.fillOpacity;
+          h.color  = hs.color;
+          h.invert = hs.invert;
+          const colorChanged  = oldColor  !== hs.color;
+          const invertChanged = oldInvert !== hs.invert;
+
+          // Outline — update material in-place; only rebuild when crossing zero or color changes
+          if (hs.outlineOpacity > 0 && h.outlineEntities.length > 0 && !colorChanged) {
+            h.outlineEntities.forEach(e =>
+              e.polyline.material.color.setValue(hexToColor(h.color).withAlpha(hs.outlineOpacity)));
+            h.outlineOpacity = hs.outlineOpacity;
+            h.outlineWidth   = hs.outlineWidth;
+          } else if (hs.outlineOpacity !== h.outlineOpacity || colorChanged || hs.outlineWidth !== h.outlineWidth) {
+            h.outlineOpacity = hs.outlineOpacity;
+            h.outlineWidth   = hs.outlineWidth;
+            refreshOutlineEntities(h);
+          }
+
+          // Subregion — same pattern
+          if (hs.subregionOpacity > 0 && h.subregionEntities.length > 0 && !colorChanged) {
+            h.subregionEntities.forEach(e =>
+              e.polyline.material.color.setValue(hexToColor(h.color).withAlpha(hs.subregionOpacity)));
+            h.subregionOpacity = hs.subregionOpacity;
+            h.subregionWidth   = hs.subregionWidth;
+          } else if (hs.subregionOpacity !== h.subregionOpacity || colorChanged || hs.subregionWidth !== h.subregionWidth) {
+            h.subregionOpacity = hs.subregionOpacity;
+            h.subregionWidth   = hs.subregionWidth;
+            refreshSubregionEntities(h);
+          }
+
+          // Fill — ImageryLayer: set .alpha directly; PolygonEntity: setValue; else rebuild
+          if (hs.fillOpacity > 0 && h.fillEntities.length > 0 && !colorChanged && !invertChanged) {
+            h.fillEntities.forEach(item => {
+              if (item instanceof Cesium.ImageryLayer)
+                item.alpha = hs.fillOpacity;
+              else
+                item.polygon.material.color.setValue(hexToColor(h.color).withAlpha(hs.fillOpacity));
+            });
+            h.fillOpacity = hs.fillOpacity;
+          } else if (hs.fillOpacity !== oldFillOpacity || colorChanged || invertChanged) {
+            setFillOpacity(h.key, hs.fillOpacity); // uses updated h.color + h.invert
+          }
+        });
+
+        // Group states
+        (state.groupStates || []).forEach(gs => {
+          const g = regionGroups.find(g => g.id === gs.id);
+          if (!g) return;
+          const oldColor = g.color, oldInvert = g.invert, oldFillOpacity = g.fillOpacity;
+          g.color  = gs.color;
+          g.invert = gs.invert;
+          const colorChanged  = oldColor  !== gs.color;
+          const invertChanged = oldInvert !== gs.invert;
+          if (gs.fillOpacity > 0 && g.fillEntities.length > 0 && !colorChanged && !invertChanged) {
+            g.fillEntities.forEach(item => {
+              if (item instanceof Cesium.ImageryLayer)
+                item.alpha = gs.fillOpacity;
+              else
+                item.polygon.material.color.setValue(hexToColor(g.color).withAlpha(gs.fillOpacity));
+            });
+            g.fillOpacity = gs.fillOpacity;
+          } else if (gs.fillOpacity !== oldFillOpacity || colorChanged || invertChanged) {
+            g.fillOpacity = gs.fillOpacity;
+            refreshGroupEntities(g);
+          }
+        });
+
+        // City states
+        (state.cityStates || []).forEach(cs => {
+          const m = cityMarkers.find(m => m.id === cs.id);
+          if (!m) return;
+          const needRebuild = cs.color !== m.color || Math.round(cs.dotSize) !== m.dotSize;
+          m.color     = cs.color;
+          m.dotSize   = Math.round(cs.dotSize);
+          m.showLabel = cs.showLabel;
+          if (needRebuild) updateCityEntity(m);
+          else             m.entity.label.show = cs.showLabel;
+        });
       }
 
       // ── Keyframes ───────────────────────────────────────────────────────────
       function addKeyframe() {
         if (!viewer) return;
-        const state = getCameraState();
-        const t = keyframes.length === 0 ? 0 : totalDuration();
-        const kf = {
-          id: nextKfId++,
-          label: `Keyframe ${nextKfId - 1} · ${todMinutesToDisplay(state.todMinutes)}`,
-          time: parseFloat(t.toFixed(2)),
-          ...state,
-        };
-        // Insert sorted by time
-        keyframes.push(kf);
-        keyframes.sort((a, b) => a.time - b.time);
-        selectedKfId = kf.id;
+        const t = parseFloat(playbackT.toFixed(2));
+        let count = 0;
+        for (const trackId of selectedTrackIds) {
+          const track = tracks[trackId];
+          if (!track) continue;
+          const state = captureTrackState(trackId);
+          if (!state) continue;
+          const existing = track.keyframes.find(k => k.time === t);
+          if (existing) {
+            Object.assign(existing, state);
+          } else {
+            const kf = { id: nextKfId++, time: t, ...state };
+            track.keyframes.push(kf);
+            track.keyframes.sort((a, b) => a.time - b.time);
+            if (trackId === 'camera') selectedKfId = kf.id;
+          }
+          count++;
+        }
         renderKeyframeList();
-        setStatus(`Keyframe added at t=${kf.time}s`);
+        setStatus(`Keyframe added at t=${t}s (${count} track${count !== 1 ? 's' : ''})`);
       }
 
       function deleteKeyframe(id) {
-        keyframes = keyframes.filter(k => k.id !== id);
-        if (selectedKfId === id) selectedKfId = keyframes[0]?.id ?? null;
-        renderKeyframeList();
+        deleteTrackKeyframe('camera', id);
+      }
+
+      function deleteTrackKeyframe(trackId, kfId) {
+        const track = tracks[trackId];
+        if (!track) return;
+        track.keyframes = track.keyframes.filter(k => k.id !== kfId);
+        if (tlSelectedKf?.kfId === kfId) tlSelectedKf = null;
+        if (trackId === 'camera') {
+          if (selectedKfId === kfId) selectedKfId = track.keyframes[0]?.id ?? null;
+          renderKeyframeList();
+        }
       }
 
       const SCENE_MODE_CYCLE = { "3d": "columbus", "columbus": "2d", "2d": "3d" };
 
       function renderKeyframeList() {
+        const camKfs = tracks['camera']?.keyframes || [];
         const list = document.getElementById("keyframeList");
         list.innerHTML = "";
-        if (keyframes.length === 0) {
+        if (camKfs.length === 0) {
           list.innerHTML = '<li style="color:#aaa;font-size:12px;border:none;background:none;padding:4px 0;">No keyframes yet</li>';
           return;
         }
-        keyframes.forEach((kf, idx) => {
+        camKfs.forEach((kf, idx) => {
           const li = document.createElement("li");
           if (kf.id === selectedKfId) li.classList.add("selected");
 
           const label = document.createElement("span");
           label.className = "kf-label";
-          label.textContent = kf.label;
+          label.textContent = `Keyframe ${idx + 1} · t=${kf.time}s`;
 
           const time = document.createElement("span");
           time.className = "kf-time";
           time.textContent = `${kf.time}s`;
 
           // Scene mode badge — highlighted when different from previous keyframe
-          const prevMode = idx > 0 ? (keyframes[idx - 1].sceneMode || "3d") : null;
+          const prevMode = idx > 0 ? (camKfs[idx - 1].sceneMode || "3d") : null;
           const kfMode = kf.sceneMode || "3d";
           const modeBtn = document.createElement("button");
           modeBtn.className = "kf-mode" + (prevMode !== null && kfMode !== prevMode ? " kf-mode-change" : "");
@@ -1149,7 +1417,7 @@
             playStartT = kf.time;
             syncSceneModeToTime(kf.time);
             viewer.scene.completeMorph(); // finish instantly when jumping directly
-            setCameraState(kf);
+            setCameraState(buildStateAtTime(kf.time));
             updateProgressUI(kf.time);
             renderKeyframeList();
           });
@@ -1160,8 +1428,10 @@
       // ── Animation ───────────────────────────────────────────────────────────
       // Returns the scene mode that should be active at time t (most recent keyframe mode ≤ t).
       function getSceneModeAtTime(t) {
-        let mode = keyframes[0]?.sceneMode || "3d";
-        for (const kf of keyframes) {
+        const kfs = tracks['camera']?.keyframes || [];
+        if (kfs.length === 0) return '3d';
+        let mode = kfs[0].sceneMode || '3d';
+        for (const kf of kfs) {
           if (kf.time <= t) mode = kf.sceneMode || mode;
           else break;
         }
@@ -1186,32 +1456,106 @@
         return a + diff * t;
       }
 
-      function interpolateCameraAtTime(t) {
-        if (keyframes.length === 0) return null;
-        if (keyframes.length === 1) return { ...keyframes[0] };
+      function lerpColor(ca, cb, t) {
+        const ra = parseInt(ca.slice(1,3),16), ga = parseInt(ca.slice(3,5),16), ba = parseInt(ca.slice(5,7),16);
+        const rb = parseInt(cb.slice(1,3),16), gb = parseInt(cb.slice(3,5),16), bb = parseInt(cb.slice(5,7),16);
+        const r = Math.round(ra+(rb-ra)*t), g = Math.round(ga+(gb-ga)*t), b = Math.round(ba+(bb-ba)*t);
+        return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+      }
 
-        const clampedT = Math.max(keyframes[0].time, Math.min(keyframes[keyframes.length - 1].time, t));
-
-        // Find surrounding keyframes
-        let i = keyframes.length - 2;
-        for (let j = 0; j < keyframes.length - 1; j++) {
-          if (clampedT <= keyframes[j + 1].time) { i = j; break; }
-        }
-
-        const a = keyframes[i];
-        const b = keyframes[i + 1];
+      // Interpolate a single track at time t. Returns the interpolated state object or null.
+      function interpolateTrack(trackId, t) {
+        const track = tracks[trackId];
+        if (!track || track.keyframes.length === 0) return null;
+        const kfs = track.keyframes;
+        if (kfs.length === 1) return { ...kfs[0] };
+        if (t <= kfs[0].time) return { ...kfs[0] };
+        if (t >= kfs[kfs.length-1].time) return { ...kfs[kfs.length-1] };
+        let i = 0;
+        for (let j = 0; j < kfs.length - 1; j++) { if (t <= kfs[j+1].time) { i = j; break; } }
+        const a = kfs[i], b = kfs[i+1];
         const span = b.time - a.time;
-        const alpha = span > 0 ? (clampedT - a.time) / span : 1;
+        const alpha = span > 0 ? (t - a.time) / span : 1;
+        if (trackId === 'camera') {
+          return {
+            lon:     a.lon     + (b.lon     - a.lon)     * alpha,
+            lat:     a.lat     + (b.lat     - a.lat)     * alpha,
+            height:  a.height  + (b.height  - a.height)  * alpha,
+            heading: lerpAngle(a.heading, b.heading, alpha),
+            pitch:   lerpAngle(a.pitch,   b.pitch,   alpha),
+            roll:    lerpAngle(a.roll,    b.roll,    alpha),
+            sceneMode: a.sceneMode,
+          };
+        }
+        if (trackId === 'tod') {
+          return { todMinutes: a.todMinutes + (b.todMinutes - a.todMinutes) * alpha };
+        }
+        if (trackId === 'borders') {
+          return { borderOpacity: a.borderOpacity + (b.borderOpacity - a.borderOpacity) * alpha };
+        }
+        if (trackId.startsWith('hl_')) {
+          return {
+            color:            lerpColor(a.color, b.color, alpha),
+            outlineOpacity:   a.outlineOpacity   + (b.outlineOpacity   - a.outlineOpacity)   * alpha,
+            outlineWidth:     a.outlineWidth     + (b.outlineWidth     - a.outlineWidth)     * alpha,
+            subregionOpacity: a.subregionOpacity + (b.subregionOpacity - a.subregionOpacity) * alpha,
+            subregionWidth:   a.subregionWidth   + (b.subregionWidth   - a.subregionWidth)   * alpha,
+            fillOpacity:      a.fillOpacity      + (b.fillOpacity      - a.fillOpacity)      * alpha,
+            invert: alpha < 0.5 ? a.invert : b.invert,
+          };
+        }
+        if (trackId.startsWith('group_')) {
+          return {
+            color:       lerpColor(a.color, b.color, alpha),
+            fillOpacity: a.fillOpacity + (b.fillOpacity - a.fillOpacity) * alpha,
+            invert: alpha < 0.5 ? a.invert : b.invert,
+          };
+        }
+        if (trackId.startsWith('city_')) {
+          return {
+            color:     lerpColor(a.color, b.color, alpha),
+            dotSize:   a.dotSize + (b.dotSize - a.dotSize) * alpha,
+            showLabel: alpha < 0.5 ? a.showLabel : b.showLabel,
+          };
+        }
+        return null;
+      }
 
-        return {
-          lon:        a.lon        + (b.lon        - a.lon)        * alpha,
-          lat:        a.lat        + (b.lat        - a.lat)        * alpha,
-          height:     a.height     + (b.height     - a.height)     * alpha,
-          heading:    lerpAngle(a.heading,    b.heading,    alpha),
-          pitch:      lerpAngle(a.pitch,      b.pitch,      alpha),
-          roll:       lerpAngle(a.roll,       b.roll,       alpha),
-          todMinutes: a.todMinutes + (b.todMinutes - a.todMinutes) * alpha,
-        };
+      // Build the full scene state at time t by querying all active tracks.
+      // Falls back to current entity state if a track has no keyframes.
+      function buildStateAtTime(t) {
+        const state = {};
+        const cam = interpolateTrack('camera', t);
+        if (cam) Object.assign(state, cam);
+        const tod = interpolateTrack('tod', t);
+        if (tod) state.todMinutes = tod.todMinutes;
+        const brd = interpolateTrack('borders', t);
+        if (brd) state.borderOpacity = brd.borderOpacity;
+
+        // Only include entity states if their track has keyframes — avoids calling
+        // applySceneState on every entity every animation frame when nothing is animating.
+        const hlAnimated = highlights.filter(h => (tracks['hl_'+h.key]?.keyframes.length ?? 0) > 0);
+        if (hlAnimated.length > 0) {
+          state.highlightStates = hlAnimated.map(h => {
+            const hs = interpolateTrack('hl_' + h.key, t);
+            return { key:h.key, ...hs };
+          });
+        }
+        const grpAnimated = regionGroups.filter(g => (tracks['group_'+g.id]?.keyframes.length ?? 0) > 0);
+        if (grpAnimated.length > 0) {
+          state.groupStates = grpAnimated.map(g => {
+            const gs = interpolateTrack('group_' + g.id, t);
+            return { id:g.id, ...gs };
+          });
+        }
+        const cityAnimated = cityMarkers.filter(m => (tracks['city_'+m.id]?.keyframes.length ?? 0) > 0);
+        if (cityAnimated.length > 0) {
+          state.cityStates = cityAnimated.map(m => {
+            const cs = interpolateTrack('city_' + m.id, t);
+            return { id:m.id, ...cs };
+          });
+        }
+        return state;
       }
 
       function updateProgressUI(t) {
@@ -1242,15 +1586,17 @@
           lastPlaybackMode = activeMode;
         }
 
-        const state = interpolateCameraAtTime(playbackT);
-        if (state) setCameraState(state); // no-ops while MORPHING
+        const state = buildStateAtTime(playbackT);
+        setCameraState(state); // no-ops while MORPHING
         updateProgressUI(playbackT);
 
         if (isPlaying) animRaf = requestAnimationFrame(animationFrame);
       }
 
       function startPlayback() {
-        if (keyframes.length < 2) { setStatus("Need at least 2 keyframes to play."); return; }
+        if (!Object.values(tracks).some(tr => tr.keyframes.length >= 2)) {
+          setStatus("Need at least 2 keyframes in at least one track to play."); return;
+        }
         if (playbackT >= totalDuration()) {
           playbackT = 0;
           syncSceneModeToTime(0);
@@ -1267,21 +1613,32 @@
         isPlaying = false;
         if (animRaf) cancelAnimationFrame(animRaf);
         document.getElementById("playBtn").textContent = "▶ Play";
+        syncControlsToState(buildStateAtTime(playbackT));
+      }
+
+      // Sync sidebar controls to the current animated state — called on pause/stop
+      // so sliders reflect the correct value without updating them every frame.
+      function syncControlsToState(state) {
+        if (state.borderOpacity !== undefined) {
+          const pct = Math.round(state.borderOpacity * 100);
+          document.getElementById("borderOpacity").value = pct;
+          document.getElementById("borderOpacityVal").textContent = pct + "%";
+        }
       }
 
       function stopPlayback() {
         pausePlayback();
         playbackT = 0;
         updateProgressUI(0);
-        if (keyframes.length > 0) {
+        if (Object.values(tracks).some(tr => tr.keyframes.length > 0)) {
           syncSceneModeToTime(0);
-          setCameraState(interpolateCameraAtTime(0));
+          setCameraState(buildStateAtTime(0));
         }
       }
 
       // ── Export ──────────────────────────────────────────────────────────────
       async function exportFrames() {
-        if (keyframes.length < 2) { setStatus("Need at least 2 keyframes to export."); return; }
+        if (!Object.values(tracks).some(tr => tr.keyframes.length >= 2)) { setStatus("Need at least 2 keyframes to export."); return; }
 
         const [w, h] = document.getElementById("resolutionSelect").value.split("x").map(Number);
         const fps    = parseInt(document.getElementById("framerateSelect").value);
@@ -1319,8 +1676,9 @@
           if (activeMode !== exportMode && morphFramesLeft === 0) {
             exportMode = activeMode;
             // Count frames until next keyframe (or default 2s worth)
-            const modeKf  = [...keyframes].reverse().find(kf => kf.time <= t);
-            const nextKf  = keyframes.find(kf => kf.time > (modeKf?.time ?? t));
+            const camKfs  = tracks['camera']?.keyframes || [];
+            const modeKf  = [...camKfs].reverse().find(kf => kf.time <= t);
+            const nextKf  = camKfs.find(kf => kf.time > (modeKf?.time ?? t));
             const gapSecs = nextKf ? Math.min(nextKf.time - (modeKf?.time ?? t), 5) : 2;
             morphFramesLeft = Math.round(gapSecs * fps);
             // Conservative morph duration: each frame typically takes ~150-300ms in practice.
@@ -1333,8 +1691,8 @@
             if (morphFramesLeft === 0) viewer.scene.completeMorph();
           }
 
-          const state = interpolateCameraAtTime(t);
-          if (state) setCameraState(state); // no-ops while MORPHING
+          const state = buildStateAtTime(t);
+          setCameraState(state); // no-ops while MORPHING
 
           // Wait for Cesium to finish rendering this frame
           await new Promise(r => viewer.scene.postRender.addEventListener(function once() {
@@ -1664,8 +2022,8 @@
             canvas.width = W; canvas.height = H;
             const ctx = canvas.getContext('2d');
 
-            // Fill tile with mask colour at the requested opacity.
-            ctx.fillStyle = `rgba(${hexR},${hexG},${hexB},${fillOpacity})`;
+            // Fill tile with mask colour at full opacity; layer.alpha controls transparency.
+            ctx.fillStyle = `rgba(${hexR},${hexG},${hexB},1)`;
             ctx.fillRect(0, 0, W, H);
 
             // Erase the selected region so the imagery shows through.
@@ -1687,6 +2045,7 @@
         };
 
         const layer = viewer.imageryLayers.addImageryProvider(provider);
+        layer.alpha = fillOpacity;
         return [layer];
       }
 
@@ -1714,6 +2073,10 @@
           subregionEntities: [], subregionOpacity: 0.0, subregionWidth: 1.0,
           fillEntities: [], fillOpacity: 0, invert: false,
         });
+        tracks['hl_' + entry.key] = { id:'hl_'+entry.key, label:entry.name, category:'highlight',
+          color, h:22, keyframes:[] };
+        selectedTrackIds.add('hl_' + entry.key);
+        tlBuildLabels();
         renderHighlightList();
       }
 
@@ -1721,10 +2084,14 @@
         const idx = highlights.findIndex(h => h.key === key);
         if (idx === -1) return;
         const h = highlights[idx];
+        const hlKey = h.key;
         h.outlineEntities.forEach(e => viewer.entities.remove(e));
         h.subregionEntities.forEach(e => viewer.entities.remove(e));
         h.fillEntities.forEach(removeFillItem);
         highlights.splice(idx, 1);
+        delete tracks['hl_' + hlKey];
+        selectedTrackIds.delete('hl_' + hlKey);
+        tlBuildLabels();
         renderHighlightList();
       }
 
@@ -2015,14 +2382,29 @@
         applyBmAdjust();
       });
 
+      // Shared material for all border polylines — update in-place to avoid per-entity
+      // re-assignment (which triggers Cesium dirty-marking on thousands of entities every frame).
+      let borderMat = null;
+
       function setBorderOpacity(ratio) { // ratio 0–1
-        const alpha = ratio;
-        const mat   = new Cesium.ColorMaterialProperty(Cesium.Color.WHITE.withAlpha(alpha));
         for (const ds of [countryDataSource, stateDataSource]) {
           if (!ds) continue;
-          ds.show = alpha > 0;
+          ds.show = ratio > 0;
+        }
+        if (!borderMat) {
+          // First call: create the shared material.
+          borderMat = new Cesium.ColorMaterialProperty(Cesium.Color.WHITE.withAlpha(ratio));
+        } else {
+          // Subsequent calls: update colour in-place — no entity iteration needed.
+          borderMat.color.setValue(Cesium.Color.WHITE.withAlpha(ratio));
+        }
+        // Assign borderMat to any entity that doesn't already reference it
+        // (first load, or if data sources are refreshed).
+        for (const ds of [countryDataSource, stateDataSource]) {
+          if (!ds) continue;
           for (const entity of ds.entities.values) {
-            if (entity.polyline) entity.polyline.material = mat;
+            if (entity.polyline && entity.polyline.material !== borderMat)
+              entity.polyline.material = borderMat;
           }
         }
       }
@@ -2083,6 +2465,11 @@
           entities: [],
           fillEntities: [],
         });
+        const newGroup = regionGroups[regionGroups.length - 1];
+        tracks['group_'+newGroup.id] = { id:'group_'+newGroup.id, label:'Group: '+name, category:'group',
+          color:'#3388ff', h:22, keyframes:[] };
+        selectedTrackIds.add('group_'+newGroup.id);
+        tlBuildLabels();
         renderGroupList();
       }
 
@@ -2090,9 +2477,13 @@
         const idx = regionGroups.findIndex(g => g.id === id);
         if (idx === -1) return;
         const g = regionGroups[idx];
+        const gid = g.id;
         g.entities.forEach(e => viewer.entities.remove(e));
         g.fillEntities.forEach(removeFillItem);
         regionGroups.splice(idx, 1);
+        delete tracks['group_' + gid];
+        selectedTrackIds.delete('group_' + gid);
+        tlBuildLabels();
         renderGroupList();
       }
 
@@ -2314,6 +2705,10 @@
         };
         marker.entity = makeCityEntity(marker);
         cityMarkers.push(marker);
+        tracks['city_'+marker.id] = { id:'city_'+marker.id, label:marker.name, category:'city',
+          color: defaultCityColor, h:22, keyframes:[] };
+        selectedTrackIds.add('city_'+marker.id);
+        tlBuildLabels();
         renderCityList();
       }
 
@@ -2321,7 +2716,10 @@
         const idx = cityMarkers.findIndex(m => m.id === id);
         if (idx === -1) return;
         viewer.entities.remove(cityMarkers[idx].entity);
+        delete tracks['city_' + id];
+        selectedTrackIds.delete('city_' + id);
         cityMarkers.splice(idx, 1);
+        tlBuildLabels();
         renderCityList();
       }
 
@@ -2438,8 +2836,8 @@
         playStartT  = playbackT;
         playStartMs = performance.now();
         syncSceneModeToTime(playbackT);
-        const state = interpolateCameraAtTime(playbackT);
-        if (state) setCameraState(state);
+        const state = buildStateAtTime(playbackT);
+        setCameraState(state);
         updateProgressUI(playbackT);
       });
 
@@ -2452,7 +2850,426 @@
         setViewerResolution(w, h);
       });
 
+      // ── Timeline ─────────────────────────────────────────────────────────────
+
+      const TL_RULER_H = 24;
+
+      function tlGetRows() {
+        const rows = [];
+        for (const id of ['camera', 'tod', 'borders']) {
+          if (tracks[id]) rows.push(tracks[id]);
+        }
+        for (const h of highlights) { const t = tracks['hl_'+h.key]; if (t) rows.push(t); }
+        for (const g of regionGroups) { const t = tracks['group_'+g.id]; if (t) rows.push(t); }
+        for (const m of cityMarkers) { const t = tracks['city_'+m.id]; if (t) rows.push(t); }
+        return rows;
+      }
+      function tlTotalH() { return TL_RULER_H + tlGetRows().reduce((s, r) => s + r.h, 0); }
+
+      const SCENE_SEG_COLORS = { '3d': '#1a3a5c', 'columbus': '#3a1a5c', '2d': '#1a5c3a' };
+
+      let tlOpen        = true;
+      let tlZoom        = 80;   // px/sec
+      let tlScroll      = 0;    // px from timeline start
+      let tlDrag        = null; // { type, trackId?, kfId?, startX, startT, startScroll }
+      let tlSelectedKf  = null; // { trackId, kfId } — keyframe selected in timeline
+
+      function tlTimeToX(t)  { return t * tlZoom - tlScroll; }
+      function tlXToTime(x)  { return (x + tlScroll) / tlZoom; }
+
+      function tlTickInterval(visSecs) {
+        const targets = [0.1, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
+        const ideal = visSecs / 7;
+        return targets.find(c => c >= ideal) || 600;
+      }
+
+      function tlFormatTime(s) {
+        if (s < 60)  return s % 1 === 0 ? s + 's' : s.toFixed(1) + 's';
+        const m = Math.floor(s / 60), sec = Math.round(s % 60);
+        return `${m}:${String(sec).padStart(2, '0')}`;
+      }
+
+      function tlBuildLabels() {
+        const panel = document.getElementById('tlLabels');
+        [...panel.querySelectorAll('.tl-lbl')].forEach(el => el.remove());
+        for (const row of tlGetRows()) {
+          const d = document.createElement('div');
+          d.className = 'tl-lbl' + (selectedTrackIds.has(row.id) ? ' tl-lbl-sel' : '');
+          d.style.height = row.h + 'px';
+          d.dataset.trackId = row.id;
+          const dot = document.createElement('span');
+          dot.className = 'tl-sel-dot';
+          dot.style.background = row.color;
+          d.appendChild(dot);
+          const lbl = document.createElement('span');
+          lbl.textContent = row.label;
+          d.appendChild(lbl);
+          d.title = 'Click to toggle keyframe capture for this track';
+          d.addEventListener('click', () => {
+            if (selectedTrackIds.has(row.id)) selectedTrackIds.delete(row.id);
+            else selectedTrackIds.add(row.id);
+            tlBuildLabels();
+          });
+          panel.appendChild(d);
+        }
+      }
+
+      function tlDraw() {
+        const canvas = document.getElementById('tlCanvas');
+        if (!canvas) return;
+        const wrap = document.getElementById('tlCanvasWrap');
+        const W = wrap ? wrap.clientWidth : canvas.width;
+        const H = tlTotalH();
+        if (canvas.width !== W || canvas.height !== H) {
+          canvas.width  = W;
+          canvas.height = H;
+        }
+        const ctx = canvas.getContext('2d');
+
+        // Background
+        ctx.fillStyle = '#1c1c1e';
+        ctx.fillRect(0, 0, W, H);
+
+        // ── Ruler ──────────────────────────────────────────────────────────
+        ctx.fillStyle = '#252527';
+        ctx.fillRect(0, 0, W, TL_RULER_H);
+
+        const visSecs  = W / tlZoom;
+        const interval = tlTickInterval(visSecs);
+        const startT   = Math.floor(tlXToTime(0) / interval) * interval;
+
+        ctx.font = '10px Arial';
+        for (let t = startT; t < startT + visSecs + interval * 2; t += interval) {
+          const x = Math.round(tlTimeToX(t));
+          if (x < -60 || x > W + 4) continue;
+
+          ctx.strokeStyle = '#4a4a4e';
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(x + 0.5, TL_RULER_H - 5); ctx.lineTo(x + 0.5, TL_RULER_H); ctx.stroke();
+
+          if (x > 0) {
+            ctx.fillStyle = '#999';
+            ctx.textAlign = 'left';
+            ctx.fillText(tlFormatTime(Math.max(0, t)), x + 3, TL_RULER_H - 6);
+          }
+
+          // Minor ticks (halves)
+          const half = interval / 2;
+          const hx = Math.round(tlTimeToX(t + half));
+          if (hx > 0 && hx < W) {
+            ctx.strokeStyle = '#333';
+            ctx.beginPath(); ctx.moveTo(hx + 0.5, TL_RULER_H - 3); ctx.lineTo(hx + 0.5, TL_RULER_H); ctx.stroke();
+          }
+        }
+
+        // Duration end-marker
+        const dur = totalDuration();
+        if (dur > 0) {
+          const ex = Math.round(tlTimeToX(dur));
+          if (ex >= 0 && ex <= W) {
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath(); ctx.moveTo(ex + 0.5, 0); ctx.lineTo(ex + 0.5, H); ctx.stroke();
+            ctx.setLineDash([]);
+          }
+        }
+
+        // ── Tracks ─────────────────────────────────────────────────────────
+        let y = TL_RULER_H;
+        for (const row of tlGetRows()) {
+          ctx.fillStyle = '#252527';
+          ctx.fillRect(0, y, W, row.h);
+          ctx.fillStyle = '#2e2e30';
+          ctx.fillRect(0, y + row.h - 1, W, 1);
+          if (selectedTrackIds.has(row.id)) {
+            ctx.fillStyle = 'rgba(74,158,255,0.07)';
+            ctx.fillRect(0, y, W, row.h - 1);
+          }
+          if (row.id === 'camera')  tlDrawCameraTrack(ctx, y, row.h, W);
+          else if (row.id === 'tod') tlDrawTodTrack(ctx, y, row.h, W);
+          else                       tlDrawGenericTrack(ctx, row, y, row.h, W);
+          y += row.h;
+        }
+
+        // ── Playhead ───────────────────────────────────────────────────────
+        const px = Math.round(tlTimeToX(playbackT));
+        if (px >= -1 && px <= W + 1) {
+          ctx.strokeStyle = 'rgba(255,59,48,0.9)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(px + 0.5, 0); ctx.lineTo(px + 0.5, H); ctx.stroke();
+          // Handle triangle in ruler
+          ctx.fillStyle = '#ff3b30';
+          ctx.beginPath();
+          ctx.moveTo(px - 5, 0);
+          ctx.lineTo(px + 5, 0);
+          ctx.lineTo(px,     9);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        // Update time display
+        const tlTime = document.getElementById('tlCurrentTime');
+        if (tlTime) tlTime.textContent = tlFormatTime(playbackT);
+      }
+
+      function tlDrawCameraTrack(ctx, y, h, W) {
+        const camKfs = tracks['camera']?.keyframes || [];
+        if (camKfs.length === 0) return;
+        const cy = y + h / 2;
+
+        // Bar connecting first and last keyframe
+        if (camKfs.length > 1) {
+          const x1 = Math.max(0, tlTimeToX(camKfs[0].time));
+          const x2 = Math.min(W, tlTimeToX(camKfs[camKfs.length - 1].time));
+          ctx.fillStyle = '#2a4a6a';
+          ctx.fillRect(x1, cy - 2, x2 - x1, 4);
+        }
+
+        // Scene mode band — thin 4px bar at the bottom of the camera row
+        const dur = Math.max(totalDuration(), tlXToTime(W) + 1);
+        for (let i = 0; i < camKfs.length; i++) {
+          const kf     = camKfs[i];
+          const mode   = kf.sceneMode || '3d';
+          const startT = kf.time;
+          const endT   = i < camKfs.length - 1 ? camKfs[i + 1].time : dur;
+          const x1 = Math.max(0, tlTimeToX(startT));
+          const x2 = Math.min(W, tlTimeToX(endT));
+          if (x2 <= x1) continue;
+          ctx.fillStyle = SCENE_SEG_COLORS[mode] || SCENE_SEG_COLORS['3d'];
+          ctx.fillRect(x1, y + h - 5, x2 - x1, 4);
+          if (x2 - x1 > 22) {
+            ctx.fillStyle = 'rgba(255,255,255,0.45)';
+            ctx.font = '9px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(SCENE_MODE_LABELS[mode] || '3D', x1 + 4, y + h - 7);
+          }
+        }
+
+        // Keyframe diamonds
+        for (const kf of camKfs) {
+          const x = tlTimeToX(kf.time);
+          if (x < -12 || x > W + 12) continue;
+          const tlSel = tlSelectedKf?.trackId === 'camera' && tlSelectedKf?.kfId === kf.id;
+          const sel   = kf.id === selectedKfId || tlSel;
+          const size  = sel ? 9 : 7;
+          ctx.save();
+          ctx.translate(x, cy);
+          ctx.rotate(Math.PI / 4);
+          ctx.fillStyle   = sel ? '#ffffff' : '#4a9eff';
+          ctx.strokeStyle = sel ? '#4a9eff' : '#1a5a9f';
+          ctx.lineWidth   = 1.5;
+          ctx.beginPath(); ctx.rect(-size / 2, -size / 2, size, size);
+          ctx.fill(); ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      function tlDrawTodTrack(ctx, y, h, W) {
+        const todKfs = tracks['tod']?.keyframes || [];
+        if (todKfs.length < 2) return;
+        const dur = totalDuration();
+        if (dur <= 0) return;
+        const steps = Math.min(W, 200);
+        for (let i = 0; i < steps; i++) {
+          const t = tlXToTime(i * W / steps);
+          if (t < 0 || t > dur) continue;
+          const todState = interpolateTrack('tod', t);
+          if (!todState) continue;
+          const tod = (todState.todMinutes ?? 720) / 1440;
+          const b = 0.1 + 0.75 * Math.sin(Math.PI * tod);
+          ctx.fillStyle = `rgb(${Math.round(b*60+10)},${Math.round(b*110+15)},${Math.round(b*190+35)})`;
+          ctx.fillRect(Math.floor(i * W / steps), y + 3, Math.ceil(W / steps) + 1, h - 6);
+        }
+        for (const kf of todKfs) {
+          const x = tlTimeToX(kf.time);
+          if (x < -10 || x > W + 10) continue;
+          const cy = y + h / 2;
+          const sel = tlSelectedKf?.trackId === 'tod' && tlSelectedKf?.kfId === kf.id;
+          ctx.save(); ctx.translate(x, cy); ctx.rotate(Math.PI / 4);
+          ctx.fillStyle = sel ? '#ffffff' : '#ffaa44';
+          ctx.strokeStyle = sel ? '#ffaa44' : '#885500';
+          ctx.lineWidth = sel ? 2 : 1.5;
+          ctx.beginPath(); ctx.rect(sel ? -5 : -4, sel ? -5 : -4, sel ? 10 : 8, sel ? 10 : 8);
+          ctx.fill(); ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      function tlDrawGenericTrack(ctx, row, y, h, W) {
+        const kfs = row.keyframes;
+        if (kfs.length === 0) return;
+        const cy = y + h / 2;
+        if (kfs.length > 1) {
+          const x1 = Math.max(0, tlTimeToX(kfs[0].time));
+          const x2 = Math.min(W, tlTimeToX(kfs[kfs.length-1].time));
+          ctx.fillStyle = row.color + '44';
+          ctx.fillRect(x1, cy - 2, x2 - x1, 4);
+        }
+        for (const kf of kfs) {
+          const x = tlTimeToX(kf.time);
+          if (x < -10 || x > W + 10) continue;
+          const sel  = tlSelectedKf?.trackId === row.id && tlSelectedKf?.kfId === kf.id;
+          const size = sel ? 8 : 6;
+          ctx.save(); ctx.translate(x, cy); ctx.rotate(Math.PI / 4);
+          ctx.fillStyle   = sel ? '#ffffff' : row.color;
+          ctx.strokeStyle = sel ? row.color  : '#00000088';
+          ctx.lineWidth   = sel ? 1.5 : 1;
+          ctx.beginPath(); ctx.rect(-size/2, -size/2, size, size);
+          ctx.fill(); ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      // ── Timeline mouse / wheel ──────────────────────────────────────────
+      function tlInitEvents() {
+        const canvas = document.getElementById('tlCanvas');
+
+        canvas.addEventListener('mousedown', (e) => {
+          const rect = canvas.getBoundingClientRect();
+          const mx = e.clientX - rect.left;
+          const my = e.clientY - rect.top;
+
+          // Ruler click or playhead drag
+          if (my < TL_RULER_H) {
+            const px = tlTimeToX(playbackT);
+            if (Math.abs(mx - px) < 8) {
+              tlDrag = { type: 'playhead' };
+            } else {
+              const t = Math.max(0, tlXToTime(mx));
+              tlSeekTo(t);
+              tlDrag = { type: 'playhead' };
+            }
+            return;
+          }
+
+          // Track hit-test — any track can have keyframes selected/dragged
+          const rows = tlGetRows();
+          let ty = TL_RULER_H;
+          for (const row of rows) {
+            if (my >= ty && my < ty + row.h) {
+              const cy = ty + row.h / 2;
+              const kfs = row.keyframes || [];
+              let hit = null;
+              for (const kf of kfs) {
+                if (Math.abs(tlTimeToX(kf.time) - mx) < 8 && Math.abs(cy - my) < 10) { hit = kf; break; }
+              }
+              if (hit) {
+                tlSelectedKf = { trackId: row.id, kfId: hit.id };
+                tlDrag = { type: 'kf', trackId: row.id, kfId: hit.id, startX: mx, startT: hit.time };
+                tlSeekTo(hit.time);
+                if (row.id === 'camera') { selectedKfId = hit.id; renderKeyframeList(); }
+              } else {
+                tlSeekTo(Math.max(0, tlXToTime(mx)));
+                tlDrag = { type: 'playhead' };
+              }
+              break;
+            }
+            ty += row.h;
+          }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+          if (!tlDrag) return;
+          const rect = canvas.getBoundingClientRect();
+          const mx = e.clientX - rect.left;
+
+          if (tlDrag.type === 'playhead') {
+            tlSeekTo(Math.max(0, Math.min(totalDuration(), tlXToTime(mx))));
+          } else if (tlDrag.type === 'kf') {
+            const track = tracks[tlDrag.trackId];
+            const kf = track?.keyframes.find(k => k.id === tlDrag.kfId);
+            if (kf) {
+              kf.time = Math.max(0, parseFloat((tlDrag.startT + (mx - tlDrag.startX) / tlZoom).toFixed(2)));
+              track.keyframes.sort((a, b) => a.time - b.time);
+              playbackT = kf.time;
+              playStartT = kf.time;
+              updateProgressUI(kf.time);
+              if (tlDrag.trackId === 'camera') renderKeyframeList();
+            }
+          } else if (tlDrag.type === 'pan') {
+            tlScroll = Math.max(0, tlDrag.startScroll - (mx - tlDrag.startX));
+          }
+        });
+
+        window.addEventListener('mouseup', () => { tlDrag = null; });
+
+        canvas.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          const rect = canvas.getBoundingClientRect();
+          const mx   = e.clientX - rect.left;
+          const tAtCursor = tlXToTime(mx);
+          const factor = e.deltaY < 0 ? 1.18 : 1 / 1.18;
+          tlZoom   = Math.max(8, Math.min(600, tlZoom * factor));
+          tlScroll = Math.max(0, tAtCursor * tlZoom - mx);
+          document.getElementById('tlZoomLabel').textContent = (tlZoom / 80).toFixed(1) + '×';
+        }, { passive: false });
+      }
+
+      function tlSeekTo(t) {
+        playbackT  = t;
+        playStartT = t;
+        syncSceneModeToTime(t);
+        const state = buildStateAtTime(t);
+        setCameraState(state);
+        updateProgressUI(t);
+      }
+
+      function tlFitView() {
+        const dur = totalDuration();
+        if (dur <= 0) return;
+        const wrap = document.getElementById('tlCanvasWrap');
+        const W = wrap ? wrap.clientWidth : 600;
+        tlZoom   = Math.max(8, (W - 20) / dur);
+        tlScroll = 0;
+        document.getElementById('tlZoomLabel').textContent = (tlZoom / 80).toFixed(1) + '×';
+      }
+
+      function tlSetOpen(open) {
+        tlOpen = open;
+        document.getElementById('tlBody').style.display = open ? 'flex' : 'none';
+        document.getElementById('tlToggleBtn').textContent = (open ? '▾' : '▸') + ' Timeline';
+      }
+
+      // Continuous redraw loop for smooth playhead
+      function tlRenderLoop() {
+        if (tlOpen) tlDraw();
+        requestAnimationFrame(tlRenderLoop);
+      }
+
+      // ── Timeline button wiring ───────────────────────────────────────────────
+      document.getElementById('tlToggleBtn').addEventListener('click', () => tlSetOpen(!tlOpen));
+      document.getElementById('tlZoomIn').addEventListener('click', () => {
+        tlZoom = Math.min(600, tlZoom * 1.4);
+        document.getElementById('tlZoomLabel').textContent = (tlZoom / 80).toFixed(1) + '×';
+      });
+      document.getElementById('tlZoomOut').addEventListener('click', () => {
+        tlZoom = Math.max(8, tlZoom / 1.4);
+        document.getElementById('tlZoomLabel').textContent = (tlZoom / 80).toFixed(1) + '×';
+      });
+      document.getElementById('tlFitBtn').addEventListener('click', tlFitView);
+      // Delete selected timeline keyframe with Delete or Backspace (when not editing an input)
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+        const tag = document.activeElement?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        if (tlSelectedKf) {
+          deleteTrackKeyframe(tlSelectedKf.trackId, tlSelectedKf.kfId);
+          e.preventDefault();
+        }
+      });
+
+      document.getElementById('tlSelectAll').addEventListener('click', () => {
+        for (const row of tlGetRows()) selectedTrackIds.add(row.id);
+        tlBuildLabels();
+      });
+      document.getElementById('tlSelectNone').addEventListener('click', () => {
+        selectedTrackIds.clear();
+        tlBuildLabels();
+      });
+
       // ── Boot ─────────────────────────────────────────────────────────────────
+      initBuiltinTracks();
       renderLooksSelect();
       renderKeyframeList();
       updateProgressUI(0);
@@ -2465,6 +3282,9 @@
       })();
       setTimeOfDay(720);
       loadRegionData();
+      tlBuildLabels();
+      tlInitEvents();
+      tlRenderLoop();
     </script>
   </body>
 </html>
