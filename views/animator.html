@@ -776,10 +776,15 @@
             <input type="range" id="stateBorderOpacity" min="0" max="100" value="50" step="5" style="flex:1;" />
             <span id="stateBorderOpacityVal" style="font-size:11px;color:#888;width:28px;text-align:right;">50%</span>
           </div>
-          <div class="tod-row" style="opacity:0.4;" title="County borders — coming soon">
+          <div class="tod-row">
             <span style="font-size:11px;color:#777;width:52px;flex-shrink:0;">Counties</span>
-            <input type="range" id="countyBorderOpacity" min="0" max="100" value="30" step="5" style="flex:1;" disabled />
-            <span id="countyBorderOpacityVal" style="font-size:11px;color:#888;width:28px;text-align:right;">30%</span>
+            <input type="range" id="countyBorderOpacity" min="0" max="100" value="0" step="5" style="flex:1;" />
+            <span id="countyBorderOpacityVal" style="font-size:11px;color:#888;width:28px;text-align:right;">0%</span>
+          </div>
+          <div id="countyFilterRow" style="display:none;padding-left:52px;margin-top:3px;">
+            <select id="countyStateFilter" style="width:100%;font-size:11px;padding:2px 4px;">
+              <option value="">All states</option>
+            </select>
           </div>
           <div id="regionSearchRow" style="margin-top:8px;">
             <input type="text" id="regionSearch" list="regionDatalist"
@@ -1243,6 +1248,7 @@
           return {
             countryOpacity: parseInt(document.getElementById('countryBorderOpacity').value) / 100,
             stateOpacity:   parseInt(document.getElementById('stateBorderOpacity').value) / 100,
+            countyOpacity:  parseInt(document.getElementById('countyBorderOpacity').value) / 100,
           };
         }
         if (trackId.startsWith('hl_')) {
@@ -1331,6 +1337,9 @@
             document.getElementById("stateBorderOpacity").value = pct;
             document.getElementById("stateBorderOpacityVal").textContent = pct + "%";
           }
+        }
+        if (state.countyOpacity !== undefined) {
+          setCountyBorderOpacity(state.countyOpacity);
         }
 
         // Highlight states
@@ -1605,9 +1614,12 @@
           const so = a.stateOpacity   ?? a.borderOpacity ?? 0.5;
           const co2 = b.countryOpacity ?? b.borderOpacity ?? 0.7;
           const so2 = b.stateOpacity   ?? b.borderOpacity ?? 0.5;
+          const cyo = a.countyOpacity ?? 0;
+          const cyo2 = b.countyOpacity ?? 0;
           return {
-            countryOpacity: co + (co2 - co) * alpha,
-            stateOpacity:   so + (so2 - so) * alpha,
+            countryOpacity: co  + (co2  - co)  * alpha,
+            stateOpacity:   so  + (so2  - so)  * alpha,
+            countyOpacity:  cyo + (cyo2 - cyo) * alpha,
           };
         }
         if (trackId.startsWith('hl_')) {
@@ -1761,6 +1773,11 @@
           const pct = Math.round(state.stateOpacity * 100);
           document.getElementById("stateBorderOpacity").value = pct;
           document.getElementById("stateBorderOpacityVal").textContent = pct + "%";
+        }
+        if (state.countyOpacity !== undefined) {
+          const pct = Math.round(state.countyOpacity * 100);
+          document.getElementById("countyBorderOpacity").value = pct;
+          document.getElementById("countyBorderOpacityVal").textContent = pct + "%";
         }
       }
 
@@ -1933,6 +1950,21 @@
 
       const DEFAULT_OUTLINE = Cesium.Color.WHITE.withAlpha(0.7);
       const DEFAULT_WIDTH   = 1.5;
+
+      const STATE_FIPS = {
+        '01':'Alabama','02':'Alaska','04':'Arizona','05':'Arkansas','06':'California',
+        '08':'Colorado','09':'Connecticut','10':'Delaware','11':'Washington D.C.',
+        '12':'Florida','13':'Georgia','15':'Hawaii','16':'Idaho','17':'Illinois',
+        '18':'Indiana','19':'Iowa','20':'Kansas','21':'Kentucky','22':'Louisiana',
+        '23':'Maine','24':'Maryland','25':'Massachusetts','26':'Michigan','27':'Minnesota',
+        '28':'Mississippi','29':'Missouri','30':'Montana','31':'Nebraska','32':'Nevada',
+        '33':'New Hampshire','34':'New Jersey','35':'New Mexico','36':'New York',
+        '37':'North Carolina','38':'North Dakota','39':'Ohio','40':'Oklahoma',
+        '41':'Oregon','42':'Pennsylvania','44':'Rhode Island','45':'South Carolina',
+        '46':'South Dakota','47':'Tennessee','48':'Texas','49':'Utah','50':'Vermont',
+        '51':'Virginia','53':'Washington','54':'West Virginia','55':'Wisconsin',
+        '56':'Wyoming','72':'Puerto Rico',
+      };
 
       // Maps states.geojson `admin` values → countries.geojson `NAME` where they differ
       const ADMIN_TO_COUNTRY = {
@@ -2750,6 +2782,124 @@
         }
       }
 
+      // County borders — drawn directly as GroundPolylinePrimitive (no entity overhead,
+      // correct globe-limb depth handling, proper MultiPolygon/hole support).
+      let countyPositions      = null; // Map<fips2, Cartesian3[][]>
+      let countyLoading        = false;
+      let countyPrimitive      = null; // active GroundPolylinePrimitive
+      let countyFilter         = '';   // '' = all, or 2-digit state FIPS
+      let countyCurrentOpacity = 0;
+
+      function rebuildCountyPrimitive() {
+        if (countyPrimitive) {
+          viewer.scene.primitives.remove(countyPrimitive);
+          countyPrimitive = null;
+        }
+        if (!countyPositions || countyCurrentOpacity <= 0) return;
+        const rings = countyFilter
+          ? (countyPositions.get(countyFilter) || [])
+          : Array.from(countyPositions.values()).flat();
+        if (!rings.length) return;
+        const instances = rings.map(positions =>
+          new Cesium.GeometryInstance({
+            geometry: new Cesium.GroundPolylineGeometry({ positions, width: 1 }),
+          })
+        );
+        countyPrimitive = viewer.scene.primitives.add(
+          new Cesium.GroundPolylinePrimitive({
+            geometryInstances: instances,
+            appearance: new Cesium.PolylineMaterialAppearance({
+              material: Cesium.Material.fromType('Color', {
+                color: DEFAULT_OUTLINE.withAlpha(countyCurrentOpacity),
+              }),
+              translucent: true,
+            }),
+          })
+        );
+      }
+
+      async function loadCountyPositions() {
+        if (countyLoading || countyPositions) return;
+        countyLoading = true;
+        setStatus("Loading county data…");
+        try {
+          const res    = await fetch("/api/counties");
+          const geojson = await res.json();
+          countyPositions = new Map();
+          for (const feature of geojson.features) {
+            const fips2 = String(feature.id ?? '').padStart(5, '0').slice(0, 2);
+            if (!fips2 || fips2 === '00') continue;
+            const geom = feature.geometry;
+            if (!geom) continue;
+            // Handle Polygon (all rings) and MultiPolygon (all polygons, all rings)
+            const rings = geom.type === 'Polygon'
+              ? geom.coordinates
+              : geom.type === 'MultiPolygon'
+                ? geom.coordinates.flat()
+                : [];
+            for (const ring of rings) {
+              const raw = Cesium.Cartesian3.fromDegreesArray(
+                ring.flatMap(([lng, lat]) => [lng, lat])
+              );
+              if (raw.length < 2) continue;
+              // Deduplicate consecutive identical vertices (same fix that resolved Alaska flicker)
+              const deduped = [raw[0]];
+              for (let i = 1; i < raw.length; i++) {
+                const p = raw[i], q = deduped[deduped.length - 1];
+                if (Math.abs(p.x - q.x) > 1 || Math.abs(p.y - q.y) > 1 || Math.abs(p.z - q.z) > 1)
+                  deduped.push(p);
+              }
+              // Ensure ring is closed
+              const f = deduped[0], l = deduped[deduped.length - 1];
+              if (Math.abs(f.x - l.x) > 1 || Math.abs(f.y - l.y) > 1 || Math.abs(f.z - l.z) > 1)
+                deduped.push(deduped[0]);
+              if (deduped.length < 2) continue;
+              if (!countyPositions.has(fips2)) countyPositions.set(fips2, []);
+              countyPositions.get(fips2).push(deduped);
+            }
+          }
+          setStatus("");
+        } catch (e) {
+          console.error("[counties]", e);
+          setStatus("Failed to load county data");
+          countyLoading = false;
+          return;
+        }
+        countyLoading = false;
+        if (countyCurrentOpacity > 0) rebuildCountyPrimitive();
+      }
+
+      function setCountyBorderOpacity(ratio) {
+        countyCurrentOpacity = ratio;
+        document.getElementById("countyBorderOpacity").value = Math.round(ratio * 100);
+        document.getElementById("countyBorderOpacityVal").textContent = Math.round(ratio * 100) + "%";
+        document.getElementById("countyFilterRow").style.display = ratio > 0 ? "" : "none";
+
+        if (ratio <= 0) {
+          if (countyPrimitive) {
+            viewer.scene.primitives.remove(countyPrimitive);
+            countyPrimitive = null;
+          }
+          return;
+        }
+        if (!countyPositions) {
+          loadCountyPositions(); // async — will call rebuildCountyPrimitive() on completion
+          return;
+        }
+        // Update opacity on existing primitive if possible, else rebuild
+        if (countyPrimitive?.appearance?.material?.uniforms) {
+          countyPrimitive.appearance.material.uniforms.color = DEFAULT_OUTLINE.withAlpha(ratio);
+        } else {
+          rebuildCountyPrimitive();
+        }
+      }
+
+      function setCountyFilter(fips2) {
+        if (fips2 === countyFilter) return;
+        countyFilter = fips2;
+        if (countyPositions && countyCurrentOpacity > 0) rebuildCountyPrimitive();
+      }
+
       // Ratio lock — when enabled, moving any slider scales the others proportionally.
       let borderRatioLocked = false;
 
@@ -2765,6 +2915,7 @@
             for (const [sid, vid, fn] of [
               ['countryBorderOpacity', 'countryBorderOpacityVal', setCountryBorderOpacity],
               ['stateBorderOpacity',   'stateBorderOpacityVal',   setStateBorderOpacity],
+              ['countyBorderOpacity',  'countyBorderOpacityVal',  setCountyBorderOpacity],
             ]) {
               if (sid === changedId) continue;
               const el = document.getElementById(sid);
@@ -2783,6 +2934,25 @@
         onBorderSliderInput("countryBorderOpacity", "countryBorderOpacityVal", setCountryBorderOpacity));
       document.getElementById("stateBorderOpacity").addEventListener("input",
         onBorderSliderInput("stateBorderOpacity", "stateBorderOpacityVal", setStateBorderOpacity));
+      document.getElementById("countyBorderOpacity").addEventListener("input",
+        onBorderSliderInput("countyBorderOpacity", "countyBorderOpacityVal", setCountyBorderOpacity));
+
+      document.getElementById("countyStateFilter").addEventListener("change", e => {
+        setCountyFilter(e.target.value);
+      });
+
+      // Populate state filter dropdown from STATE_FIPS mapping
+      (function() {
+        const sel = document.getElementById("countyStateFilter");
+        Object.entries(STATE_FIPS)
+          .sort((a, b) => a[1].localeCompare(b[1]))
+          .forEach(([fips, name]) => {
+            const opt = document.createElement("option");
+            opt.value = fips;
+            opt.textContent = name;
+            sel.appendChild(opt);
+          });
+      })();
 
       document.getElementById("borderRatioLockBtn").addEventListener("click", () => {
         borderRatioLocked = !borderRatioLocked;

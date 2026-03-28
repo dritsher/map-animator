@@ -15,6 +15,31 @@ function makeSessionId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
+// Counties GeoJSON — fetched from CDN on first request and cached locally
+const COUNTIES_CACHE = path.join(__dirname, "../public/data/counties.geojson");
+const COUNTIES_CDN   = "https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json";
+
+router.get("/api/counties", (req, res) => {
+  if (fs.existsSync(COUNTIES_CACHE)) {
+    return res.sendFile(COUNTIES_CACHE);
+  }
+  // Fetch from CDN, stream to disk, then serve
+  const tmp = COUNTIES_CACHE + ".tmp";
+  const file = fs.createWriteStream(tmp);
+  https.get(COUNTIES_CDN, { headers: { "User-Agent": "map-animator" } }, upstream => {
+    upstream.pipe(file);
+    file.on("finish", () => {
+      file.close(() => {
+        try { fs.renameSync(tmp, COUNTIES_CACHE); } catch (e) {}
+        res.sendFile(COUNTIES_CACHE);
+      });
+    });
+  }).on("error", err => {
+    try { fs.unlinkSync(tmp); } catch (e) {}
+    res.status(502).json({ error: "Could not fetch county data" });
+  });
+});
+
 // Geocoding proxy — keeps the MapTiler key server-side so it works on any domain
 router.get("/api/geocode", (req, res) => {
   const q = (req.query.q || "").trim();
