@@ -347,6 +347,7 @@
         display: flex;
         gap: 6px;
         margin-bottom: 8px;
+        position: relative;
       }
       #citySearch { flex: 1; margin: 0; }
       #addCityBtn {
@@ -355,6 +356,30 @@
         padding: 6px 10px;
         flex-shrink: 0;
       }
+      #geocodeResults {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0; right: 0;
+        background: #2a2a2a;
+        border: 1px solid #555;
+        border-radius: 4px;
+        z-index: 999;
+        max-height: 180px;
+        overflow-y: auto;
+        margin-top: 2px;
+      }
+      .geocode-result {
+        padding: 6px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        border-bottom: 1px solid #3a3a3a;
+        line-height: 1.3;
+      }
+      .geocode-result:last-child { border-bottom: none; }
+      .geocode-result:hover { background: #3a3a3a; }
+      .geocode-result-name { font-weight: bold; color: #eee; }
+      .geocode-result-detail { color: #888; }
 
       #cityList {
         list-style: none;
@@ -781,6 +806,7 @@
               placeholder="Search city…" autocomplete="off" />
             <datalist id="cityDatalist"></datalist>
             <button id="addCityBtn">+</button>
+            <div id="geocodeResults"></div>
           </div>
           <ul id="cityList"></ul>
         </div>
@@ -3006,14 +3032,8 @@
         });
       }
 
-      function addCity(displayStr) {
-        // displayStr is "Name (Country)"
-        const match = displayStr.match(/^(.+)\s\((.+)\)$/);
-        if (!match) return;
-        const [, name, country] = match;
-        const found = cityData.find(c => c.name === name && c.country === country);
-        if (!found) return;
-        if (cityMarkers.some(m => m.name === name && m.country === country)) return;
+      function addCityFromData(found) {
+        if (cityMarkers.some(m => m.name === found.name && m.country === found.country)) return;
         const marker = {
           id: nextCityId++,
           name: found.name,
@@ -3034,6 +3054,68 @@
         tlBuildLabels();
         renderCityList();
       }
+
+      function addCity(displayStr) {
+        // displayStr is "Name (Country)"
+        const match = displayStr.match(/^(.+)\s\((.+)\)$/);
+        if (match) {
+          const [, name, country] = match;
+          const found = cityData.find(c => c.name === name && c.country === country);
+          if (found) { addCityFromData(found); return true; }
+        }
+        return false;
+      }
+
+      // ── Geocoding fallback (MapTiler) ────────────────────────────────────────
+      const geocodePanel = document.getElementById("geocodeResults");
+
+      function hideGeocodeResults() {
+        geocodePanel.style.display = "none";
+        geocodePanel.innerHTML = "";
+      }
+
+      async function geocodeAndShow(query) {
+        const url = `/api/geocode?q=${encodeURIComponent(query)}`;
+        let features;
+        try {
+          const res = await fetch(url);
+          if (!res.ok) return;
+          features = (await res.json()).features || [];
+        } catch (e) { return; }
+
+        if (!features.length) {
+          geocodePanel.innerHTML = '<div class="geocode-result"><span class="geocode-result-detail">No results found</span></div>';
+          geocodePanel.style.display = "block";
+          return;
+        }
+
+        geocodePanel.innerHTML = "";
+        features.forEach(f => {
+          const [lon, lat] = f.center || f.geometry?.coordinates || [];
+          if (lon == null || lat == null) return;
+          // Extract a short name and context string from place_name
+          const parts = (f.place_name || f.text || query).split(",");
+          const shortName = parts[0].trim();
+          const detail = parts.slice(1).join(",").trim();
+
+          const row = document.createElement("div");
+          row.className = "geocode-result";
+          row.innerHTML = `<div class="geocode-result-name">${shortName}</div>` +
+                          (detail ? `<div class="geocode-result-detail">${detail}</div>` : "");
+          row.addEventListener("click", () => {
+            addCityFromData({ name: shortName, country: detail || "Unknown", lat, lon });
+            document.getElementById("citySearch").value = "";
+            hideGeocodeResults();
+          });
+          geocodePanel.appendChild(row);
+        });
+        geocodePanel.style.display = "block";
+      }
+
+      // Close results when clicking outside
+      document.addEventListener("click", e => {
+        if (!document.getElementById("citySearchRow").contains(e.target)) hideGeocodeResults();
+      });
 
       function removeCity(id) {
         const idx = cityMarkers.findIndex(m => m.id === id);
@@ -3279,16 +3361,20 @@
       document.getElementById("addCityBtn").addEventListener("click", () => {
         const val = document.getElementById("citySearch").value.trim();
         if (!val) return;
-        addCity(val);
-        document.getElementById("citySearch").value = "";
+        if (!addCity(val)) geocodeAndShow(val);
+        else document.getElementById("citySearch").value = "";
       });
 
       document.getElementById("citySearch").addEventListener("keydown", e => {
         if (e.key !== "Enter") return;
         const val = e.target.value.trim();
         if (!val) return;
-        addCity(val);
-        e.target.value = "";
+        if (!addCity(val)) geocodeAndShow(val);
+        else e.target.value = "";
+      });
+
+      document.getElementById("citySearch").addEventListener("input", () => {
+        hideGeocodeResults();
       });
 
       // ── Time of day ─────────────────────────────────────────────────────────

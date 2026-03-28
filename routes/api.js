@@ -2,6 +2,7 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const https = require("https");
 const { execFile } = require("child_process");
 const { promisify } = require("util");
 
@@ -13,6 +14,31 @@ const sessions = new Map(); // sessionId -> { dir, frameCount }
 function makeSessionId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
+
+// Geocoding proxy — keeps the MapTiler key server-side so it works on any domain
+router.get("/api/geocode", (req, res) => {
+  const q = (req.query.q || "").trim();
+  if (!q) return res.status(400).json({ error: "Missing query" });
+
+  const key = process.env.MAPTILER_API_KEY;
+  if (!key) return res.status(503).json({ error: "Geocoding not configured" });
+
+  const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(q)}.json?key=${encodeURIComponent(key)}&limit=5`;
+
+  https.get(url, { headers: { "User-Agent": "map-animator" } }, upstream => {
+    let body = "";
+    upstream.on("data", chunk => body += chunk);
+    upstream.on("end", () => {
+      try {
+        res.json(JSON.parse(body));
+      } catch (e) {
+        res.status(502).json({ error: "Bad response from geocoder" });
+      }
+    });
+  }).on("error", err => {
+    res.status(502).json({ error: "Geocoder unreachable" });
+  });
+});
 
 // Start a new export session — creates a temp directory
 router.post("/api/export/start", (req, res) => {
