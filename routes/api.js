@@ -25,7 +25,9 @@ router.get("/api/geocode", (req, res) => {
 
   const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(q)}.json?key=${encodeURIComponent(key)}&limit=5`;
 
-  https.get(url, { headers: { "User-Agent": "map-animator" } }, upstream => {
+  // Forward the browser's origin so domain-restricted keys pass MapTiler's referer check
+  const origin = req.headers.origin || `${req.protocol}://${req.headers.host}`;
+  https.get(url, { headers: { "User-Agent": "map-animator", "Referer": origin, "Origin": origin } }, upstream => {
     let body = "";
     upstream.on("data", chunk => body += chunk);
     upstream.on("end", () => {
