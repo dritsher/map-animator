@@ -25,7 +25,7 @@
         position: fixed;
         inset: 0;
         display: grid;
-        grid-template-columns: 340px minmax(0, 1fr);
+        grid-template-columns: 380px minmax(0, 1fr);
         grid-template-rows: minmax(0, 1fr) auto;
       }
 
@@ -805,7 +805,14 @@
         </div>
 
         <div class="section">
-          <div class="section-title">Cities</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <div class="section-title" style="margin-bottom:0;">Cities</div>
+            <div id="cityClipboardBar" style="display:none;align-items:center;gap:4px;">
+              <span style="font-size:10px;color:#aaa;">⎘ style copied</span>
+              <button id="applyStyleToAllBtn" style="font-size:10px;padding:2px 6px;width:auto;margin:0;">Apply to all</button>
+              <button id="clearClipboardBtn" style="font-size:10px;padding:2px 5px;width:auto;margin:0;color:#888;background:none;border:1px solid #555;">✕</button>
+            </div>
+          </div>
           <div id="citySearchRow">
             <input type="text" id="citySearch" list="cityDatalist"
               placeholder="Search city…" autocomplete="off" />
@@ -1268,17 +1275,24 @@
         if (trackId.startsWith('city_')) {
           const m = cityMarkers.find(m => m.id === parseInt(trackId.slice(5)));
           return m ? {
-            color:        m.color,
-            labelColor:   m.labelColor   ?? m.color,
-            dotSize:      m.dotSize,
-            showLabel:    m.showLabel,
-            dotOpacity:   m.dotOpacity   ?? 1.0,
-            labelOpacity: m.labelOpacity ?? 1.0,
-            fontSize:     m.fontSize     ?? 13,
-            fontWeight:   m.fontWeight   ?? 'normal',
-            fontFamily:   m.fontFamily   ?? 'Arial',
-            offsetX:      m.offsetX      ?? 0,
-            offsetY:      m.offsetY      ?? 0,
+            color:             m.color,
+            labelColor:        m.labelColor        ?? m.color,
+            dotSize:           m.dotSize,
+            showLabel:         m.showLabel,
+            dotOpacity:        m.dotOpacity         ?? 1.0,
+            labelOpacity:      m.labelOpacity       ?? 1.0,
+            fontSize:          m.fontSize           ?? 13,
+            fontWeight:        m.fontWeight         ?? 'normal',
+            fontStyle:         m.fontStyle          ?? 'normal',
+            fontFamily:        m.fontFamily         ?? 'Arial',
+            offsetX:           m.offsetX            ?? 0,
+            offsetY:           m.offsetY            ?? 0,
+            outlineWidth:      m.outlineWidth       ?? 2,
+            showBackground:    m.showBackground     ?? false,
+            backgroundColor:   m.backgroundColor   ?? '#000000',
+            backgroundOpacity: m.backgroundOpacity  ?? 0.5,
+            bgPadX:            m.bgPadX             ?? 5,
+            bgPadY:            m.bgPadY             ?? 3,
           } : null;
         }
         return null;
@@ -1431,17 +1445,24 @@
           const m = cityMarkers.find(m => m.id === cs.id);
           if (!m) return;
           const needRebuild = cs.color !== m.color || Math.round(cs.dotSize) !== m.dotSize;
-          m.color        = cs.color;
-          m.labelColor   = cs.labelColor   ?? m.labelColor;
-          m.dotSize      = Math.round(cs.dotSize);
-          m.showLabel    = cs.showLabel;
-          m.dotOpacity   = cs.dotOpacity   ?? m.dotOpacity;
-          m.labelOpacity = cs.labelOpacity ?? m.labelOpacity;
-          m.fontSize     = cs.fontSize      ?? m.fontSize;
-          m.fontWeight   = cs.fontWeight   ?? m.fontWeight;
-          m.fontFamily   = cs.fontFamily   ?? m.fontFamily;
-          m.offsetX      = cs.offsetX      ?? m.offsetX;
-          m.offsetY      = cs.offsetY      ?? m.offsetY;
+          m.color             = cs.color;
+          m.labelColor        = cs.labelColor        ?? m.labelColor;
+          m.dotSize           = Math.round(cs.dotSize);
+          m.showLabel         = cs.showLabel;
+          m.dotOpacity        = cs.dotOpacity         ?? m.dotOpacity;
+          m.labelOpacity      = cs.labelOpacity       ?? m.labelOpacity;
+          m.fontSize          = cs.fontSize           ?? m.fontSize;
+          m.fontWeight        = cs.fontWeight         ?? m.fontWeight;
+          m.fontStyle         = cs.fontStyle          ?? m.fontStyle;
+          m.fontFamily        = cs.fontFamily         ?? m.fontFamily;
+          m.offsetX           = cs.offsetX            ?? m.offsetX;
+          m.offsetY           = cs.offsetY            ?? m.offsetY;
+          m.outlineWidth      = cs.outlineWidth       ?? m.outlineWidth;
+          m.showBackground    = cs.showBackground     ?? m.showBackground;
+          m.backgroundColor   = cs.backgroundColor   ?? m.backgroundColor;
+          m.backgroundOpacity = cs.backgroundOpacity  ?? m.backgroundOpacity;
+          m.bgPadX            = cs.bgPadX             ?? m.bgPadX;
+          m.bgPadY            = cs.bgPadY             ?? m.bgPadY;
           if (needRebuild) updateCityEntity(m);
           else             updateCityLabelStyle(m);
         });
@@ -1650,17 +1671,24 @@
         }
         if (trackId.startsWith('city_')) {
           return {
-            color:        lerpColor(a.color, b.color, alpha),
-            labelColor:   lerpColor(a.labelColor ?? a.color, b.labelColor ?? b.color, alpha),
-            dotSize:      a.dotSize      + (b.dotSize      - a.dotSize)      * alpha,
-            showLabel:    alpha < 0.5 ? a.showLabel  : b.showLabel,
-            dotOpacity:   a.dotOpacity   + (b.dotOpacity   - a.dotOpacity)   * alpha,
-            labelOpacity: a.labelOpacity + (b.labelOpacity - a.labelOpacity) * alpha,
-            fontSize:     a.fontSize + (b.fontSize - a.fontSize) * alpha,
-            fontWeight:   alpha < 0.5 ? a.fontWeight : b.fontWeight,
-            fontFamily:   alpha < 0.5 ? a.fontFamily : b.fontFamily,
-            offsetX:      a.offsetX + (b.offsetX - a.offsetX) * alpha,
-            offsetY:      a.offsetY + (b.offsetY - a.offsetY) * alpha,
+            color:             lerpColor(a.color, b.color, alpha),
+            labelColor:        lerpColor(a.labelColor ?? a.color, b.labelColor ?? b.color, alpha),
+            dotSize:           a.dotSize           + (b.dotSize           - a.dotSize)           * alpha,
+            showLabel:         alpha < 0.5 ? a.showLabel         : b.showLabel,
+            dotOpacity:        a.dotOpacity        + (b.dotOpacity        - a.dotOpacity)        * alpha,
+            labelOpacity:      a.labelOpacity      + (b.labelOpacity      - a.labelOpacity)      * alpha,
+            fontSize:          a.fontSize          + (b.fontSize          - a.fontSize)          * alpha,
+            fontWeight:        alpha < 0.5 ? a.fontWeight        : b.fontWeight,
+            fontStyle:         alpha < 0.5 ? a.fontStyle         : b.fontStyle,
+            fontFamily:        alpha < 0.5 ? a.fontFamily        : b.fontFamily,
+            offsetX:           a.offsetX           + (b.offsetX           - a.offsetX)           * alpha,
+            offsetY:           a.offsetY           + (b.offsetY           - a.offsetY)           * alpha,
+            outlineWidth:      a.outlineWidth      + (b.outlineWidth      - a.outlineWidth)      * alpha,
+            showBackground:    alpha < 0.5 ? a.showBackground    : b.showBackground,
+            backgroundColor:   lerpColor(a.backgroundColor ?? '#000000', b.backgroundColor ?? '#000000', alpha),
+            backgroundOpacity: (a.backgroundOpacity ?? 0.5) + ((b.backgroundOpacity ?? 0.5) - (a.backgroundOpacity ?? 0.5)) * alpha,
+            bgPadX:            (a.bgPadX ?? 5) + ((b.bgPadX ?? 5) - (a.bgPadX ?? 5)) * alpha,
+            bgPadY:            (a.bgPadY ?? 3) + ((b.bgPadY ?? 3) - (a.bgPadY ?? 3)) * alpha,
           };
         }
         return null;
@@ -3188,6 +3216,45 @@
       let cityMarkers = [];  // [{id, name, country, lat, lon, color, dotSize, showLabel, entity}]
       let nextCityId  = 1;
 
+      let cityStyleClipboard = null;
+      const CITY_STYLE_FIELDS = [
+        'color','labelColor','dotSize','showLabel','fontSize','fontWeight','fontStyle','fontFamily',
+        'offsetX','offsetY','outlineWidth','showBackground','backgroundColor','backgroundOpacity',
+        'bgPadX','bgPadY','dotOpacity','labelOpacity',
+      ];
+
+      function copyCityStyle(marker) {
+        cityStyleClipboard = {};
+        CITY_STYLE_FIELDS.forEach(k => { cityStyleClipboard[k] = marker[k]; });
+        document.getElementById('cityClipboardBar').style.display = 'flex';
+        renderCityList();
+      }
+
+      function applyCityStyleFrom(src, marker) {
+        const needRebuild = src.color !== marker.color || Math.round(src.dotSize) !== marker.dotSize;
+        CITY_STYLE_FIELDS.forEach(k => { if (src[k] !== undefined) marker[k] = src[k]; });
+        if (needRebuild) updateCityEntity(marker);
+        else updateCityLabelStyle(marker);
+      }
+
+      function pasteCityStyle(marker) {
+        if (!cityStyleClipboard) return;
+        applyCityStyleFrom(cityStyleClipboard, marker);
+        renderCityList();
+      }
+
+      function applyStyleToAll() {
+        if (!cityStyleClipboard) return;
+        cityMarkers.forEach(m => applyCityStyleFrom(cityStyleClipboard, m));
+        renderCityList();
+      }
+
+      function clearStyleClipboard() {
+        cityStyleClipboard = null;
+        document.getElementById('cityClipboardBar').style.display = 'none';
+        renderCityList();
+      }
+
       async function loadCityData() {
         try {
           const res = await fetch("/data/cities.json");
@@ -3216,11 +3283,14 @@
           }),
           label: new Cesium.LabelGraphics({
             text: c.name,
-            font: `${c.fontWeight === 'bold' ? 'bold ' : ''}${c.fontSize ?? 13}px ${c.fontFamily ?? 'Arial'}`,
-            fillColor: Cesium.Color.fromCssColorString(c.color).withAlpha(c.labelOpacity ?? 1.0),
+            font: `${c.fontStyle === 'italic' ? 'italic ' : ''}${c.fontWeight === 'bold' ? 'bold ' : ''}${c.fontSize ?? 13}px ${c.fontFamily ?? 'Arial'}`,
+            fillColor: Cesium.Color.fromCssColorString(c.labelColor ?? c.color).withAlpha(c.labelOpacity ?? 1.0),
             outlineColor: Cesium.Color.BLACK,
-            outlineWidth: 2,
+            outlineWidth: c.outlineWidth ?? 2,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            showBackground:    c.showBackground ?? false,
+            backgroundColor:   Cesium.Color.fromCssColorString(c.backgroundColor ?? '#000000').withAlpha(c.backgroundOpacity ?? 0.5),
+            backgroundPadding: new Cesium.Cartesian2(c.bgPadX ?? 5, c.bgPadY ?? 3),
             pixelOffset: new Cesium.Cartesian2(c.dotSize / 2 + 4 + (c.offsetX ?? 0), c.offsetY ?? 0),
             horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
             verticalOrigin: Cesium.VerticalOrigin.CENTER,
@@ -3242,8 +3312,11 @@
           labelColor: defaultCityColor,
           dotSize: defaultCityDotSize,
           showLabel: true,
-          fontSize: 13, fontWeight: 'normal', fontFamily: 'Arial', offsetX: 0, offsetY: 0,
+          fontSize: 13, fontWeight: 'normal', fontStyle: 'normal', fontFamily: 'Arial',
+          offsetX: 0, offsetY: 0, outlineWidth: 2,
           dotOpacity: 1.0, labelOpacity: 1.0,
+          showBackground: false, backgroundColor: '#000000', backgroundOpacity: 0.5,
+          bgPadX: 5, bgPadY: 3,
         };
         marker.entity = makeCityEntity(marker);
         cityMarkers.push(marker);
@@ -3345,11 +3418,15 @@
           marker.entity.point.outlineColor = Cesium.Color.BLACK.withAlpha(dotOpacity);
         }
         if (marker.entity.label) {
-          const fontStr = `${marker.fontWeight === 'bold' ? 'bold ' : ''}${marker.fontSize}px ${marker.fontFamily}`;
-          marker.entity.label.font         = fontStr;
-          marker.entity.label.fillColor    = labelCol.withAlpha(labelOpacity);
-          marker.entity.label.outlineColor = Cesium.Color.BLACK.withAlpha(labelOpacity);
-          marker.entity.label.pixelOffset  = new Cesium.Cartesian2(marker.dotSize / 2 + 4 + (marker.offsetX ?? 0), marker.offsetY ?? 0);
+          const fontStr = `${marker.fontStyle === 'italic' ? 'italic ' : ''}${marker.fontWeight === 'bold' ? 'bold ' : ''}${marker.fontSize}px ${marker.fontFamily}`;
+          marker.entity.label.font             = fontStr;
+          marker.entity.label.fillColor        = labelCol.withAlpha(labelOpacity);
+          marker.entity.label.outlineColor     = Cesium.Color.BLACK.withAlpha(labelOpacity);
+          marker.entity.label.outlineWidth     = marker.outlineWidth ?? 2;
+          marker.entity.label.showBackground    = marker.showBackground ?? false;
+          marker.entity.label.backgroundColor  = Cesium.Color.fromCssColorString(marker.backgroundColor ?? '#000000').withAlpha((marker.backgroundOpacity ?? 0.5) * labelOpacity);
+          marker.entity.label.backgroundPadding = new Cesium.Cartesian2(marker.bgPadX ?? 5, marker.bgPadY ?? 3);
+          marker.entity.label.pixelOffset      = new Cesium.Cartesian2(marker.dotSize / 2 + 4 + (marker.offsetX ?? 0), marker.offsetY ?? 0);
           // Only control show via opacity when the label is toggled on
           if (marker.showLabel) marker.entity.label.show = labelOpacity > 0;
         }
@@ -3422,6 +3499,17 @@
           styleToggle.style.cssText = "min-width:20px;padding:1px 4px;font-size:10px;";
           mainRow.appendChild(styleToggle);
 
+          // Paste style (visible only when clipboard is populated)
+          if (cityStyleClipboard) {
+            const pasteBtn = document.createElement("button");
+            pasteBtn.className = "hl-toggle";
+            pasteBtn.textContent = "⎘";
+            pasteBtn.title = "Paste style from clipboard";
+            pasteBtn.style.cssText = "min-width:20px;padding:1px 4px;font-size:11px;color:#4a9eff;";
+            pasteBtn.addEventListener("click", () => pasteCityStyle(marker));
+            mainRow.appendChild(pasteBtn);
+          }
+
           // Remove
           const rmBtn = document.createElement("button");
           rmBtn.className = "hl-remove";
@@ -3431,124 +3519,154 @@
 
           li.appendChild(mainRow);
 
-          // ── Style row ─────────────────────────────────────────────────────
-          const styleRow = document.createElement("div");
-          styleRow.className = "city-style-row";
+          // Helper to make a small labeled number input
+          const makeNumInput = (min, max, step, val, titleStr, width, onChange) => {
+            const el = document.createElement("input");
+            el.type = "number";
+            el.min = String(min); el.max = String(max); el.step = String(step);
+            el.value = String(val);
+            el.title = titleStr;
+            el.style.cssText = `width:${width}px;font-size:11px;padding:1px 3px;margin:0;text-align:center;`;
+            el.addEventListener("change", e => { onChange(e); updateCityLabelStyle(marker); });
+            return el;
+          };
+          const makeLbl = (text, extra) => {
+            const s = document.createElement("span");
+            s.textContent = text;
+            s.style.cssText = `font-size:10px;color:#888;${extra ?? ''}`;
+            return s;
+          };
+          const makeColorSwatch = (getColor, setColor, title) => {
+            const swatch = document.createElement("span");
+            swatch.title = title;
+            swatch.style.cssText = `display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid #666;background:${getColor()};cursor:pointer;flex-shrink:0;`;
+            const inp = document.createElement("input");
+            inp.type = "color"; inp.value = getColor();
+            inp.style.cssText = "position:absolute;width:0;height:0;opacity:0;pointer-events:none;";
+            swatch.appendChild(inp);
+            swatch.addEventListener("click", () => inp.click());
+            inp.addEventListener("input", e => { setColor(e.target.value); swatch.style.background = e.target.value; updateCityLabelStyle(marker); });
+            return swatch;
+          };
+          const makeToggleBtn = (label, title, isActive, onClick) => {
+            const btn = document.createElement("button");
+            btn.textContent = label; btn.title = title;
+            btn.className = "hl-toggle" + (isActive ? " hl-toggle-active" : "");
+            btn.addEventListener("click", () => onClick(btn));
+            return btn;
+          };
 
-          // Label color swatch
-          const lblColorSwatch = document.createElement("span");
-          lblColorSwatch.title = "Label text color";
-          lblColorSwatch.style.cssText = `display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid #666;background:${marker.labelColor ?? marker.color};cursor:pointer;flex-shrink:0;`;
-          const lblColorInput = document.createElement("input");
-          lblColorInput.type = "color";
-          lblColorInput.value = marker.labelColor ?? marker.color;
-          lblColorInput.style.cssText = "position:absolute;width:0;height:0;opacity:0;pointer-events:none;";
-          lblColorSwatch.appendChild(lblColorInput);
-          lblColorSwatch.addEventListener("click", () => lblColorInput.click());
-          lblColorInput.addEventListener("input", e => {
-            marker.labelColor = e.target.value;
-            lblColorSwatch.style.background = marker.labelColor;
-            updateCityLabelStyle(marker);
-          });
-          styleRow.appendChild(lblColorSwatch);
+          // ── Row 1: Font ───────────────────────────────────────────────────
+          const fontRow = document.createElement("div");
+          fontRow.className = "city-style-row";
 
-          const sizeLabel = document.createElement("span");
-          sizeLabel.textContent = "Size";
-          sizeLabel.style.cssText = "font-size:10px;color:#888;";
-          styleRow.appendChild(sizeLabel);
-
-          const fontSizeInput = document.createElement("input");
-          fontSizeInput.type = "number";
-          fontSizeInput.min = "8"; fontSizeInput.max = "30"; fontSizeInput.step = "1";
-          fontSizeInput.value = String(marker.fontSize);
-          fontSizeInput.title = "Font size (px)";
-          fontSizeInput.style.cssText = "width:38px;font-size:11px;padding:1px 3px;margin:0;text-align:center;";
-          fontSizeInput.addEventListener("change", e => {
-            marker.fontSize = Math.max(8, Math.min(30, parseInt(e.target.value) || 13));
-            fontSizeInput.value = String(marker.fontSize);
-            updateCityLabelStyle(marker);
-          });
-          styleRow.appendChild(fontSizeInput);
-
-          const boldBtn = document.createElement("button");
-          boldBtn.className = "hl-toggle" + (marker.fontWeight === 'bold' ? " hl-toggle-active" : "");
-          boldBtn.textContent = "B";
-          boldBtn.title = "Bold";
-          boldBtn.style.cssText = "font-weight:bold;min-width:24px;";
-          boldBtn.addEventListener("click", () => {
+          fontRow.appendChild(makeColorSwatch(
+            () => marker.labelColor ?? marker.color,
+            v  => { marker.labelColor = v; },
+            "Label text color"
+          ));
+          fontRow.appendChild(makeLbl("Size"));
+          fontRow.appendChild(makeNumInput(8, 100, 1, marker.fontSize, "Font size (px)", 40,
+            e => { marker.fontSize = Math.max(8, Math.min(100, parseInt(e.target.value) || 13)); e.target.value = String(marker.fontSize); }
+          ));
+          const boldBtn = makeToggleBtn("B", "Bold", marker.fontWeight === 'bold', btn => {
             marker.fontWeight = marker.fontWeight === 'bold' ? 'normal' : 'bold';
-            boldBtn.className = "hl-toggle" + (marker.fontWeight === 'bold' ? " hl-toggle-active" : "");
+            btn.className = "hl-toggle" + (marker.fontWeight === 'bold' ? " hl-toggle-active" : "");
             updateCityLabelStyle(marker);
           });
-          styleRow.appendChild(boldBtn);
-
+          boldBtn.style.cssText = "font-weight:bold;min-width:24px;";
+          fontRow.appendChild(boldBtn);
+          const italicBtn = makeToggleBtn("I", "Italic", marker.fontStyle === 'italic', btn => {
+            marker.fontStyle = marker.fontStyle === 'italic' ? 'normal' : 'italic';
+            btn.className = "hl-toggle" + (marker.fontStyle === 'italic' ? " hl-toggle-active" : "");
+            updateCityLabelStyle(marker);
+          });
+          italicBtn.style.cssText = "font-style:italic;min-width:24px;";
+          fontRow.appendChild(italicBtn);
           const fontSelect = document.createElement("select");
           fontSelect.title = "Font family";
-          ['Arial', 'Helvetica', 'Verdana', 'Georgia', 'Times New Roman', 'Courier', 'Impact'].forEach(f => {
+          fontSelect.style.cssText = "flex:1;font-size:11px;";
+          ['Arial','Helvetica','Verdana','Georgia','Times New Roman','Courier','Impact'].forEach(f => {
             const opt = document.createElement("option");
             opt.value = f; opt.textContent = f;
             if (f === marker.fontFamily) opt.selected = true;
             fontSelect.appendChild(opt);
           });
-          fontSelect.addEventListener("change", e => {
-            marker.fontFamily = e.target.value;
+          fontSelect.addEventListener("change", e => { marker.fontFamily = e.target.value; updateCityLabelStyle(marker); });
+          fontRow.appendChild(fontSelect);
+
+          // ── Row 2: Position + halo ────────────────────────────────────────
+          const posRow = document.createElement("div");
+          posRow.className = "city-style-row";
+
+          posRow.appendChild(makeLbl("X"));
+          posRow.appendChild(makeNumInput(-200, 200, 1, marker.offsetX ?? 0, "Label X offset (px)", 42,
+            e => { marker.offsetX = parseInt(e.target.value) || 0; }
+          ));
+          posRow.appendChild(makeLbl("Y", "margin-left:4px;"));
+          posRow.appendChild(makeNumInput(-200, 200, 1, marker.offsetY ?? 0, "Label Y offset (px, negative = up)", 42,
+            e => { marker.offsetY = parseInt(e.target.value) || 0; }
+          ));
+          posRow.appendChild(makeLbl("Halo", "margin-left:6px;"));
+          const haloSlider = document.createElement("input");
+          haloSlider.type = "range"; haloSlider.min = "0"; haloSlider.max = "8"; haloSlider.step = "0.5";
+          haloSlider.value = String(marker.outlineWidth ?? 2);
+          haloSlider.title = "Halo/outline width (0 = none)";
+          haloSlider.style.cssText = "flex:1;min-width:30px;";
+          const haloVal = document.createElement("span");
+          haloVal.textContent = String(marker.outlineWidth ?? 2);
+          haloVal.style.cssText = "font-size:10px;color:#888;width:18px;text-align:right;";
+          haloSlider.addEventListener("input", e => {
+            marker.outlineWidth = parseFloat(e.target.value);
+            haloVal.textContent = e.target.value;
             updateCityLabelStyle(marker);
           });
-          styleRow.appendChild(fontSelect);
+          posRow.appendChild(haloSlider);
+          posRow.appendChild(haloVal);
 
-          const offsetXLabel = document.createElement("span");
-          offsetXLabel.textContent = "X";
-          offsetXLabel.style.cssText = "font-size:10px;color:#888;margin-left:4px;";
-          styleRow.appendChild(offsetXLabel);
+          // ── Row 3: Background ─────────────────────────────────────────────
+          const bgRow = document.createElement("div");
+          bgRow.className = "city-style-row";
 
-          const offsetXInput = document.createElement("input");
-          offsetXInput.type = "number";
-          offsetXInput.min = "-60"; offsetXInput.max = "60"; offsetXInput.step = "1";
-          offsetXInput.value = String(marker.offsetX ?? 0);
-          offsetXInput.title = "Label horizontal offset (px, added to dot spacing)";
-          offsetXInput.style.cssText = "width:38px;font-size:11px;padding:1px 3px;margin:0;text-align:center;";
-          offsetXInput.addEventListener("change", e => {
-            marker.offsetX = parseInt(e.target.value) || 0;
+          const bgColorSwatch = makeColorSwatch(
+            () => marker.backgroundColor ?? '#000000',
+            v  => { marker.backgroundColor = v; },
+            "Background color"
+          );
+          bgColorSwatch.style.display = marker.showBackground ? "inline-block" : "none";
+
+          const bgToggleBtn = makeToggleBtn("Bg", "Label background fill", marker.showBackground, btn => {
+            marker.showBackground = !marker.showBackground;
+            btn.className = "hl-toggle" + (marker.showBackground ? " hl-toggle-active" : "");
+            bgColorSwatch.style.display = marker.showBackground ? "inline-block" : "none";
             updateCityLabelStyle(marker);
           });
-          styleRow.appendChild(offsetXInput);
+          bgRow.appendChild(bgToggleBtn);
+          bgRow.appendChild(bgColorSwatch);
+          bgRow.appendChild(makeLbl("Pad X", "margin-left:6px;"));
+          bgRow.appendChild(makeNumInput(0, 40, 1, marker.bgPadX ?? 5, "Background horizontal padding (px)", 38,
+            e => { marker.bgPadX = Math.max(0, parseInt(e.target.value) || 0); }
+          ));
+          bgRow.appendChild(makeLbl("Y", "margin-left:4px;"));
+          bgRow.appendChild(makeNumInput(0, 40, 1, marker.bgPadY ?? 3, "Background vertical padding (px)", 38,
+            e => { marker.bgPadY = Math.max(0, parseInt(e.target.value) || 0); }
+          ));
 
-          const offsetYLabel = document.createElement("span");
-          offsetYLabel.textContent = "Y";
-          offsetYLabel.style.cssText = "font-size:10px;color:#888;";
-          styleRow.appendChild(offsetYLabel);
-
-          const offsetInput = document.createElement("input");
-          offsetInput.type = "number";
-          offsetInput.min = "-60"; offsetInput.max = "60"; offsetInput.step = "1";
-          offsetInput.value = String(marker.offsetY ?? 0);
-          offsetInput.title = "Label vertical offset (px, negative = up)";
-          offsetInput.style.cssText = "width:38px;font-size:11px;padding:1px 3px;margin:0;text-align:center;";
-          offsetInput.addEventListener("change", e => {
-            marker.offsetY = parseInt(e.target.value) || 0;
-            updateCityLabelStyle(marker);
-          });
-          styleRow.appendChild(offsetInput);
-
-          // ── Opacity row ───────────────────────────────────────────────────
+          // ── Row 4: Opacity ────────────────────────────────────────────────
           const opacityRow = document.createElement("div");
           opacityRow.className = "city-style-row";
 
           const makeOpacityControl = (labelText, getValue, setValue) => {
-            const lbl = document.createElement("span");
-            lbl.textContent = labelText;
-            lbl.style.cssText = "font-size:10px;color:#888;";
+            const lbl = makeLbl(labelText);
             const slider = document.createElement("input");
-            slider.type = "range";
-            slider.min = "0"; slider.max = "100"; slider.step = "5";
+            slider.type = "range"; slider.min = "0"; slider.max = "100"; slider.step = "5";
             slider.value = String(Math.round(getValue() * 100));
-            slider.style.cssText = "flex:1;min-width:40px;";
+            slider.style.cssText = "flex:1;min-width:30px;";
             const pct = document.createElement("span");
             pct.textContent = Math.round(getValue() * 100) + "%";
-            pct.style.cssText = "font-size:10px;color:#888;width:28px;text-align:right;";
+            pct.style.cssText = "font-size:10px;color:#888;width:26px;text-align:right;";
             slider.addEventListener("input", e => {
-              const val = parseInt(e.target.value) / 100;
-              setValue(val);
+              setValue(parseInt(e.target.value) / 100);
               pct.textContent = e.target.value + "%";
               updateCityLabelStyle(marker);
             });
@@ -3556,24 +3674,37 @@
             opacityRow.appendChild(slider);
             opacityRow.appendChild(pct);
           };
+          makeOpacityControl("Dot",   () => marker.dotOpacity        ?? 1.0, v => { marker.dotOpacity        = v; });
+          makeOpacityControl("Label", () => marker.labelOpacity      ?? 1.0, v => { marker.labelOpacity      = v; });
+          makeOpacityControl("Bg",    () => marker.backgroundOpacity ?? 0.5, v => { marker.backgroundOpacity = v; });
 
-          makeOpacityControl("Dot",   () => marker.dotOpacity,   v => { marker.dotOpacity   = v; });
-          makeOpacityControl("Label", () => marker.labelOpacity, v => { marker.labelOpacity = v; });
+          const copyStyleBtn = document.createElement("button");
+          copyStyleBtn.className = "hl-toggle";
+          copyStyleBtn.textContent = "⎘ Copy style";
+          copyStyleBtn.title = "Copy this city's style to clipboard";
+          copyStyleBtn.style.cssText = "font-size:10px;margin-top:2px;width:100%;";
 
-          styleRow.style.display  = "none";
-          opacityRow.style.display = "none";
+          copyStyleBtn.addEventListener("click", () => copyCityStyle(marker));
+
+          [fontRow, posRow, bgRow, opacityRow, copyStyleBtn].forEach(r => r.style.display = "none");
           styleToggle.addEventListener("click", () => {
-            const open = styleRow.style.display === "none";
-            styleRow.style.display   = open ? "flex" : "none";
-            opacityRow.style.display = open ? "flex" : "none";
-            styleToggle.textContent  = open ? "▼" : "▸";
+            const open = fontRow.style.display === "none";
+            [fontRow, posRow, bgRow, opacityRow].forEach(r => r.style.display = open ? "flex" : "none");
+            copyStyleBtn.style.display = open ? "block" : "none";
+            styleToggle.textContent = open ? "▼" : "▸";
           });
 
-          li.appendChild(styleRow);
+          li.appendChild(fontRow);
+          li.appendChild(posRow);
+          li.appendChild(bgRow);
           li.appendChild(opacityRow);
+          li.appendChild(copyStyleBtn);
           ul.appendChild(li);
         });
       }
+
+      document.getElementById("applyStyleToAllBtn").addEventListener("click", applyStyleToAll);
+      document.getElementById("clearClipboardBtn").addEventListener("click", clearStyleClipboard);
 
       document.getElementById("addCityBtn").addEventListener("click", () => {
         const val = document.getElementById("citySearch").value.trim();
