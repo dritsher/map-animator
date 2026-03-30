@@ -815,6 +815,14 @@
               Show place labels
             </label>
           </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:11px;color:#555;">
+            <span>Level: <strong id="basemapCurrentLevel">—</strong></span>
+            <span style="margin-left:auto;">Max:</span>
+            <input type="number" id="basemapMaxLevelInput" min="1" max="22" placeholder="—"
+              style="width:42px;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;text-align:center;" />
+            <button id="basemapMaxLevelAuto" title="Reset to automatic"
+              style="font-size:10px;padding:1px 5px;width:auto;color:#666;background:#f0f0f0;border:1px solid #ccc;border-radius:3px;">Auto</button>
+          </div>
           <div id="basemapDateRow" style="display:none;">
             <div class="bm-row" style="margin-top:4px;">
               <label for="basemapDateInput" style="white-space:nowrap;">Date</label>
@@ -1056,6 +1064,7 @@
       let viewer = null;
       let currentBasemap = "carto-positron";
       let basemapShowLabels = true;
+      let basemapMaxLevelOverride = null; // null = use each basemap's natural default
 
       // Per-track keyframe system. Built-in: 'camera', 'tod', 'borders'.
       // Dynamic: 'hl_{key}' (highlights), 'group_{id}', 'city_{id}'.
@@ -1097,17 +1106,17 @@
         'maptiler-satellite':     { source: 'MapTiler satellite imagery',             resolution: '~0.5m urban / ~5m elsewhere', rights: 'API key required; free tier (100k tiles/month)' },
         'carto-positron':         { source: 'CARTO / OpenStreetMap',                  resolution: 'Vector (unlimited zoom)', rights: 'Free with attribution; no key required', labelToggle: true },
         'carto-dark':             { source: 'CARTO / OpenStreetMap',                  resolution: 'Vector (unlimited zoom)', rights: 'Free with attribution; no key required', labelToggle: true },
-        'usgs-topo':              { source: 'USGS National Map',                      resolution: '~1m/px (US only)', rights: 'Public domain — US government data' },
-        'usgs-imagery':           { source: 'USGS National Map aerial imagery',       resolution: '~1m/px (US only)', rights: 'Public domain — US government data' },
-        'eox-s2':                 { source: 'ESA Sentinel-2 / EOX IT Services',       resolution: '~10m/px', note: '2024 annual cloud-free composite', rights: 'Free with attribution (Copernicus open data)' },
+        'usgs-topo':              { source: 'USGS National Map',                      resolution: '~1m/px (US only)', rights: 'Public domain — US government data', defaultMaxLevel: 16 },
+        'usgs-imagery':           { source: 'USGS National Map aerial imagery',       resolution: '~1m/px (US only)', rights: 'Public domain — US government data', defaultMaxLevel: 16 },
+        'eox-s2':                 { source: 'ESA Sentinel-2 / EOX IT Services',       resolution: '~10m/px', note: '2024 annual cloud-free composite', rights: 'Free with attribution (Copernicus open data)', defaultMaxLevel: 17 },
         'gebco':                  { source: 'GEBCO (General Bathymetric Chart)',       resolution: '~500m/px', note: 'ocean bathymetry; land shown flat', rights: 'Free — CC BY 4.0 (attribution required)' },
-        'nasa-night':             { source: 'NASA/NOAA VIIRS (Black Marble)',          resolution: '~500m/px', note: '2016 annual composite', rights: 'Public domain — NASA open data' },
-        'nasa-blue-marble':       { source: 'NASA MODIS (Blue Marble)',               resolution: '~500m/px', note: 'seamless global composite', rights: 'Public domain — NASA open data' },
-        'nasa-blue-marble-ocean': { source: 'NASA MODIS + SRTM30 bathymetry',        resolution: '~500m/px', note: 'includes ocean floor depth', rights: 'Public domain — NASA open data' },
-        'nasa-terrain-color':     { source: 'NASA/METI ASTER GDEM',                  resolution: '~30m/px', rights: 'Public domain — NASA/METI open data' },
+        'nasa-night':             { source: 'NASA/NOAA VIIRS (Black Marble)',          resolution: '~500m/px', note: '2016 annual composite', rights: 'Public domain — NASA open data', defaultMaxLevel: 8 },
+        'nasa-blue-marble':       { source: 'NASA MODIS (Blue Marble)',               resolution: '~500m/px', note: 'seamless global composite', rights: 'Public domain — NASA open data', defaultMaxLevel: 8 },
+        'nasa-blue-marble-ocean': { source: 'NASA MODIS + SRTM30 bathymetry',        resolution: '~500m/px', note: 'includes ocean floor depth', rights: 'Public domain — NASA open data', defaultMaxLevel: 8 },
+        'nasa-terrain-color':     { source: 'NASA/METI ASTER GDEM',                  resolution: '~30m/px', rights: 'Public domain — NASA/METI open data', defaultMaxLevel: 12 },
         'nasa-terrain-grey':      { source: 'NASA/METI ASTER GDEM',                  resolution: '~30m/px', rights: 'Public domain — NASA/METI open data' },
-        'nasa-truecolor-modis':   { source: 'NASA Terra MODIS',                      resolution: '~250m/px', dateType: 'daily', dateMin: '2000-02-24', rights: 'Public domain — NASA open data' },
-        'nasa-truecolor-viirs':   { source: 'NASA NOAA-20 VIIRS',                    resolution: '~375m/px', dateType: 'daily', dateMin: '2018-01-01', rights: 'Public domain — NASA open data' },
+        'nasa-truecolor-modis':   { source: 'NASA Terra MODIS',                      resolution: '~250m/px', dateType: 'daily', dateMin: '2000-02-24', rights: 'Public domain — NASA open data', defaultMaxLevel: 9 },
+        'nasa-truecolor-viirs':   { source: 'NASA NOAA-20 VIIRS',                    resolution: '~375m/px', dateType: 'daily', dateMin: '2018-01-01', rights: 'Public domain — NASA open data', defaultMaxLevel: 9 },
       };
 
       function updateBasemapInfo(basemap) {
@@ -1130,6 +1139,10 @@
         } else {
           labelsRow.style.display = 'none';
         }
+
+        const maxInput = document.getElementById('basemapMaxLevelInput');
+        maxInput.placeholder = meta.defaultMaxLevel ?? '—';
+        maxInput.value = basemapMaxLevelOverride ?? '';
 
         if (meta.dateType === 'daily') {
           dateRow.style.display = '';
@@ -1156,6 +1169,10 @@
         // Silently upgrade any legacy IDs from old project files
         basemap = BASEMAP_COMPAT[basemap] ?? basemap;
 
+        // Effective max level: user override takes precedence over each basemap's natural default
+        const naturalMax = BASEMAP_META[basemap]?.defaultMaxLevel;
+        const maxLevel   = basemapMaxLevelOverride ?? naturalMax; // undefined = no cap
+
         const mtUrl = (path, ext = 'png') =>
           `https://api.maptiler.com/${path}/{z}/{x}/{y}.${ext}?key=${encodeURIComponent(MAPTILER_KEY)}`;
 
@@ -1163,25 +1180,28 @@
           return new Cesium.UrlTemplateImageryProvider({
             url: mtUrl("maps/streets-v2/256"),
             credit: "© MapTiler © OpenStreetMap contributors",
+            ...(maxLevel !== undefined && { maximumLevel: maxLevel }),
           });
         }
         if (basemap === "maptiler-basic") {
           return new Cesium.UrlTemplateImageryProvider({
             url: mtUrl("maps/basic-v2/256"),
             credit: "© MapTiler © OpenStreetMap contributors",
+            ...(maxLevel !== undefined && { maximumLevel: maxLevel }),
           });
         }
         if (basemap === "maptiler-satellite") {
           return new Cesium.UrlTemplateImageryProvider({
             url: mtUrl("tiles/satellite-v2", "jpg"),
             credit: "© MapTiler",
+            ...(maxLevel !== undefined && { maximumLevel: maxLevel }),
           });
         }
         if (basemap === "nasa-night") {
           return new Cesium.UrlTemplateImageryProvider({
             url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png",
             credit: "NASA GIBS / Black Marble",
-            maximumLevel: 8,
+            maximumLevel: maxLevel,
           });
         }
         const gibsUrl = (layer, date, tms, ext = 'jpg') =>
@@ -1195,42 +1215,42 @@
           return new Cesium.UrlTemplateImageryProvider({
             url: gibsStatic("BlueMarble_NextGeneration", "GoogleMapsCompatible_Level8"),
             credit: "NASA GIBS / Blue Marble",
-            maximumLevel: 8,
+            maximumLevel: maxLevel,
           });
         }
         if (basemap === "nasa-blue-marble-ocean") {
           return new Cesium.UrlTemplateImageryProvider({
             url: gibsStatic("BlueMarble_ShadedRelief_Bathymetry", "GoogleMapsCompatible_Level8"),
             credit: "NASA GIBS / Blue Marble",
-            maximumLevel: 8,
+            maximumLevel: maxLevel,
           });
         }
         if (basemap === "nasa-terrain-color") {
           return new Cesium.UrlTemplateImageryProvider({
             url: gibsStatic("ASTER_GDEM_Color_Shaded_Relief", "GoogleMapsCompatible_Level12"),
             credit: "NASA GIBS / ASTER GDEM",
-            maximumLevel: 12,
+            maximumLevel: maxLevel,
           });
         }
         if (basemap === "nasa-terrain-grey") {
           return new Cesium.UrlTemplateImageryProvider({
             url: gibsStatic("ASTER_GDEM_Greyscale_Shaded_Relief", "GoogleMapsCompatible_Level12"),
             credit: "NASA GIBS / ASTER GDEM",
-            maximumLevel: 12,
+            maximumLevel: maxLevel,
           });
         }
         if (basemap === "nasa-truecolor-modis") {
           return new Cesium.UrlTemplateImageryProvider({
             url: gibsUrl("MODIS_Terra_CorrectedReflectance_TrueColor", tileDate, "GoogleMapsCompatible_Level9"),
             credit: "NASA GIBS / MODIS Terra",
-            maximumLevel: 9,
+            maximumLevel: maxLevel,
           });
         }
         if (basemap === "nasa-truecolor-viirs") {
           return new Cesium.UrlTemplateImageryProvider({
             url: gibsUrl("VIIRS_NOAA20_CorrectedReflectance_TrueColor", tileDate, "GoogleMapsCompatible_Level9"),
             credit: "NASA GIBS / VIIRS NOAA-20",
-            maximumLevel: 9,
+            maximumLevel: maxLevel,
           });
         }
         if (basemap === "carto-positron") {
@@ -1238,6 +1258,7 @@
           return new Cesium.UrlTemplateImageryProvider({
             url: `https://a.basemaps.cartocdn.com/${variant}/{z}/{x}/{y}.png`,
             credit: "© CARTO © OpenStreetMap contributors",
+            ...(maxLevel !== undefined && { maximumLevel: maxLevel }),
           });
         }
         if (basemap === "carto-dark") {
@@ -1245,27 +1266,28 @@
           return new Cesium.UrlTemplateImageryProvider({
             url: `https://a.basemaps.cartocdn.com/${variant}/{z}/{x}/{y}.png`,
             credit: "© CARTO © OpenStreetMap contributors",
+            ...(maxLevel !== undefined && { maximumLevel: maxLevel }),
           });
         }
         if (basemap === "usgs-topo") {
           return new Cesium.UrlTemplateImageryProvider({
             url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}",
             credit: "USGS National Map",
-            maximumLevel: 16,
+            maximumLevel: maxLevel,
           });
         }
         if (basemap === "usgs-imagery") {
           return new Cesium.UrlTemplateImageryProvider({
             url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}",
             credit: "USGS National Map",
-            maximumLevel: 16,
+            maximumLevel: maxLevel,
           });
         }
         if (basemap === "eox-s2") {
           return new Cesium.UrlTemplateImageryProvider({
             url: "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg",
             credit: "Sentinel-2 cloudless by EOX IT Services — Contains modified Copernicus Sentinel data 2024",
-            maximumLevel: 17,
+            maximumLevel: maxLevel,
           });
         }
         if (basemap === "gebco") {
@@ -1493,6 +1515,16 @@
             webgl: { preserveDrawingBuffer: true },
           },
         });
+
+        // Update the tile-level indicator whenever the camera moves
+        const levelEl = document.getElementById('basemapCurrentLevel');
+        function updateLevelIndicator() {
+          const h = viewer.camera.positionCartographic.height;
+          const z = Math.max(0, Math.min(22, Math.round(Math.log2(40075016 / h) + 2)));
+          levelEl.textContent = z;
+        }
+        viewer.camera.changed.addEventListener(updateLevelIndicator);
+        updateLevelIndicator();
 
         viewer.scene.fog.enabled = true;
         viewer.scene.fog.density = 0.0002;
@@ -3027,6 +3059,18 @@
       document.getElementById("basemapDateInput").addEventListener("change", () => applyBasemap(currentBasemap));
       document.getElementById("basemapLabelsCheck").addEventListener("change", e => {
         basemapShowLabels = e.target.checked;
+        applyBasemap(currentBasemap);
+      });
+
+      document.getElementById("basemapMaxLevelInput").addEventListener("change", e => {
+        const v = parseInt(e.target.value);
+        basemapMaxLevelOverride = (isNaN(v) || e.target.value === '') ? null : Math.max(1, Math.min(22, v));
+        e.target.value = basemapMaxLevelOverride ?? '';
+        applyBasemap(currentBasemap);
+      });
+      document.getElementById("basemapMaxLevelAuto").addEventListener("click", () => {
+        basemapMaxLevelOverride = null;
+        document.getElementById("basemapMaxLevelInput").value = '';
         applyBasemap(currentBasemap);
       });
 
@@ -4689,6 +4733,7 @@
           playbackT,
           currentBasemap,
           basemapShowLabels,
+          basemapMaxLevelOverride,
           bmAdjust: { ...bmAdjust },
           borders: {
             countryOpacity: parseInt(document.getElementById('countryBorderOpacity').value) / 100,
@@ -4777,6 +4822,7 @@
 
         // 3. Basemap + adjustments (reuse applyLook logic)
         basemapShowLabels = project.basemapShowLabels ?? true;
+        basemapMaxLevelOverride = project.basemapMaxLevelOverride ?? null;
         const look = {
           basemap:    project.currentBasemap ?? 'carto-positron',
           brightness: project.bmAdjust?.brightness ?? 1.0,
