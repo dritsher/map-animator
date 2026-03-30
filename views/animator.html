@@ -809,6 +809,12 @@
             </optgroup>
           </select>
           <div id="basemapInfo"></div>
+          <div id="basemapLabelsRow" style="display:none;margin-top:4px;">
+            <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:#555;cursor:pointer;">
+              <input type="checkbox" id="basemapLabelsCheck" checked style="margin:0;" />
+              Show place labels
+            </label>
+          </div>
           <div id="basemapDateRow" style="display:none;">
             <div class="bm-row" style="margin-top:4px;">
               <label for="basemapDateInput" style="white-space:nowrap;">Date</label>
@@ -1049,6 +1055,7 @@
       // ── State ───────────────────────────────────────────────────────────────
       let viewer = null;
       let currentBasemap = "carto-positron";
+      let basemapShowLabels = true;
 
       // Per-track keyframe system. Built-in: 'camera', 'tod', 'borders'.
       // Dynamic: 'hl_{key}' (highlights), 'group_{id}', 'city_{id}'.
@@ -1088,8 +1095,8 @@
         'maptiler-streets':       { source: 'MapTiler / OpenStreetMap',               resolution: 'Vector (unlimited zoom)', rights: 'API key required; free tier (100k tiles/month)' },
         'maptiler-basic':         { source: 'MapTiler / OpenStreetMap',               resolution: 'Vector (unlimited zoom)', rights: 'API key required; free tier (100k tiles/month)' },
         'maptiler-satellite':     { source: 'MapTiler satellite imagery',             resolution: '~0.5m urban / ~5m elsewhere', rights: 'API key required; free tier (100k tiles/month)' },
-        'carto-positron':         { source: 'CARTO / OpenStreetMap',                  resolution: 'Vector (unlimited zoom)', rights: 'Free with attribution; no key required' },
-        'carto-dark':             { source: 'CARTO / OpenStreetMap',                  resolution: 'Vector (unlimited zoom)', rights: 'Free with attribution; no key required' },
+        'carto-positron':         { source: 'CARTO / OpenStreetMap',                  resolution: 'Vector (unlimited zoom)', rights: 'Free with attribution; no key required', labelToggle: true },
+        'carto-dark':             { source: 'CARTO / OpenStreetMap',                  resolution: 'Vector (unlimited zoom)', rights: 'Free with attribution; no key required', labelToggle: true },
         'usgs-topo':              { source: 'USGS National Map',                      resolution: '~1m/px (US only)', rights: 'Public domain — US government data' },
         'usgs-imagery':           { source: 'USGS National Map aerial imagery',       resolution: '~1m/px (US only)', rights: 'Public domain — US government data' },
         'eox-s2':                 { source: 'ESA Sentinel-2 / EOX IT Services',       resolution: '~10m/px', note: '2024 annual cloud-free composite', rights: 'Free with attribution (Copernicus open data)' },
@@ -1115,6 +1122,14 @@
         if (meta.resolution) { html += `<strong>Resolution:</strong> ${meta.resolution}`; if (meta.note) html += ` <span style="color:#999">(${meta.note})</span>`; html += '<br>'; }
         if (meta.rights)     html += `<strong>Rights:</strong> ${meta.rights}`;
         infoEl.innerHTML = html;
+
+        const labelsRow = document.getElementById('basemapLabelsRow');
+        if (meta.labelToggle) {
+          labelsRow.style.display = '';
+          document.getElementById('basemapLabelsCheck').checked = basemapShowLabels;
+        } else {
+          labelsRow.style.display = 'none';
+        }
 
         if (meta.dateType === 'daily') {
           dateRow.style.display = '';
@@ -1219,14 +1234,16 @@
           });
         }
         if (basemap === "carto-positron") {
+          const variant = basemapShowLabels ? "light_all" : "light_nolabels";
           return new Cesium.UrlTemplateImageryProvider({
-            url: "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+            url: `https://a.basemaps.cartocdn.com/${variant}/{z}/{x}/{y}.png`,
             credit: "© CARTO © OpenStreetMap contributors",
           });
         }
         if (basemap === "carto-dark") {
+          const variant = basemapShowLabels ? "dark_all" : "dark_nolabels";
           return new Cesium.UrlTemplateImageryProvider({
-            url: "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+            url: `https://a.basemaps.cartocdn.com/${variant}/{z}/{x}/{y}.png`,
             credit: "© CARTO © OpenStreetMap contributors",
           });
         }
@@ -3008,6 +3025,10 @@
       // ── Event Listeners ─────────────────────────────────────────────────────
       document.getElementById("basemapSelect").addEventListener("change", e => applyBasemap(e.target.value));
       document.getElementById("basemapDateInput").addEventListener("change", () => applyBasemap(currentBasemap));
+      document.getElementById("basemapLabelsCheck").addEventListener("change", e => {
+        basemapShowLabels = e.target.checked;
+        applyBasemap(currentBasemap);
+      });
 
       // ── Scene mode ───────────────────────────────────────────────────────────
       document.querySelectorAll(".scene-mode-btn").forEach(btn => {
@@ -4667,6 +4688,7 @@
           totalDuration: totalDuration(),
           playbackT,
           currentBasemap,
+          basemapShowLabels,
           bmAdjust: { ...bmAdjust },
           borders: {
             countryOpacity: parseInt(document.getElementById('countryBorderOpacity').value) / 100,
@@ -4754,6 +4776,7 @@
         playStartT = playbackT;
 
         // 3. Basemap + adjustments (reuse applyLook logic)
+        basemapShowLabels = project.basemapShowLabels ?? true;
         const look = {
           basemap:    project.currentBasemap ?? 'carto-positron',
           brightness: project.bmAdjust?.brightness ?? 1.0,
