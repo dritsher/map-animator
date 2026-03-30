@@ -778,14 +778,16 @@
         <div class="section">
           <div class="section-title">Basemap</div>
           <select id="basemapSelect">
-            <optgroup label="Vector">
-              <option value="maptiler-streets">Streets</option>
-              <option value="maptiler-basic">Basic</option>
-              <option value="carto-positron">Positron (CARTO)</option>
+            <optgroup label="Vector (free)">
+              <option value="carto-positron" selected>Positron (CARTO)</option>
               <option value="carto-dark">Dark Matter (CARTO)</option>
             </optgroup>
+            <optgroup label="Vector (MapTiler key required)">
+              <option value="maptiler-streets">Streets</option>
+              <option value="maptiler-basic">Basic</option>
+            </optgroup>
             <optgroup label="Aerial / Satellite">
-              <option value="maptiler-satellite">Satellite (MapTiler)</option>
+              <option value="maptiler-satellite">Satellite (MapTiler, key required)</option>
               <option value="usgs-imagery">Aerial (USGS, US only)</option>
               <option value="eox-s2">Sentinel-2 Cloudless (EOX)</option>
             </optgroup>
@@ -1036,7 +1038,7 @@
 
       // ── State ───────────────────────────────────────────────────────────────
       let viewer = null;
-      let currentBasemap = "maptiler-streets";
+      let currentBasemap = "carto-positron";
 
       // Per-track keyframe system. Built-in: 'camera', 'tod', 'borders'.
       // Dynamic: 'hl_{key}' (highlights), 'group_{id}', 'city_{id}'.
@@ -1290,14 +1292,14 @@
       const BUILT_IN_LOOKS = [
         {
           name: "Default",
-          basemap: "maptiler-streets",
+          basemap: "carto-positron",
           brightness: 1.0, contrast: 1.0, saturation: 1.0, hue: 0, gamma: 1.0,
           countryOpacity: 0.7, stateOpacity: 0.5,
           regionColor: "#ff9900", cityColor: "#ffffff", cityDotSize: 8,
         },
         {
           name: "Dark",
-          basemap: "maptiler-streets",
+          basemap: "carto-dark",
           brightness: 0.45, contrast: 1.1, saturation: 0.15, hue: 0, gamma: 0.85,
           countryOpacity: 0.45, stateOpacity: 0.3,
           regionColor: "#ff9900", cityColor: "#ffffff", cityDotSize: 8,
@@ -1318,14 +1320,14 @@
         },
         {
           name: "Monochrome",
-          basemap: "maptiler-basic",
+          basemap: "carto-positron",
           brightness: 0.85, contrast: 1.2, saturation: 0.0, hue: 0, gamma: 1.0,
           countryOpacity: 0.8, stateOpacity: 0.55,
           regionColor: "#ff3333", cityColor: "#ffffff", cityDotSize: 8,
         },
         {
           name: "Election",
-          basemap: "maptiler-streets",
+          basemap: "carto-positron",
           brightness: 0.55, contrast: 1.3, saturation: 0.1, hue: 0, gamma: 0.9,
           countryOpacity: 0.6, stateOpacity: 0.4,
           regionColor: "#4488ff", cityColor: "#ffffff", cityDotSize: 8,
@@ -4703,7 +4705,7 @@
 
         // 3. Basemap + adjustments (reuse applyLook logic)
         const look = {
-          basemap:    project.currentBasemap ?? 'maptiler-streets',
+          basemap:    project.currentBasemap ?? 'carto-positron',
           brightness: project.bmAdjust?.brightness ?? 1.0,
           contrast:   project.bmAdjust?.contrast   ?? 1.0,
           saturation: project.bmAdjust?.saturation ?? 1.0,
