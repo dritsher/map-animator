@@ -695,6 +695,23 @@
       }
 
       /* ── Custom modal ──────────────────────────────────────────────────────── */
+      #basemapInfo {
+        margin-top: 5px;
+        font-size: 11px;
+        color: #666;
+        line-height: 1.6;
+      }
+      #basemapInfo strong { color: #444; }
+      #basemapDateRow { margin-top: 5px; }
+      #basemapDateRow input[type="date"] {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 4px 6px;
+        font-size: 12px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: #fafafa;
+      }
       #modalOverlay {
         display: none;
         position: fixed;
@@ -761,17 +778,38 @@
         <div class="section">
           <div class="section-title">Basemap</div>
           <select id="basemapSelect">
-            <option value="maptiler-streets">Streets</option>
-            <option value="maptiler-basic">Basic</option>
-            <option value="maptiler-satellite">Satellite</option>
-            <option value="nasa-night">Earth at Night</option>
-            <option value="nasa-blue-marble">Blue Marble</option>
-            <option value="nasa-blue-marble-ocean">Blue Marble + Ocean Depth</option>
-            <option value="nasa-terrain-color">Terrain (Color)</option>
-            <option value="nasa-terrain-grey">Terrain (Greyscale)</option>
-            <option value="nasa-truecolor-modis">True Color — MODIS (Today)</option>
-            <option value="nasa-truecolor-viirs">True Color — VIIRS (Today)</option>
+            <optgroup label="Vector">
+              <option value="maptiler-streets">Streets</option>
+              <option value="maptiler-basic">Basic</option>
+              <option value="carto-positron">Positron (CARTO)</option>
+              <option value="carto-dark">Dark Matter (CARTO)</option>
+            </optgroup>
+            <optgroup label="Aerial / Satellite">
+              <option value="maptiler-satellite">Satellite (MapTiler)</option>
+              <option value="usgs-imagery">Aerial (USGS, US only)</option>
+              <option value="eox-s2">Sentinel-2 Cloudless (EOX)</option>
+            </optgroup>
+            <optgroup label="Terrain">
+              <option value="usgs-topo">Topo (USGS, US only)</option>
+              <option value="nasa-terrain-color">Terrain Color (ASTER)</option>
+              <option value="nasa-terrain-grey">Terrain Greyscale (ASTER)</option>
+              <option value="gebco">Ocean Bathymetry (GEBCO)</option>
+            </optgroup>
+            <optgroup label="NASA Earth Science">
+              <option value="nasa-blue-marble">Blue Marble</option>
+              <option value="nasa-blue-marble-ocean">Blue Marble + Ocean Depth</option>
+              <option value="nasa-night">Earth at Night</option>
+              <option value="nasa-truecolor-modis">True Color — MODIS (Daily)</option>
+              <option value="nasa-truecolor-viirs">True Color — VIIRS (Daily)</option>
+            </optgroup>
           </select>
+          <div id="basemapInfo"></div>
+          <div id="basemapDateRow" style="display:none;">
+            <div class="bm-row" style="margin-top:4px;">
+              <label for="basemapDateInput" style="white-space:nowrap;">Date</label>
+              <input type="date" id="basemapDateInput" />
+            </div>
+          </div>
           <div style="margin-top:6px;">
             <div class="bm-row">
               <label for="bm-brightness">Brightness</label>
@@ -1034,6 +1072,48 @@
       }
 
       // ── Basemap ─────────────────────────────────────────────────────────────
+      const BASEMAP_META = {
+        'maptiler-streets':       { source: 'MapTiler / OpenStreetMap',               resolution: 'Vector (unlimited zoom)', rights: 'API key required; free tier (100k tiles/month)' },
+        'maptiler-basic':         { source: 'MapTiler / OpenStreetMap',               resolution: 'Vector (unlimited zoom)', rights: 'API key required; free tier (100k tiles/month)' },
+        'maptiler-satellite':     { source: 'MapTiler satellite imagery',             resolution: '~0.5m urban / ~5m elsewhere', rights: 'API key required; free tier (100k tiles/month)' },
+        'carto-positron':         { source: 'CARTO / OpenStreetMap',                  resolution: 'Vector (unlimited zoom)', rights: 'Free with attribution; no key required' },
+        'carto-dark':             { source: 'CARTO / OpenStreetMap',                  resolution: 'Vector (unlimited zoom)', rights: 'Free with attribution; no key required' },
+        'usgs-topo':              { source: 'USGS National Map',                      resolution: '~1m/px (US only)', rights: 'Public domain — US government data' },
+        'usgs-imagery':           { source: 'USGS National Map aerial imagery',       resolution: '~1m/px (US only)', rights: 'Public domain — US government data' },
+        'eox-s2':                 { source: 'ESA Sentinel-2 / EOX IT Services',       resolution: '~10m/px', note: '2024 annual cloud-free composite', rights: 'Free with attribution (Copernicus open data)' },
+        'gebco':                  { source: 'GEBCO (General Bathymetric Chart)',       resolution: '~500m/px', note: 'ocean bathymetry; land shown flat', rights: 'Free — CC BY 4.0 (attribution required)' },
+        'nasa-night':             { source: 'NASA/NOAA VIIRS (Black Marble)',          resolution: '~500m/px', note: '2016 annual composite', rights: 'Public domain — NASA open data' },
+        'nasa-blue-marble':       { source: 'NASA MODIS (Blue Marble)',               resolution: '~500m/px', note: 'seamless global composite', rights: 'Public domain — NASA open data' },
+        'nasa-blue-marble-ocean': { source: 'NASA MODIS + SRTM30 bathymetry',        resolution: '~500m/px', note: 'includes ocean floor depth', rights: 'Public domain — NASA open data' },
+        'nasa-terrain-color':     { source: 'NASA/METI ASTER GDEM',                  resolution: '~30m/px', rights: 'Public domain — NASA/METI open data' },
+        'nasa-terrain-grey':      { source: 'NASA/METI ASTER GDEM',                  resolution: '~30m/px', rights: 'Public domain — NASA/METI open data' },
+        'nasa-truecolor-modis':   { source: 'NASA Terra MODIS',                      resolution: '~250m/px', dateType: 'daily', dateMin: '2000-02-24', rights: 'Public domain — NASA open data' },
+        'nasa-truecolor-viirs':   { source: 'NASA NOAA-20 VIIRS',                    resolution: '~375m/px', dateType: 'daily', dateMin: '2018-01-01', rights: 'Public domain — NASA open data' },
+      };
+
+      function updateBasemapInfo(basemap) {
+        const meta = BASEMAP_META[basemap] || {};
+        const infoEl   = document.getElementById('basemapInfo');
+        const dateRow  = document.getElementById('basemapDateRow');
+        const dateInput = document.getElementById('basemapDateInput');
+        const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+
+        let html = '';
+        if (meta.source)     html += `<strong>Source:</strong> ${meta.source}<br>`;
+        if (meta.resolution) { html += `<strong>Resolution:</strong> ${meta.resolution}`; if (meta.note) html += ` <span style="color:#999">(${meta.note})</span>`; html += '<br>'; }
+        if (meta.rights)     html += `<strong>Rights:</strong> ${meta.rights}`;
+        infoEl.innerHTML = html;
+
+        if (meta.dateType === 'daily') {
+          dateRow.style.display = '';
+          dateInput.min = meta.dateMin;
+          dateInput.max = yesterday;
+          if (!dateInput.value || dateInput.value > yesterday) dateInput.value = yesterday;
+        } else {
+          dateRow.style.display = 'none';
+        }
+      }
+
       // Mapping for old basemap IDs that may appear in saved project files
       const BASEMAP_COMPAT = {
         'cesium-default':   'maptiler-streets',
@@ -1045,7 +1125,7 @@
         'maptiler-topo':    'maptiler-basic',
       };
 
-      async function createImageryProviderForBasemap(basemap) {
+      async function createImageryProviderForBasemap(basemap, date) {
         // Silently upgrade any legacy IDs from old project files
         basemap = BASEMAP_COMPAT[basemap] ?? basemap;
 
@@ -1082,6 +1162,7 @@
         const gibsStatic = (layer, tms, ext = 'jpg') =>
           `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${layer}/default/${tms}/{z}/{y}/{x}.${ext}`;
         const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+        const tileDate = date || yesterday;
 
         if (basemap === "nasa-blue-marble") {
           return new Cesium.UrlTemplateImageryProvider({
@@ -1113,16 +1194,57 @@
         }
         if (basemap === "nasa-truecolor-modis") {
           return new Cesium.UrlTemplateImageryProvider({
-            url: gibsUrl("MODIS_Terra_CorrectedReflectance_TrueColor", yesterday, "GoogleMapsCompatible_Level9"),
+            url: gibsUrl("MODIS_Terra_CorrectedReflectance_TrueColor", tileDate, "GoogleMapsCompatible_Level9"),
             credit: "NASA GIBS / MODIS Terra",
             maximumLevel: 9,
           });
         }
         if (basemap === "nasa-truecolor-viirs") {
           return new Cesium.UrlTemplateImageryProvider({
-            url: gibsUrl("VIIRS_NOAA20_CorrectedReflectance_TrueColor", yesterday, "GoogleMapsCompatible_Level9"),
+            url: gibsUrl("VIIRS_NOAA20_CorrectedReflectance_TrueColor", tileDate, "GoogleMapsCompatible_Level9"),
             credit: "NASA GIBS / VIIRS NOAA-20",
             maximumLevel: 9,
+          });
+        }
+        if (basemap === "carto-positron") {
+          return new Cesium.UrlTemplateImageryProvider({
+            url: "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+            credit: "© CARTO © OpenStreetMap contributors",
+          });
+        }
+        if (basemap === "carto-dark") {
+          return new Cesium.UrlTemplateImageryProvider({
+            url: "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+            credit: "© CARTO © OpenStreetMap contributors",
+          });
+        }
+        if (basemap === "usgs-topo") {
+          return new Cesium.UrlTemplateImageryProvider({
+            url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}",
+            credit: "USGS National Map",
+            maximumLevel: 16,
+          });
+        }
+        if (basemap === "usgs-imagery") {
+          return new Cesium.UrlTemplateImageryProvider({
+            url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}",
+            credit: "USGS National Map",
+            maximumLevel: 16,
+          });
+        }
+        if (basemap === "eox-s2") {
+          return new Cesium.UrlTemplateImageryProvider({
+            url: "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg",
+            credit: "Sentinel-2 cloudless by EOX IT Services — Contains modified Copernicus Sentinel data 2024",
+            maximumLevel: 17,
+          });
+        }
+        if (basemap === "gebco") {
+          return new Cesium.WebMapServiceImageryProvider({
+            url: "https://wms.gebco.net/mapserv",
+            layers: "GEBCO_LATEST",
+            parameters: { transparent: false, format: "image/jpeg" },
+            credit: "GEBCO — General Bathymetric Chart of the Oceans",
           });
         }
         // Fallback
@@ -1146,7 +1268,11 @@
 
       async function applyBasemap(basemap) {
         if (!viewer) return;
-        const provider = await createImageryProviderForBasemap(basemap);
+        updateBasemapInfo(basemap);
+        const dateInput = document.getElementById('basemapDateInput');
+        const meta = BASEMAP_META[basemap] || {};
+        const date = meta.dateType === 'daily' ? dateInput.value : null;
+        const provider = await createImageryProviderForBasemap(basemap, date);
         viewer.imageryLayers.removeAll();
         basemapLayer = viewer.imageryLayers.addImageryProvider(provider);
         applyBmAdjust();
@@ -1367,7 +1493,7 @@
           setTimeout(() => { viewer.useDefaultRenderLoop = true; }, 0);
         });
 
-        setTimeout(() => applyBasemap(currentBasemap), 0);
+        setTimeout(() => { updateBasemapInfo(currentBasemap); applyBasemap(currentBasemap); }, 0);
 
         setStatus("Ready. Add keyframes to build an animation.");
       }
@@ -2848,6 +2974,7 @@
 
       // ── Event Listeners ─────────────────────────────────────────────────────
       document.getElementById("basemapSelect").addEventListener("change", e => applyBasemap(e.target.value));
+      document.getElementById("basemapDateInput").addEventListener("change", () => applyBasemap(currentBasemap));
 
       // ── Scene mode ───────────────────────────────────────────────────────────
       document.querySelectorAll(".scene-mode-btn").forEach(btn => {
