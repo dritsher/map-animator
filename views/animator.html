@@ -880,7 +880,14 @@
           <div class="section-title">Regions</div>
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
             <span style="font-size:12px;color:#555;">Borders</span>
-            <button id="borderRatioLockBtn" title="Lock ratio between border layers" style="font-size:13px;background:none;border:none;cursor:pointer;padding:0 2px;width:auto;color:#888;">🔓</button>
+            <div style="display:flex;align-items:center;gap:5px;">
+              <span id="borderColorSwatch" title="Border color"
+                style="display:inline-block;width:20px;height:14px;border-radius:3px;border:1px solid #aaa;background:#ffffff;cursor:pointer;flex-shrink:0;"
+              ></span>
+              <input type="color" id="borderColorInput" value="#ffffff"
+                style="position:absolute;opacity:0;width:0;height:0;pointer-events:none;" />
+              <button id="borderRatioLockBtn" title="Lock ratio between border layers" style="font-size:13px;background:none;border:none;cursor:pointer;padding:0 2px;width:auto;color:#888;">🔓</button>
+            </div>
           </div>
           <div class="tod-row">
             <span style="font-size:11px;color:#777;width:52px;flex-shrink:0;">Countries</span>
@@ -1396,6 +1403,7 @@
           gamma:      bmAdjust.gamma,
           countryOpacity: parseInt(document.getElementById("countryBorderOpacity").value) / 100,
           stateOpacity:   parseInt(document.getElementById("stateBorderOpacity").value) / 100,
+          borderColor,
           regionColor: defaultRegionColor,
           cityColor:   defaultCityColor,
           cityDotSize: defaultCityDotSize,
@@ -1432,6 +1440,7 @@
         document.getElementById("countryBorderOpacityVal").textContent = coPct + "%";
         document.getElementById("stateBorderOpacity").value = soPct;
         document.getElementById("stateBorderOpacityVal").textContent = soPct + "%";
+        if (look.borderColor) setBorderColor(look.borderColor);
         setCountryBorderOpacity(coPct / 100);
         setStateBorderOpacity(soPct / 100);
 
@@ -1534,6 +1543,7 @@
             countryOpacity: parseInt(document.getElementById('countryBorderOpacity').value) / 100,
             stateOpacity:   parseInt(document.getElementById('stateBorderOpacity').value) / 100,
             countyOpacity:  parseInt(document.getElementById('countyBorderOpacity').value) / 100,
+            borderColor,
           };
         }
         if (trackId.startsWith('hl_')) {
@@ -1632,6 +1642,9 @@
         }
         if (state.countyOpacity !== undefined) {
           setCountyBorderOpacity(state.countyOpacity);
+        }
+        if (state.borderColor !== undefined) {
+          setBorderColor(state.borderColor);
         }
 
         // Highlight states
@@ -1919,6 +1932,7 @@
             countryOpacity: co  + (co2  - co)  * alpha,
             stateOpacity:   so  + (so2  - so)  * alpha,
             countyOpacity:  cyo + (cyo2 - cyo) * alpha,
+            borderColor:    lerpColor(a.borderColor ?? '#ffffff', b.borderColor ?? '#ffffff', alpha),
           };
         }
         if (trackId.startsWith('hl_')) {
@@ -2256,6 +2270,20 @@
 
       const DEFAULT_OUTLINE = Cesium.Color.WHITE.withAlpha(0.7);
       const DEFAULT_WIDTH   = 1.5;
+
+      let borderColor = '#ffffff'; // shared color for all border layers
+
+      function hexToCesiumColor(hex, alpha) {
+        const r = parseInt(hex.slice(1, 3), 16) / 255;
+        const g = parseInt(hex.slice(3, 5), 16) / 255;
+        const b = parseInt(hex.slice(5, 7), 16) / 255;
+        return new Cesium.Color(r, g, b, alpha !== undefined ? alpha : 1);
+      }
+
+      function cesiumColorToHex(c) {
+        const toHex = v => Math.round(v * 255).toString(16).padStart(2, '0');
+        return '#' + toHex(c.red) + toHex(c.green) + toHex(c.blue);
+      }
 
       const STATE_FIPS = {
         '01':'Alabama','02':'Alaska','04':'Arizona','05':'Arkansas','06':'California',
@@ -3065,9 +3093,9 @@
         if (!countryDataSource) return;
         countryDataSource.show = ratio > 0;
         if (!countryBorderMat) {
-          countryBorderMat = new Cesium.ColorMaterialProperty(Cesium.Color.WHITE.withAlpha(ratio));
+          countryBorderMat = new Cesium.ColorMaterialProperty(hexToCesiumColor(borderColor, ratio));
         } else {
-          countryBorderMat.color.setValue(Cesium.Color.WHITE.withAlpha(ratio));
+          countryBorderMat.color.setValue(hexToCesiumColor(borderColor, ratio));
         }
         for (const entity of countryDataSource.entities.values) {
           if (entity.polyline && entity.polyline.material !== countryBorderMat)
@@ -3079,14 +3107,25 @@
         if (!stateDataSource) return;
         stateDataSource.show = ratio > 0;
         if (!stateBorderMat) {
-          stateBorderMat = new Cesium.ColorMaterialProperty(Cesium.Color.WHITE.withAlpha(ratio));
+          stateBorderMat = new Cesium.ColorMaterialProperty(hexToCesiumColor(borderColor, ratio));
         } else {
-          stateBorderMat.color.setValue(Cesium.Color.WHITE.withAlpha(ratio));
+          stateBorderMat.color.setValue(hexToCesiumColor(borderColor, ratio));
         }
         for (const entity of stateDataSource.entities.values) {
           if (entity.polyline && entity.polyline.material !== stateBorderMat)
             entity.polyline.material = stateBorderMat;
         }
+      }
+
+      function setBorderColor(hex) {
+        borderColor = hex;
+        document.getElementById('borderColorSwatch').style.background = hex;
+        document.getElementById('borderColorInput').value = hex;
+        const coRatio = parseInt(document.getElementById('countryBorderOpacity').value) / 100;
+        const soRatio = parseInt(document.getElementById('stateBorderOpacity').value) / 100;
+        setCountryBorderOpacity(coRatio);
+        setStateBorderOpacity(soRatio);
+        rebuildCountyPrimitive();
       }
 
       // County borders — drawn directly as GroundPolylinePrimitive (no entity overhead,
@@ -3117,7 +3156,7 @@
             geometryInstances: instances,
             appearance: new Cesium.PolylineMaterialAppearance({
               material: Cesium.Material.fromType('Color', {
-                color: DEFAULT_OUTLINE.withAlpha(countyCurrentOpacity),
+                color: hexToCesiumColor(borderColor, countyCurrentOpacity),
               }),
               translucent: true,
             }),
@@ -3195,7 +3234,7 @@
         }
         // Update opacity on existing primitive if possible, else rebuild
         if (countyPrimitive?.appearance?.material?.uniforms) {
-          countyPrimitive.appearance.material.uniforms.color = DEFAULT_OUTLINE.withAlpha(ratio);
+          countyPrimitive.appearance.material.uniforms.color = hexToCesiumColor(borderColor, ratio);
         } else {
           rebuildCountyPrimitive();
         }
@@ -3265,6 +3304,13 @@
         borderRatioLocked = !borderRatioLocked;
         document.getElementById("borderRatioLockBtn").textContent = borderRatioLocked ? "🔒" : "🔓";
         document.getElementById("borderRatioLockBtn").style.color = borderRatioLocked ? "#4a9eff" : "#888";
+      });
+
+      document.getElementById("borderColorSwatch").addEventListener("click", () => {
+        document.getElementById("borderColorInput").click();
+      });
+      document.getElementById("borderColorInput").addEventListener("input", e => {
+        setBorderColor(e.target.value);
       });
 
       document.getElementById("addRegionBtn").addEventListener("click", () => {
@@ -4624,6 +4670,7 @@
             stateOpacity:   parseInt(document.getElementById('stateBorderOpacity').value) / 100,
             countyOpacity:  parseInt(document.getElementById('countyBorderOpacity').value) / 100,
             countyFilter,
+            borderColor,
           },
           defaults: {
             regionColor: defaultRegionColor,
@@ -4713,6 +4760,7 @@
           gamma:      project.bmAdjust?.gamma      ?? 1.0,
           countryOpacity: project.borders?.countryOpacity ?? 0.7,
           stateOpacity:   project.borders?.stateOpacity   ?? 0.5,
+          borderColor:    project.borders?.borderColor ?? '#ffffff',
           regionColor: project.defaults?.regionColor ?? '#ff9900',
           cityColor:   project.defaults?.cityColor   ?? '#ffffff',
           cityDotSize: project.defaults?.cityDotSize ?? 8,
