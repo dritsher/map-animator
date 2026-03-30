@@ -43,6 +43,20 @@
         gap: 12px;
       }
 
+      #projectBar {
+        display: flex;
+        gap: 6px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #ddd;
+        flex-shrink: 0;
+      }
+      #projectBar button {
+        flex: 1;
+        font-size: 12px;
+        padding: 5px 8px;
+        margin: 0;
+      }
+
       #cesiumPane {
         grid-column: 2;
         grid-row: 1;
@@ -679,12 +693,70 @@
         width: 0%;
         transition: width 0.1s linear;
       }
+
+      /* ── Custom modal ──────────────────────────────────────────────────────── */
+      #modalOverlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.45);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+      #modalOverlay.open { display: flex; }
+      #modalBox {
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.28);
+        padding: 24px 24px 18px;
+        width: 320px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      #modalTitle {
+        font-size: 15px;
+        font-weight: 600;
+        color: #222;
+        margin: 0;
+      }
+      #modalInput {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 7px 10px;
+        font-size: 13px;
+        border: 1px solid #bbb;
+        border-radius: 4px;
+        background: #fafafa;
+        margin: 0;
+        outline: none;
+      }
+      #modalInput:focus { border-color: #2a7aef; box-shadow: 0 0 0 2px #2a7aef33; }
+      #modalActions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+      #modalActions button {
+        width: auto;
+        margin: 0;
+        padding: 6px 16px;
+        font-size: 13px;
+      }
     </style>
   </head>
   <body>
     <div id="app">
       <div id="sidebar">
         <h2>Map Animator</h2>
+
+        <div id="projectBar">
+          <button id="saveProjectBtn">Save Project</button>
+          <button id="loadProjectBtn">Load Project</button>
+          <input type="file" id="loadProjectInput" accept=".json" style="display:none;" />
+        </div>
 
         <div class="section">
           <div class="section-title">Basemap</div>
@@ -4299,6 +4371,278 @@
         tlBuildLabels();
       });
 
+      // ── Project Save / Load ──────────────────────────────────────────────────
+      function promptFilename(defaultValue) {
+        return new Promise((resolve) => {
+          const overlay  = document.getElementById('modalOverlay');
+          const input    = document.getElementById('modalInput');
+          const confirm  = document.getElementById('modalConfirmBtn');
+          const cancel   = document.getElementById('modalCancelBtn');
+
+          input.value = defaultValue;
+          overlay.classList.add('open');
+          input.focus();
+          input.select();
+
+          function finish(value) {
+            overlay.classList.remove('open');
+            confirm.removeEventListener('click', onConfirm);
+            cancel.removeEventListener('click', onCancel);
+            input.removeEventListener('keydown', onKey);
+            resolve(value);
+          }
+
+          function onConfirm() { finish(input.value); }
+          function onCancel()  { finish(null); }
+          function onKey(e) {
+            if (e.key === 'Enter')  { e.preventDefault(); finish(input.value); }
+            if (e.key === 'Escape') { e.preventDefault(); finish(null); }
+          }
+
+          confirm.addEventListener('click', onConfirm);
+          cancel.addEventListener('click', onCancel);
+          input.addEventListener('keydown', onKey);
+        });
+      }
+
+      async function saveProject() {
+        const project = {
+          version: 1,
+          totalDuration: totalDuration(),
+          playbackT,
+          currentBasemap,
+          bmAdjust: { ...bmAdjust },
+          borders: {
+            countryOpacity: parseInt(document.getElementById('countryBorderOpacity').value) / 100,
+            stateOpacity:   parseInt(document.getElementById('stateBorderOpacity').value) / 100,
+            countyOpacity:  parseInt(document.getElementById('countyBorderOpacity').value) / 100,
+            countyFilter,
+          },
+          defaults: {
+            regionColor: defaultRegionColor,
+            cityColor:   defaultCityColor,
+            cityDotSize: defaultCityDotSize,
+          },
+          highlights: highlights.map(h => ({
+            key: h.key, name: h.name, type: h.type, color: h.color,
+            outlineOpacity: h.outlineOpacity, outlineWidth: h.outlineWidth,
+            subregionOpacity: h.subregionOpacity, subregionWidth: h.subregionWidth,
+            fillOpacity: h.fillOpacity, invert: h.invert,
+            showLabel: h.showLabel, labelText: h.labelText, labelColor: h.labelColor,
+            labelFontSize: h.labelFontSize, labelFontWeight: h.labelFontWeight,
+            labelFontFamily: h.labelFontFamily, labelOffsetX: h.labelOffsetX,
+            labelOffsetY: h.labelOffsetY, labelOpacity: h.labelOpacity,
+          })),
+          groups: regionGroups.map(g => ({
+            id: g.id, name: g.name, color: g.color,
+            fillOpacity: g.fillOpacity, invert: g.invert,
+            members: g.members.map(m => ({ key: m.key, name: m.name })),
+          })),
+          cities: cityMarkers.map(c => ({
+            id: c.id, name: c.name, country: c.country, lat: c.lat, lon: c.lon,
+            color: c.color, dotSize: c.dotSize, showLabel: c.showLabel,
+            labelColor: c.labelColor, fontSize: c.fontSize, fontWeight: c.fontWeight,
+            fontStyle: c.fontStyle, fontFamily: c.fontFamily,
+            offsetX: c.offsetX, offsetY: c.offsetY, outlineWidth: c.outlineWidth,
+            showBackground: c.showBackground, backgroundColor: c.backgroundColor,
+            backgroundOpacity: c.backgroundOpacity, bgPadX: c.bgPadX, bgPadY: c.bgPadY,
+            dotOpacity: c.dotOpacity, labelOpacity: c.labelOpacity,
+          })),
+          tracks: Object.fromEntries(
+            Object.entries(tracks).map(([id, t]) => [id, { keyframes: t.keyframes.map(k => ({ ...k })) }])
+          ),
+          nextKfId,
+          nextGroupId,
+          nextCityId,
+          selectedTrackIds: Array.from(selectedTrackIds),
+        };
+
+        const defaultName = 'map-animator-project';
+        const input = await promptFilename(defaultName);
+        if (input === null) return; // cancelled
+        const filename = (input.trim() || defaultName).replace(/\.json$/i, '') + '.json';
+
+        const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        setStatus(`Project saved as "${filename}".`);
+      }
+
+      async function loadProject(project) {
+        if (regionLookup.size === 0) {
+          setStatus('Region data not yet loaded — please wait and try again.');
+          return;
+        }
+
+        // 1. Clear existing entities and state
+        [...highlights].forEach(h => removeHighlight(h.key));
+        [...regionGroups].forEach(g => deleteGroup(g.id));
+        cityMarkers.forEach(c => { if (c.entity) viewer.entities.remove(c.entity); });
+        cityMarkers = [];
+        nextCityId = 1;
+        // Clear all tracks and reset builtins
+        Object.keys(tracks).forEach(id => { if (id !== 'camera' && id !== 'tod' && id !== 'borders') delete tracks[id]; });
+        tracks['camera'].keyframes  = [];
+        tracks['tod'].keyframes     = [];
+        tracks['borders'].keyframes = [];
+        selectedTrackIds = new Set(['camera']);
+
+        // 2. Duration and playback position
+        document.getElementById('totalDuration').value = project.totalDuration ?? 10;
+        playbackT  = project.playbackT ?? 0;
+        playStartT = playbackT;
+
+        // 3. Basemap + adjustments (reuse applyLook logic)
+        const look = {
+          basemap:    project.currentBasemap ?? 'cesium-default',
+          brightness: project.bmAdjust?.brightness ?? 1.0,
+          contrast:   project.bmAdjust?.contrast   ?? 1.0,
+          saturation: project.bmAdjust?.saturation ?? 1.0,
+          hue:        project.bmAdjust?.hue        ?? 0.0,
+          gamma:      project.bmAdjust?.gamma      ?? 1.0,
+          countryOpacity: project.borders?.countryOpacity ?? 0.7,
+          stateOpacity:   project.borders?.stateOpacity   ?? 0.5,
+          regionColor: project.defaults?.regionColor ?? '#ff9900',
+          cityColor:   project.defaults?.cityColor   ?? '#ffffff',
+          cityDotSize: project.defaults?.cityDotSize ?? 8,
+        };
+        applyLook(look);
+
+        // 4. County border
+        const countyPct = Math.round((project.borders?.countyOpacity ?? 0) * 100);
+        document.getElementById('countyBorderOpacity').value = countyPct;
+        document.getElementById('countyBorderOpacityVal').textContent = countyPct + '%';
+        setCountyBorderOpacity(countyPct / 100);
+        if (project.borders?.countyFilter) setCountyFilter(project.borders.countyFilter);
+
+        // 5. Highlights
+        for (const saved of (project.highlights ?? [])) {
+          addHighlight(saved.name);
+          const hl = highlights.find(h => h.key === saved.key);
+          if (!hl) continue;
+          hl.color           = saved.color ?? hl.color;
+          hl.outlineOpacity  = saved.outlineOpacity ?? 1.0;
+          hl.outlineWidth    = saved.outlineWidth ?? 2.0;
+          hl.subregionOpacity = saved.subregionOpacity ?? 0.0;
+          hl.subregionWidth  = saved.subregionWidth ?? 1.0;
+          hl.fillOpacity     = saved.fillOpacity ?? 0;
+          hl.invert          = saved.invert ?? false;
+          hl.labelText       = saved.labelText ?? saved.name.split(' (')[0];
+          hl.labelColor      = saved.labelColor ?? saved.color ?? hl.color;
+          hl.labelFontSize   = saved.labelFontSize ?? 14;
+          hl.labelFontWeight = saved.labelFontWeight ?? 'normal';
+          hl.labelFontFamily = saved.labelFontFamily ?? 'Arial';
+          hl.labelOffsetX    = saved.labelOffsetX ?? 0;
+          hl.labelOffsetY    = saved.labelOffsetY ?? 0;
+          hl.labelOpacity    = saved.labelOpacity ?? 1.0;
+          if (tracks['hl_' + saved.key]) tracks['hl_' + saved.key].color = saved.color ?? hl.color;
+          refreshOutlineEntities(hl);
+          refreshSubregionEntities(hl);
+          setFillOpacity(saved.key, hl.fillOpacity);
+          if (saved.showLabel) setHighlightLabel(saved.key, true);
+        }
+
+        // 6. Groups
+        for (const saved of (project.groups ?? [])) {
+          nextGroupId = saved.id;
+          createGroup(saved.name);
+          const grp = regionGroups.find(g => g.id === saved.id);
+          if (!grp) continue;
+          grp.color       = saved.color ?? grp.color;
+          grp.fillOpacity = saved.fillOpacity ?? 0;
+          grp.invert      = saved.invert ?? false;
+          if (tracks['group_' + saved.id]) tracks['group_' + saved.id].color = grp.color;
+          for (const m of (saved.members ?? [])) addMemberToGroup(saved.id, m.name);
+          if (grp.fillOpacity > 0) {
+            grp.fillEntities.forEach(removeFillItem);
+            const polygons = getGroupPolygons(grp);
+            grp.fillEntities = makeFillEntities(polygons, grp.color, grp.fillOpacity, grp.invert);
+          }
+        }
+        nextGroupId = project.nextGroupId ?? nextGroupId;
+
+        // 7. Cities
+        nextCityId = project.nextCityId ?? 1;
+        for (const saved of (project.cities ?? [])) {
+          const marker = {
+            id: saved.id,
+            name: saved.name, country: saved.country,
+            lat: saved.lat, lon: saved.lon,
+            color:             saved.color             ?? '#ffffff',
+            dotSize:           saved.dotSize           ?? 8,
+            showLabel:         saved.showLabel         ?? true,
+            labelColor:        saved.labelColor        ?? saved.color ?? '#ffffff',
+            fontSize:          saved.fontSize          ?? 13,
+            fontWeight:        saved.fontWeight        ?? 'normal',
+            fontStyle:         saved.fontStyle         ?? 'normal',
+            fontFamily:        saved.fontFamily        ?? 'Arial',
+            offsetX:           saved.offsetX           ?? 0,
+            offsetY:           saved.offsetY           ?? 0,
+            outlineWidth:      saved.outlineWidth      ?? 2,
+            showBackground:    saved.showBackground    ?? false,
+            backgroundColor:   saved.backgroundColor   ?? '#000000',
+            backgroundOpacity: saved.backgroundOpacity ?? 0.5,
+            bgPadX:            saved.bgPadX            ?? 5,
+            bgPadY:            saved.bgPadY            ?? 3,
+            dotOpacity:        saved.dotOpacity        ?? 1.0,
+            labelOpacity:      saved.labelOpacity      ?? 1.0,
+          };
+          marker.entity = makeCityEntity(marker);
+          tracks['city_' + marker.id] = {
+            id: 'city_' + marker.id, label: marker.name, category: 'city',
+            color: marker.color, h: 22, keyframes: [], collapsed: true,
+          };
+          selectedTrackIds.add('city_' + marker.id);
+          cityMarkers.push(marker);
+        }
+
+        // 8. Restore track keyframes (overwrite after entities are rebuilt)
+        for (const [id, saved] of Object.entries(project.tracks ?? {})) {
+          if (tracks[id]) tracks[id].keyframes = saved.keyframes ?? [];
+        }
+
+        // 9. Restore counters and selection
+        nextKfId         = project.nextKfId  ?? nextKfId;
+        selectedTrackIds = new Set(project.selectedTrackIds ?? ['camera']);
+
+        // 10. Re-render everything
+        renderHighlightList();
+        renderGroupList();
+        renderCityList();
+        renderKeyframeList();
+        tlBuildLabels();
+        tlDraw();
+        updateProgressUI(playbackT);
+        applySceneState(buildStateAtTime(playbackT));
+        setStatus('Project loaded.');
+      }
+
+      document.getElementById('saveProjectBtn').addEventListener('click', saveProject);
+      document.getElementById('loadProjectBtn').addEventListener('click', () => {
+        document.getElementById('loadProjectInput').click();
+      });
+      document.getElementById('loadProjectInput').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          try {
+            const project = JSON.parse(ev.target.result);
+            loadProject(project);
+          } catch (err) {
+            setStatus('Failed to load project: invalid JSON.');
+            console.error(err);
+          }
+        };
+        reader.readAsText(file);
+        // Reset so the same file can be re-loaded if needed
+        e.target.value = '';
+      });
+
       // ── Boot ─────────────────────────────────────────────────────────────────
       initBuiltinTracks();
       renderLooksSelect();
@@ -4317,5 +4661,16 @@
       tlInitEvents();
       tlRenderLoop();
     </script>
+
+    <div id="modalOverlay">
+      <div id="modalBox">
+        <p id="modalTitle">Save Project</p>
+        <input id="modalInput" type="text" spellcheck="false" />
+        <div id="modalActions">
+          <button id="modalCancelBtn">Cancel</button>
+          <button id="modalConfirmBtn" class="primary">Save</button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>
