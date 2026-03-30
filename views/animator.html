@@ -761,12 +761,12 @@
         <div class="section">
           <div class="section-title">Basemap</div>
           <select id="basemapSelect">
-            <option value="cesium-default">Cesium Default</option>
-            <option value="arcgis-satellite">ArcGIS Satellite</option>
-            <option value="arcgis-hillshade">ArcGIS Hillshade</option>
-            <option value="maptiler-streets">MapTiler Streets</option>
-            <option value="maptiler-satellite">MapTiler Satellite</option>
-            <option value="cesium-night">Earth at Night</option>
+            <option value="maptiler-outdoor">Outdoor</option>
+            <option value="maptiler-hybrid">Satellite + Labels</option>
+            <option value="maptiler-streets">Streets</option>
+            <option value="maptiler-satellite">Satellite</option>
+            <option value="maptiler-topo">Topo</option>
+            <option value="nasa-night">Earth at Night</option>
           </select>
           <div style="margin-top:6px;">
             <div class="bm-row">
@@ -994,7 +994,7 @@
 
       // ── State ───────────────────────────────────────────────────────────────
       let viewer = null;
-      let currentBasemap = "cesium-default";
+      let currentBasemap = "maptiler-outdoor";
 
       // Per-track keyframe system. Built-in: 'camera', 'tod', 'borders'.
       // Dynamic: 'hl_{key}' (highlights), 'group_{id}', 'city_{id}'.
@@ -1030,29 +1030,63 @@
       }
 
       // ── Basemap ─────────────────────────────────────────────────────────────
+      // Mapping for old basemap IDs that may appear in saved project files
+      const BASEMAP_COMPAT = {
+        'cesium-default':   'maptiler-outdoor',
+        'cesium-night':     'nasa-night',
+        'arcgis-satellite': 'maptiler-satellite',
+        'arcgis-hillshade': 'maptiler-topo',
+      };
+
       async function createImageryProviderForBasemap(basemap) {
+        // Silently upgrade any legacy IDs from old project files
+        basemap = BASEMAP_COMPAT[basemap] ?? basemap;
+
+        const mtUrl = (path, ext = 'png') =>
+          `https://api.maptiler.com/${path}/{z}/{x}/{y}.${ext}?key=${encodeURIComponent(MAPTILER_KEY)}`;
+
+        if (basemap === "maptiler-outdoor") {
+          return new Cesium.UrlTemplateImageryProvider({
+            url: mtUrl("maps/outdoor-v2/256"),
+            credit: "© MapTiler © OpenStreetMap contributors",
+          });
+        }
+        if (basemap === "maptiler-hybrid") {
+          return new Cesium.UrlTemplateImageryProvider({
+            url: mtUrl("maps/hybrid/256", "jpg"),
+            credit: "© MapTiler © OpenStreetMap contributors",
+          });
+        }
         if (basemap === "maptiler-streets") {
           return new Cesium.UrlTemplateImageryProvider({
-            url: "https://api.maptiler.com/maps/streets-v2/256/{z}/{x}/{y}.png?key=" + encodeURIComponent(MAPTILER_KEY),
+            url: mtUrl("maps/streets-v2/256"),
             credit: "© MapTiler © OpenStreetMap contributors",
           });
         }
         if (basemap === "maptiler-satellite") {
           return new Cesium.UrlTemplateImageryProvider({
-            url: "https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key=" + encodeURIComponent(MAPTILER_KEY),
+            url: mtUrl("tiles/satellite-v2", "jpg"),
             credit: "© MapTiler",
           });
         }
-        if (basemap === "cesium-night") {
-          return await Cesium.IonImageryProvider.fromAssetId(3812);
+        if (basemap === "maptiler-topo") {
+          return new Cesium.UrlTemplateImageryProvider({
+            url: mtUrl("maps/topo-v2/256"),
+            credit: "© MapTiler © OpenStreetMap contributors",
+          });
         }
-        if (basemap === "arcgis-satellite") {
-          return await Cesium.ArcGisMapServerImageryProvider.fromBasemapType(Cesium.ArcGisBaseMapType.SATELLITE);
+        if (basemap === "nasa-night") {
+          return new Cesium.UrlTemplateImageryProvider({
+            url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble_Nighttime_M15/default/2016-01-01/GoogleMapsCompatible/{z}/{y}/{x}.jpg",
+            credit: "NASA GIBS / Black Marble",
+            maximumLevel: 8,
+          });
         }
-        if (basemap === "arcgis-hillshade") {
-          return await Cesium.ArcGisMapServerImageryProvider.fromBasemapType(Cesium.ArcGisBaseMapType.HILLSHADE);
-        }
-        return await Cesium.IonImageryProvider.fromAssetId(2);
+        // Fallback — should not normally be reached
+        return new Cesium.UrlTemplateImageryProvider({
+          url: mtUrl("maps/outdoor-v2/256"),
+          credit: "© MapTiler © OpenStreetMap contributors",
+        });
       }
 
       let basemapLayer = null;
@@ -1087,42 +1121,42 @@
       const BUILT_IN_LOOKS = [
         {
           name: "Default",
-          basemap: "cesium-default",
+          basemap: "maptiler-outdoor",
           brightness: 1.0, contrast: 1.0, saturation: 1.0, hue: 0, gamma: 1.0,
           countryOpacity: 0.7, stateOpacity: 0.5,
           regionColor: "#ff9900", cityColor: "#ffffff", cityDotSize: 8,
         },
         {
           name: "Dark",
-          basemap: "cesium-default",
+          basemap: "maptiler-outdoor",
           brightness: 0.45, contrast: 1.1, saturation: 0.15, hue: 0, gamma: 0.85,
           countryOpacity: 0.45, stateOpacity: 0.3,
           regionColor: "#ff9900", cityColor: "#ffffff", cityDotSize: 8,
         },
         {
           name: "Satellite",
-          basemap: "arcgis-satellite",
+          basemap: "maptiler-satellite",
           brightness: 1.0, contrast: 1.15, saturation: 1.2, hue: 0, gamma: 1.0,
           countryOpacity: 0.6, stateOpacity: 0.4,
           regionColor: "#ffff00", cityColor: "#ffffff", cityDotSize: 8,
         },
         {
           name: "Night",
-          basemap: "cesium-night",
+          basemap: "nasa-night",
           brightness: 1.0, contrast: 1.0, saturation: 1.0, hue: 0, gamma: 0.9,
           countryOpacity: 0.3, stateOpacity: 0.2,
           regionColor: "#00bfff", cityColor: "#ffee55", cityDotSize: 8,
         },
         {
           name: "Monochrome",
-          basemap: "arcgis-hillshade",
+          basemap: "maptiler-topo",
           brightness: 0.85, contrast: 1.2, saturation: 0.0, hue: 0, gamma: 1.0,
           countryOpacity: 0.8, stateOpacity: 0.55,
           regionColor: "#ff3333", cityColor: "#ffffff", cityDotSize: 8,
         },
         {
           name: "Election",
-          basemap: "cesium-default",
+          basemap: "maptiler-outdoor",
           brightness: 0.55, contrast: 1.3, saturation: 0.1, hue: 0, gamma: 0.9,
           countryOpacity: 0.6, stateOpacity: 0.4,
           regionColor: "#4488ff", cityColor: "#ffffff", cityDotSize: 8,
@@ -1198,9 +1232,10 @@
       }
 
       function applyLook(look) {
-        // 1. Basemap
-        document.getElementById("basemapSelect").value = look.basemap;
-        applyBasemap(look.basemap);
+        // 1. Basemap — resolve any legacy IDs before setting the select
+        const resolvedBasemap = BASEMAP_COMPAT[look.basemap] ?? look.basemap;
+        document.getElementById("basemapSelect").value = resolvedBasemap;
+        applyBasemap(resolvedBasemap);
 
         // 2. Adjustments — update bmAdjust and sliders together
         const sliderMap = [
@@ -4498,7 +4533,7 @@
 
         // 3. Basemap + adjustments (reuse applyLook logic)
         const look = {
-          basemap:    project.currentBasemap ?? 'cesium-default',
+          basemap:    project.currentBasemap ?? 'maptiler-outdoor',
           brightness: project.bmAdjust?.brightness ?? 1.0,
           contrast:   project.bmAdjust?.contrast   ?? 1.0,
           saturation: project.bmAdjust?.saturation ?? 1.0,
