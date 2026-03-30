@@ -1081,7 +1081,7 @@
           `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${layer}/default/${date}/${tms}/{z}/{y}/{x}.${ext}`;
         const gibsStatic = (layer, tms, ext = 'jpg') =>
           `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${layer}/default/${tms}/{z}/{y}/{x}.${ext}`;
-        const today = new Date().toISOString().slice(0, 10);
+        const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
 
         if (basemap === "nasa-blue-marble") {
           return new Cesium.UrlTemplateImageryProvider({
@@ -1113,14 +1113,14 @@
         }
         if (basemap === "nasa-truecolor-modis") {
           return new Cesium.UrlTemplateImageryProvider({
-            url: gibsUrl("MODIS_Terra_CorrectedReflectance_TrueColor", today, "GoogleMapsCompatible_Level9"),
+            url: gibsUrl("MODIS_Terra_CorrectedReflectance_TrueColor", yesterday, "GoogleMapsCompatible_Level9"),
             credit: "NASA GIBS / MODIS Terra",
             maximumLevel: 9,
           });
         }
         if (basemap === "nasa-truecolor-viirs") {
           return new Cesium.UrlTemplateImageryProvider({
-            url: gibsUrl("VIIRS_NOAA20_CorrectedReflectance_TrueColor", today, "GoogleMapsCompatible_Level9"),
+            url: gibsUrl("VIIRS_NOAA20_CorrectedReflectance_TrueColor", yesterday, "GoogleMapsCompatible_Level9"),
             credit: "NASA GIBS / VIIRS NOAA-20",
             maximumLevel: 9,
           });
