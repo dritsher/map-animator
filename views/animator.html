@@ -1058,7 +1058,6 @@
 
     <script>
       // ── Config ──────────────────────────────────────────────────────────────
-      const CESIUM_TOKEN   = window.__config.cesiumToken;
       const MAPTILER_KEY   = window.__config.maptilerApiKey;
 
       // ── State ───────────────────────────────────────────────────────────────
@@ -1497,7 +1496,7 @@
 
       // ── Cesium Init ─────────────────────────────────────────────────────────
       function initViewer() {
-        Cesium.Ion.defaultAccessToken = CESIUM_TOKEN;
+
 
         viewer = new Cesium.Viewer("cesiumContainer", {
           animation: false,
@@ -1509,10 +1508,11 @@
           navigationHelpButton: false,
           fullscreenButton: false,
           creditContainer: document.getElementById("cesiumCreditSink"),
-          terrain: Cesium.Terrain.fromWorldTerrain({
-            requestVertexNormals: true,
-            requestWaterMask: true,
-          }),
+          terrain: new Cesium.Terrain(
+            Cesium.ArcGISTiledElevationTerrainProvider.fromUrl(
+              "https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer"
+            )
+          ),
           contextOptions: {
             webgl: { preserveDrawingBuffer: true },
           },
