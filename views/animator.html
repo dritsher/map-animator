@@ -2563,8 +2563,11 @@
           for (let i = 0; i < col.length; i++) {
             const p = col.get(i);
             if (!p) continue;
-            if (typeof p.length === 'number') { if (anyNotReady(p)) return true; }
-            else if (p.ready === false) return true;
+            if (typeof p.get === 'function' && typeof p.length === 'number') {
+              if (anyNotReady(p)) return true;
+            } else if (p.ready === false) {
+              return true;
+            }
           }
           return false;
         }
