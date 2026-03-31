@@ -964,6 +964,13 @@
         </div>
 
         <div class="section">
+          <div class="section-title">KML Overlays</div>
+          <button id="addKmlBtn" style="width:100%;margin-bottom:2px;">+ Add KML / KMZ…</button>
+          <input type="file" id="kmlFileInput" accept=".kml,.kmz" style="display:none;">
+          <div id="kmlList"></div>
+        </div>
+
+        <div class="section">
           <div class="section-title">Keyframes</div>
           <ul id="keyframeList"></ul>
           <div style="margin-top: 8px;">
@@ -1452,11 +1459,11 @@
         };
       }
 
-      function applyLook(look) {
+      async function applyLook(look) {
         // 1. Basemap — resolve any legacy IDs before setting the select
         const resolvedBasemap = BASEMAP_COMPAT[look.basemap] ?? look.basemap;
         document.getElementById("basemapSelect").value = resolvedBasemap;
-        applyBasemap(resolvedBasemap);
+        await applyBasemap(resolvedBasemap);
 
         // 2. Adjustments — update bmAdjust and sliders together
         const sliderMap = [
@@ -1637,6 +1644,10 @@
             bgPadY:            m.bgPadY             ?? 3,
           } : null;
         }
+        if (trackId.startsWith('kml_')) {
+          const kml = kmlOverlays.find(k => k.id === parseInt(trackId.slice(4)));
+          return kml ? { visible: kml.visible } : null;
+        }
         return null;
       }
 
@@ -1810,6 +1821,17 @@
           m.bgPadY            = cs.bgPadY             ?? m.bgPadY;
           if (needRebuild) updateCityEntity(m);
           else             updateCityLabelStyle(m);
+        });
+
+        (state.kmlStates || []).forEach(ks => {
+          const kml = kmlOverlays.find(k => k.id === ks.id);
+          if (!kml) return;
+          kml.visible = ks.visible;
+          kml.dataSource.show = ks.visible;
+          if (!isPlaying) {
+            const cb = document.querySelector(`#kmlList .kml-vis[data-id="${ks.id}"]`);
+            if (cb) cb.checked = ks.visible;
+          }
         });
       }
 
@@ -2037,6 +2059,9 @@
             bgPadY:            (a.bgPadY ?? 3) + ((b.bgPadY ?? 3) - (a.bgPadY ?? 3)) * alpha,
           };
         }
+        if (trackId.startsWith('kml_')) {
+          return { visible: alpha < 0.5 ? a.visible : b.visible };
+        }
         return null;
       }
 
@@ -2072,6 +2097,13 @@
           state.cityStates = cityAnimated.map(m => {
             const cs = interpolateTrack('city_' + m.id, t);
             return { id:m.id, ...cs };
+          });
+        }
+        const kmlAnimated = kmlOverlays.filter(k => (tracks['kml_'+k.id]?.keyframes.length ?? 0) > 0);
+        if (kmlAnimated.length > 0) {
+          state.kmlStates = kmlAnimated.map(k => {
+            const ks = interpolateTrack('kml_' + k.id, t);
+            return { id: k.id, ...ks };
           });
         }
         return state;
@@ -3611,6 +3643,9 @@
       let cityMarkers = [];  // [{id, name, country, lat, lon, color, dotSize, showLabel, entity}]
       let nextCityId  = 1;
 
+      let kmlOverlays = []; // { id, name, fileBase64, mimeType, dataSource, visible }
+      let nextKmlId   = 1;
+
       let cityStyleClipboard = null;
       const CITY_STYLE_FIELDS = [
         'color','labelColor','dotSize','showLabel','fontSize','fontWeight','fontStyle','fontFamily',
@@ -4120,6 +4155,102 @@
         hideGeocodeResults();
       });
 
+      // ── KML Overlays ─────────────────────────────────────────────────────────
+
+      async function loadKmlFromBlob(blob) {
+        const url = URL.createObjectURL(blob);
+        try {
+          return await Cesium.KmlDataSource.load(url, {
+            camera: viewer.scene.camera,
+            canvas: viewer.scene.canvas,
+            clampToGround: true,
+          });
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      }
+
+      async function addKmlOverlay(file) {
+        const name = file.name.replace(/\.(kml|kmz)$/i, '');
+        const mimeType = file.name.toLowerCase().endsWith('.kmz')
+          ? 'application/vnd.google-earth.kmz'
+          : 'application/vnd.google-earth.kml+xml';
+        let dataSource;
+        try {
+          dataSource = await loadKmlFromBlob(file);
+        } catch (err) {
+          setStatus('Failed to load KML: ' + (err.message || err));
+          console.error('[KML]', err);
+          return;
+        }
+        viewer.dataSources.add(dataSource);
+        const fileBase64 = await new Promise(resolve => {
+          const reader = new FileReader();
+          reader.onload = e => resolve(e.target.result.split(',')[1]);
+          reader.readAsDataURL(file);
+        });
+        const id = nextKmlId++;
+        kmlOverlays.push({ id, name, fileBase64, mimeType, dataSource, visible: true });
+        tracks['kml_' + id] = { id: 'kml_' + id, label: name, category: 'kml', color: '#ffaa00', h: 22, keyframes: [] };
+        selectedTrackIds.add('kml_' + id);
+        tlBuildLabels();
+        tlDraw();
+        renderKmlList();
+        viewer.flyTo(dataSource).catch(() => {});
+      }
+
+      function removeKmlOverlay(id) {
+        const idx = kmlOverlays.findIndex(k => k.id === id);
+        if (idx === -1) return;
+        viewer.dataSources.remove(kmlOverlays[idx].dataSource, true);
+        kmlOverlays.splice(idx, 1);
+        delete tracks['kml_' + id];
+        selectedTrackIds.delete('kml_' + id);
+        tlBuildLabels();
+        tlDraw();
+        renderKmlList();
+      }
+
+      function setKmlVisible(id, visible) {
+        const kml = kmlOverlays.find(k => k.id === id);
+        if (!kml) return;
+        kml.visible = visible;
+        kml.dataSource.show = visible;
+      }
+
+      function renderKmlList() {
+        const list = document.getElementById('kmlList');
+        list.innerHTML = '';
+        kmlOverlays.forEach(kml => {
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid #eee;';
+          row.innerHTML = `
+            <input type="checkbox" ${kml.visible ? 'checked' : ''} data-id="${kml.id}" class="kml-vis" style="margin:0;flex-shrink:0;">
+            <span style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:12px;" title="${kml.name}">${kml.name}</span>
+            <button data-id="${kml.id}" class="kml-zoom" title="Fly to" style="font-size:10px;padding:1px 5px;width:auto;">⊕</button>
+            <button data-id="${kml.id}" class="kml-del" title="Remove" style="font-size:10px;padding:1px 5px;width:auto;color:#c00;border-color:#c00;">✕</button>
+          `;
+          list.appendChild(row);
+        });
+        list.querySelectorAll('.kml-vis').forEach(cb =>
+          cb.addEventListener('change', e => setKmlVisible(+e.target.dataset.id, e.target.checked)));
+        list.querySelectorAll('.kml-zoom').forEach(btn =>
+          btn.addEventListener('click', e => {
+            const kml = kmlOverlays.find(k => k.id === +e.target.dataset.id);
+            if (kml) viewer.flyTo(kml.dataSource).catch(() => {});
+          }));
+        list.querySelectorAll('.kml-del').forEach(btn =>
+          btn.addEventListener('click', e => removeKmlOverlay(+e.target.dataset.id)));
+      }
+
+      document.getElementById('addKmlBtn').addEventListener('click', () => document.getElementById('kmlFileInput').click());
+      document.getElementById('kmlFileInput').addEventListener('change', async e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        e.target.value = '';
+        await addKmlOverlay(file);
+      });
+
       // ── Time of day ─────────────────────────────────────────────────────────
       document.getElementById("todSlider").addEventListener("input", (e) => {
         const minutes = parseInt(e.target.value);
@@ -4201,6 +4332,7 @@
         for (const h of highlights)   addEntity(tracks['hl_'+h.key]);
         for (const g of regionGroups) addEntity(tracks['group_'+g.id]);
         for (const m of cityMarkers)  addEntity(tracks['city_'+m.id]);
+        for (const k of kmlOverlays)  addEntity(tracks['kml_'+k.id]);
         return rows;
       }
       function tlTotalH() { return TL_RULER_H + tlGetRows().reduce((s, r) => s + r.h, 0); }
@@ -4780,6 +4912,8 @@
           nextKfId,
           nextGroupId,
           nextCityId,
+          kmlOverlays: kmlOverlays.map(k => ({ id: k.id, name: k.name, fileBase64: k.fileBase64, mimeType: k.mimeType, visible: k.visible })),
+          nextKmlId,
           selectedTrackIds: Array.from(selectedTrackIds),
         };
 
@@ -4810,6 +4944,9 @@
         cityMarkers.forEach(c => { if (c.entity) viewer.entities.remove(c.entity); });
         cityMarkers = [];
         nextCityId = 1;
+        kmlOverlays.forEach(k => viewer.dataSources.remove(k.dataSource, true));
+        kmlOverlays = [];
+        nextKmlId = 1;
         // Clear all tracks and reset builtins
         Object.keys(tracks).forEach(id => { if (id !== 'camera' && id !== 'tod' && id !== 'borders') delete tracks[id]; });
         tracks['camera'].keyframes  = [];
@@ -4839,7 +4976,7 @@
           cityColor:   project.defaults?.cityColor   ?? '#ffffff',
           cityDotSize: project.defaults?.cityDotSize ?? 8,
         };
-        applyLook(look);
+        await applyLook(look);
 
         // 4. County border
         const countyPct = Math.round((project.borders?.countyOpacity ?? 0) * 100);
@@ -4929,6 +5066,26 @@
           cityMarkers.push(marker);
         }
 
+        // 7b. KML overlays
+        nextKmlId = project.nextKmlId ?? 1;
+        for (const saved of (project.kmlOverlays ?? [])) {
+          try {
+            const bytes = atob(saved.fileBase64);
+            const arr = new Uint8Array(bytes.length);
+            for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+            const blob = new Blob([arr], { type: saved.mimeType });
+            const dataSource = await loadKmlFromBlob(blob);
+            dataSource.show = saved.visible ?? true;
+            viewer.dataSources.add(dataSource);
+            kmlOverlays.push({ id: saved.id, name: saved.name, fileBase64: saved.fileBase64, mimeType: saved.mimeType, dataSource, visible: saved.visible ?? true });
+            tracks['kml_' + saved.id] = { id: 'kml_' + saved.id, label: saved.name, category: 'kml', color: '#ffaa00', h: 22, keyframes: [] };
+          } catch (err) {
+            console.error('[KML] Failed to restore:', saved.name, err);
+            setStatus(`Warning: could not restore KML layer "${saved.name}"`);
+          }
+        }
+        renderKmlList();
+
         // 8. Restore track keyframes (overwrite after entities are rebuilt)
         for (const [id, saved] of Object.entries(project.tracks ?? {})) {
           if (tracks[id]) tracks[id].keyframes = saved.keyframes ?? [];
@@ -4942,11 +5099,27 @@
         renderHighlightList();
         renderGroupList();
         renderCityList();
+        renderKmlList();
         renderKeyframeList();
         tlBuildLabels();
         tlDraw();
         updateProgressUI(playbackT);
         applySceneState(buildStateAtTime(playbackT));
+
+        // Fly camera to the t=0 keyframe position if camera keyframes exist.
+        const camStart = interpolateTrack('camera', 0);
+        if (camStart?.lon !== undefined) {
+          viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(camStart.lon, camStart.lat, camStart.height),
+            orientation: {
+              heading: Cesium.Math.toRadians(camStart.heading),
+              pitch:   Cesium.Math.toRadians(camStart.pitch),
+              roll:    Cesium.Math.toRadians(camStart.roll),
+            },
+            duration: 2,
+          });
+        }
+
         setStatus('Project loaded.');
       }
 
