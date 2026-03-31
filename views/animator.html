@@ -906,6 +906,12 @@
               <button id="borderRatioLockBtn" title="Lock ratio between border layers" style="font-size:13px;background:none;border:none;cursor:pointer;padding:0 2px;width:auto;color:#888;">🔓</button>
             </div>
           </div>
+          <div id="bordersLoadingBar" style="margin-bottom:5px;display:none;">
+            <div style="font-size:10px;color:#888;margin-bottom:2px;" id="bordersLoadingLabel">Loading borders…</div>
+            <div style="width:100%;height:4px;background:#ddd;border-radius:2px;overflow:hidden;">
+              <div id="bordersLoadingFill" style="height:100%;background:#6ab0de;border-radius:2px;width:0%;transition:width 0.4s ease;"></div>
+            </div>
+          </div>
           <div class="tod-row">
             <span style="font-size:11px;color:#777;width:52px;flex-shrink:0;">Countries</span>
             <input type="range" id="countryBorderOpacity" min="0" max="100" value="70" step="5" style="flex:1;" />
@@ -1108,22 +1114,22 @@
 
       // ── Basemap ─────────────────────────────────────────────────────────────
       const BASEMAP_META = {
-        'maptiler-streets':       { source: 'MapTiler / OpenStreetMap',               resolution: 'Vector (unlimited zoom)', rights: 'API key required; free tier (100k tiles/month)' },
-        'maptiler-basic':         { source: 'MapTiler / OpenStreetMap',               resolution: 'Vector (unlimited zoom)', rights: 'API key required; free tier (100k tiles/month)' },
-        'maptiler-satellite':     { source: 'MapTiler satellite imagery',             resolution: '~0.5m urban / ~5m elsewhere', rights: 'API key required; free tier (100k tiles/month)' },
-        'carto-positron':         { source: 'CARTO / OpenStreetMap',                  resolution: 'Vector (unlimited zoom)', rights: 'Free with attribution; no key required', labelToggle: true },
-        'carto-dark':             { source: 'CARTO / OpenStreetMap',                  resolution: 'Vector (unlimited zoom)', rights: 'Free with attribution; no key required', labelToggle: true },
-        'usgs-topo':              { source: 'USGS National Map',                      resolution: '~1m/px (US only)', rights: 'Public domain — US government data', defaultMaxLevel: 16 },
-        'usgs-imagery':           { source: 'USGS National Map aerial imagery',       resolution: '~1m/px (US only)', rights: 'Public domain — US government data', defaultMaxLevel: 16 },
-        'eox-s2':                 { source: 'ESA Sentinel-2 / EOX IT Services',       resolution: '~10m/px', note: '2024 annual cloud-free composite', rights: 'Free with attribution (Copernicus open data)', defaultMaxLevel: 17 },
-        'gebco':                  { source: 'GEBCO (General Bathymetric Chart)',       resolution: '~500m/px', note: 'ocean bathymetry; land shown flat', rights: 'Free — CC BY 4.0 (attribution required)' },
-        'nasa-night':             { source: 'NASA/NOAA VIIRS (Black Marble)',          resolution: '~500m/px', note: '2016 annual composite', rights: 'Public domain — NASA open data', defaultMaxLevel: 8 },
-        'nasa-blue-marble':       { source: 'NASA MODIS (Blue Marble)',               resolution: '~500m/px', note: 'seamless global composite', rights: 'Public domain — NASA open data', defaultMaxLevel: 8 },
-        'nasa-blue-marble-ocean': { source: 'NASA MODIS + SRTM30 bathymetry',        resolution: '~500m/px', note: 'includes ocean floor depth', rights: 'Public domain — NASA open data', defaultMaxLevel: 8 },
-        'nasa-terrain-color':     { source: 'NASA/METI ASTER GDEM',                  resolution: '~30m/px', rights: 'Public domain — NASA/METI open data', defaultMaxLevel: 12 },
-        'nasa-terrain-grey':      { source: 'NASA/METI ASTER GDEM',                  resolution: '~30m/px', rights: 'Public domain — NASA/METI open data' },
-        'nasa-truecolor-modis':   { source: 'NASA Terra MODIS',                      resolution: '~250m/px', dateType: 'daily', dateMin: '2000-02-24', rights: 'Public domain — NASA open data', defaultMaxLevel: 9 },
-        'nasa-truecolor-viirs':   { source: 'NASA NOAA-20 VIIRS',                    resolution: '~375m/px', dateType: 'daily', dateMin: '2018-01-01', rights: 'Public domain — NASA open data', defaultMaxLevel: 9 },
+        'maptiler-streets':       { source: 'MapTiler / OpenStreetMap',               resolution: 'Vector (unlimited zoom)', rights: 'API key required; free tier (100k tiles/month)', baseColor: '#c8d8e5' },
+        'maptiler-basic':         { source: 'MapTiler / OpenStreetMap',               resolution: 'Vector (unlimited zoom)', rights: 'API key required; free tier (100k tiles/month)', baseColor: '#c8d8e5' },
+        'maptiler-satellite':     { source: 'MapTiler satellite imagery',             resolution: '~0.5m urban / ~5m elsewhere', rights: 'API key required; free tier (100k tiles/month)', baseColor: '#000811' },
+        'carto-positron':         { source: 'CARTO / OpenStreetMap',                  resolution: 'Vector (unlimited zoom)', rights: 'Free with attribution; no key required', labelToggle: true, baseColor: '#d4dadc' },
+        'carto-dark':             { source: 'CARTO / OpenStreetMap',                  resolution: 'Vector (unlimited zoom)', rights: 'Free with attribution; no key required', labelToggle: true, baseColor: '#0e0e0e' },
+        'usgs-topo':              { source: 'USGS National Map',                      resolution: '~1m/px (US only)', rights: 'Public domain — US government data', defaultMaxLevel: 16, baseColor: '#d4dce8' },
+        'usgs-imagery':           { source: 'USGS National Map aerial imagery',       resolution: '~1m/px (US only)', rights: 'Public domain — US government data', defaultMaxLevel: 16, baseColor: '#000811' },
+        'eox-s2':                 { source: 'ESA Sentinel-2 / EOX IT Services',       resolution: '~10m/px', note: '2024 annual cloud-free composite', rights: 'Free with attribution (Copernicus open data)', defaultMaxLevel: 17, baseColor: '#000a15' },
+        'gebco':                  { source: 'GEBCO (General Bathymetric Chart)',       resolution: '~500m/px', note: 'ocean bathymetry; land shown flat', rights: 'Free — CC BY 4.0 (attribution required)', baseColor: '#1a3a5c' },
+        'nasa-night':             { source: 'NASA/NOAA VIIRS (Black Marble)',          resolution: '~500m/px', note: '2016 annual composite', rights: 'Public domain — NASA open data', defaultMaxLevel: 8, baseColor: '#000000' },
+        'nasa-blue-marble':       { source: 'NASA MODIS (Blue Marble)',               resolution: '~500m/px', note: 'seamless global composite', rights: 'Public domain — NASA open data', defaultMaxLevel: 8, baseColor: '#000a18' },
+        'nasa-blue-marble-ocean': { source: 'NASA MODIS + SRTM30 bathymetry',        resolution: '~500m/px', note: 'includes ocean floor depth', rights: 'Public domain — NASA open data', defaultMaxLevel: 8, baseColor: '#000a18' },
+        'nasa-terrain-color':     { source: 'NASA/METI ASTER GDEM',                  resolution: '~30m/px', rights: 'Public domain — NASA/METI open data', defaultMaxLevel: 12, baseColor: '#000000' },
+        'nasa-terrain-grey':      { source: 'NASA/METI ASTER GDEM',                  resolution: '~30m/px', rights: 'Public domain — NASA/METI open data', baseColor: '#000000' },
+        'nasa-truecolor-modis':   { source: 'NASA Terra MODIS',                      resolution: '~250m/px', dateType: 'daily', dateMin: '2000-02-24', rights: 'Public domain — NASA open data', defaultMaxLevel: 9, baseColor: '#000a18' },
+        'nasa-truecolor-viirs':   { source: 'NASA NOAA-20 VIIRS',                    resolution: '~375m/px', dateType: 'daily', dateMin: '2018-01-01', rights: 'Public domain — NASA open data', defaultMaxLevel: 9, baseColor: '#000a18' },
       };
 
       function updateBasemapInfo(basemap) {
@@ -1332,6 +1338,16 @@
         const date = meta.dateType === 'daily' ? dateInput.value : null;
         const provider = await createImageryProviderForBasemap(basemap, date);
         viewer.imageryLayers.removeAll();
+        // Add a 1×1 solid-color geographic layer first so polar caps (beyond ±85°
+        // Web Mercator coverage) are filled with a matching color instead of black.
+        const bgColor = meta.baseColor ?? '#000000';
+        const bgCanvas = document.createElement('canvas');
+        bgCanvas.width = bgCanvas.height = 1;
+        const bgCtx = bgCanvas.getContext('2d');
+        bgCtx.fillStyle = bgColor;
+        bgCtx.fillRect(0, 0, 1, 1);
+        const bgProvider = await Cesium.SingleTileImageryProvider.fromUrl(bgCanvas.toDataURL());
+        viewer.imageryLayers.addImageryProvider(bgProvider);
         basemapLayer = viewer.imageryLayers.addImageryProvider(provider);
         applyBmAdjust();
         currentBasemap = basemap;
@@ -2462,7 +2478,15 @@
         for (const entity of toRemove) ds.entities.remove(entity);
       }
 
+      function setBordersLoadingProgress(pct, label) {
+        document.getElementById('bordersLoadingFill').style.width  = pct + '%';
+        document.getElementById('bordersLoadingLabel').textContent = label;
+      }
+
       async function loadRegionData() {
+        document.getElementById('bordersLoadingBar').style.display = '';
+        setBordersLoadingProgress(5, 'Loading countries…');
+
         countryDataSource = await Cesium.GeoJsonDataSource.load("/data/countries.geojson", {
           fill:        Cesium.Color.WHITE.withAlpha(0.0),
           stroke:      DEFAULT_OUTLINE,
@@ -2470,6 +2494,7 @@
         });
         patchDataSourceEntities(countryDataSource, DEFAULT_WIDTH, 2);
         viewer.dataSources.add(countryDataSource);
+        setBordersLoadingProgress(45, 'Loading states…');
 
         stateDataSource = await Cesium.GeoJsonDataSource.load("/data/states.geojson", {
           fill:        Cesium.Color.WHITE.withAlpha(0.0),
@@ -2478,6 +2503,7 @@
         });
         patchDataSourceEntities(stateDataSource, DEFAULT_WIDTH * 0.6, 1);
         viewer.dataSources.add(stateDataSource);
+        setBordersLoadingProgress(85, 'Building region index…');
 
         // Build unified lookup covering all countries and states.
         // Each entry stores polygons[] so multi-part regions (e.g. Alaska) are complete.
@@ -2525,7 +2551,37 @@
         // Apply initial slider values to the newly loaded data sources.
         setCountryBorderOpacity(parseInt(document.getElementById('countryBorderOpacity').value) / 100);
         setStateBorderOpacity(parseInt(document.getElementById('stateBorderOpacity').value) / 100);
+
+        setBordersLoadingProgress(100, 'Rendering borders…');
         setStatus("Region data loaded.");
+
+        // Keep bar visible until Cesium finishes tessellating GroundPolylinePrimitives.
+        // Ground-clamped polylines go into scene.groundPrimitives (not scene.primitives).
+        // Each primitive starts with ready=false; flips to true when GPU upload is done.
+        // We wait until we've seen at least one not-ready primitive AND then all are ready.
+        function anyNotReady(col) {
+          for (let i = 0; i < col.length; i++) {
+            const p = col.get(i);
+            if (!p) continue;
+            if (typeof p.length === 'number') { if (anyNotReady(p)) return true; }
+            else if (p.ready === false) return true;
+          }
+          return false;
+        }
+        let seenPending = false;
+        const removeBordersListener = viewer.scene.postRender.addEventListener(() => {
+          const gp = viewer.scene.groundPrimitives;
+          if (!seenPending) {
+            // Wait until at least one not-ready primitive appears (entity visualizer has run)
+            if (anyNotReady(gp)) seenPending = true;
+            else return;
+          }
+          // Once we've seen pending work, hide when everything is ready
+          if (!anyNotReady(gp)) {
+            removeBordersListener();
+            document.getElementById('bordersLoadingBar').style.display = 'none';
+          }
+        });
       }
 
       function makePolylineEntities(polygons, color, width, opacity) {
