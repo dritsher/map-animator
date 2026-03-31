@@ -1551,14 +1551,10 @@
           navigationHelpButton: false,
           fullscreenButton: false,
           creditContainer: document.getElementById("cesiumCreditSink"),
-          terrain: new Cesium.Terrain(
-            Cesium.ArcGISTiledElevationTerrainProvider.fromUrl(
-              "https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer",
-              // Limit to ±85° so Cesium falls back to the smooth ellipsoid at the
-              // poles rather than leaving a hole when terrain tiles are unavailable.
-              { rectangle: Cesium.Rectangle.fromDegrees(-180, -85.05, 180, 85.05) }
-            )
-          ),
+          // ArcGIS elevation causes geometric holes at the poles in Cesium's renderer.
+          // Use the smooth mathematical ellipsoid until a Cesium-native terrain
+          // source (e.g. Ion World Terrain) is available.
+          terrainProvider: new Cesium.EllipsoidTerrainProvider(),
           contextOptions: {
             webgl: { preserveDrawingBuffer: true },
           },
