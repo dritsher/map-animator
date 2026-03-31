@@ -1338,16 +1338,36 @@
         const date = meta.dateType === 'daily' ? dateInput.value : null;
         const provider = await createImageryProviderForBasemap(basemap, date);
         viewer.imageryLayers.removeAll();
-        // Add a 1×1 solid-color geographic layer first so polar caps (beyond ±85°
-        // Web Mercator coverage) are filled with a matching color instead of black.
+        // Add a solid-color geographic-projection layer beneath the basemap so
+        // polar caps (beyond ~±85° Web Mercator coverage) show a matching color.
         const bgColor = meta.baseColor ?? '#000000';
-        const bgCanvas = document.createElement('canvas');
-        bgCanvas.width = bgCanvas.height = 1;
-        const bgCtx = bgCanvas.getContext('2d');
-        bgCtx.fillStyle = bgColor;
-        bgCtx.fillRect(0, 0, 1, 1);
-        const bgProvider = await Cesium.SingleTileImageryProvider.fromUrl(bgCanvas.toDataURL());
-        viewer.imageryLayers.addImageryProvider(bgProvider);
+        const [bgR, bgG, bgB] = [1,3,5].map(i => parseInt(bgColor.slice(i,i+2), 16));
+        const geoScheme = new Cesium.GeographicTilingScheme();
+        const solidProvider = {
+          get tileWidth()        { return 1; },
+          get tileHeight()       { return 1; },
+          get minimumLevel()     { return 0; },
+          get maximumLevel()     { return 0; },
+          get tilingScheme()     { return geoScheme; },
+          get rectangle()        { return geoScheme.rectangle; },
+          get tileDiscardPolicy(){ return undefined; },
+          get errorEvent()       { return new Cesium.Event(); },
+          get ready()            { return true; },
+          get readyPromise()     { return Promise.resolve(true); },
+          get credit()           { return undefined; },
+          get hasAlphaChannel()  { return false; },
+          getTileCredits()       { return []; },
+          requestImage() {
+            const c = document.createElement('canvas');
+            c.width = c.height = 1;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, 1, 1);
+            return Promise.resolve(c);
+          },
+          pickFeatures() { return undefined; },
+        };
+        viewer.imageryLayers.addImageryProvider(solidProvider);
         basemapLayer = viewer.imageryLayers.addImageryProvider(provider);
         applyBmAdjust();
         currentBasemap = basemap;
@@ -2556,31 +2576,20 @@
         setStatus("Region data loaded.");
 
         // Keep bar visible until Cesium finishes tessellating GroundPolylinePrimitives.
-        // Ground-clamped polylines go into scene.groundPrimitives (not scene.primitives).
-        // Each primitive starts with ready=false; flips to true when GPU upload is done.
-        // We wait until we've seen at least one not-ready primitive AND then all are ready.
-        function anyNotReady(col) {
-          for (let i = 0; i < col.length; i++) {
-            const p = col.get(i);
-            if (!p) continue;
-            if (typeof p.get === 'function' && typeof p.length === 'number') {
-              if (anyNotReady(p)) return true;
-            } else if (p.ready === false) {
-              return true;
-            }
-          }
-          return false;
-        }
-        let seenPending = false;
+        // We can't reliably read primitive.ready in 1.118, so instead:
+        // hide once groundPrimitives.length has been stable for 2s AND at least 3s
+        // have passed since entities were added. Safety valve at 30s.
+        const loadedAt = Date.now();
+        const MIN_MS = 3000, STABLE_MS = 2000, MAX_MS = 30000;
+        let lastGPCount = viewer.scene.groundPrimitives.length;
+        let stableSince = Date.now();
         const removeBordersListener = viewer.scene.postRender.addEventListener(() => {
-          const gp = viewer.scene.groundPrimitives;
-          if (!seenPending) {
-            // Wait until at least one not-ready primitive appears (entity visualizer has run)
-            if (anyNotReady(gp)) seenPending = true;
-            else return;
-          }
-          // Once we've seen pending work, hide when everything is ready
-          if (!anyNotReady(gp)) {
+          const now = Date.now();
+          const count = viewer.scene.groundPrimitives.length;
+          if (count !== lastGPCount) { lastGPCount = count; stableSince = now; }
+          const elapsed = now - loadedAt;
+          const stable  = now - stableSince;
+          if ((elapsed >= MIN_MS && stable >= STABLE_MS) || elapsed >= MAX_MS) {
             removeBordersListener();
             document.getElementById('bordersLoadingBar').style.display = 'none';
           }
