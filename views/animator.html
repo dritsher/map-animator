@@ -1026,6 +1026,7 @@
 
       <div id="cesiumPane">
         <div id="cesiumContainer"></div>
+        <div id="cesiumCreditSink" style="display:none;"></div>
       </div>
 
       <div id="tlFooter">
@@ -1507,6 +1508,7 @@
           sceneModePicker: false,
           navigationHelpButton: false,
           fullscreenButton: false,
+          creditContainer: document.getElementById("cesiumCreditSink"),
           terrain: Cesium.Terrain.fromWorldTerrain({
             requestVertexNormals: true,
             requestWaterMask: true,
