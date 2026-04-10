@@ -3364,7 +3364,7 @@
           viewer.scene.primitives.remove(countyPrimitive);
           countyPrimitive = null;
         }
-        if (!countyPositions || countyCurrentOpacity <= 0) return;
+        if (!countyPositions) return;
         const rings = countyFilter
           ? (countyPositions.get(countyFilter) || [])
           : Array.from(countyPositions.values()).flat();
@@ -3444,21 +3444,16 @@
         document.getElementById("countyBorderOpacityVal").textContent = Math.round(ratio * 100) + "%";
         document.getElementById("countyFilterRow").style.display = ratio > 0 ? "" : "none";
 
-        if (ratio <= 0) {
-          if (countyPrimitive) {
-            viewer.scene.primitives.remove(countyPrimitive);
-            countyPrimitive = null;
-          }
-          return;
-        }
         if (!countyPositions) {
-          loadCountyPositions(); // async — will call rebuildCountyPrimitive() on completion
+          if (ratio > 0) loadCountyPositions(); // async — will call rebuildCountyPrimitive() on completion
           return;
         }
-        // Update opacity on existing primitive if possible, else rebuild
+        // Always update via material uniform when possible — avoids expensive GPU retessellation.
+        // Do NOT remove the primitive at ratio=0; keep it alive with alpha=0 so the next
+        // opacity-up is instant rather than triggering a 5-second GroundPolylinePrimitive rebuild.
         if (countyPrimitive?.appearance?.material?.uniforms) {
           countyPrimitive.appearance.material.uniforms.color = hexToCesiumColor(borderColor, ratio);
-        } else {
+        } else if (ratio > 0) {
           rebuildCountyPrimitive();
         }
       }
