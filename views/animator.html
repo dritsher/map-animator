@@ -947,6 +947,15 @@
             <input type="text" id="groupNameInput" placeholder="Group name…" autocomplete="off" />
             <button id="addGroupBtn">+ New</button>
           </div>
+          <div id="regionQueryRow" style="margin-top:6px;">
+            <textarea id="regionQuery" rows="2"
+              placeholder='Ask AI to create a group: "States that voted Republican in 2020"'
+              autocomplete="off"
+              style="width:100%;box-sizing:border-box;font-size:11px;resize:vertical;min-height:2.5em;padding:3px 5px;line-height:1.4;font-family:inherit;border:1px solid #ccc;border-radius:4px;margin-bottom:4px;"></textarea>
+            <button id="regionQueryBtn" title="Query with AI"
+              style="width:auto;padding:2px 10px;font-size:11px;">Ask AI</button>
+          </div>
+          <div id="regionQueryStatus" style="font-size:10px;color:#888;margin-top:2px;display:none;"></div>
           <div id="groupList"></div>
         </div>
 
@@ -1820,41 +1829,37 @@
           const colorChanged  = oldColor  !== hs.color;
           const invertChanged = oldInvert !== hs.invert;
 
-          // Outline — update material in-place; only rebuild when crossing zero or color changes
-          if (hs.outlineOpacity > 0 && h.outlineEntities.length > 0 && !colorChanged) {
-            h.outlineEntities.forEach(e =>
-              e.polyline.material.color.setValue(hexToColor(h.color).withAlpha(hs.outlineOpacity)));
+          // Outline — update live ref (CallbackProperty reads it next frame)
+          if (hs.outlineOpacity !== h.outlineOpacity || colorChanged) {
             h.outlineOpacity = hs.outlineOpacity;
             h.outlineWidth   = hs.outlineWidth;
-          } else if (hs.outlineOpacity !== h.outlineOpacity || colorChanged || hs.outlineWidth !== h.outlineWidth) {
-            h.outlineOpacity = hs.outlineOpacity;
-            h.outlineWidth   = hs.outlineWidth;
-            refreshOutlineEntities(h);
+            if (h.outlineRef) { h.outlineRef.color = h.color; h.outlineRef.opacity = hs.outlineOpacity; }
+            else refreshOutlineEntities(h);
           }
 
           // Subregion — same pattern
-          if (hs.subregionOpacity > 0 && h.subregionEntities.length > 0 && !colorChanged) {
-            h.subregionEntities.forEach(e =>
-              e.polyline.material.color.setValue(hexToColor(h.color).withAlpha(hs.subregionOpacity)));
+          if (hs.subregionOpacity !== h.subregionOpacity || colorChanged) {
             h.subregionOpacity = hs.subregionOpacity;
             h.subregionWidth   = hs.subregionWidth;
-          } else if (hs.subregionOpacity !== h.subregionOpacity || colorChanged || hs.subregionWidth !== h.subregionWidth) {
-            h.subregionOpacity = hs.subregionOpacity;
-            h.subregionWidth   = hs.subregionWidth;
-            refreshSubregionEntities(h);
+            if (h.subregionRef && h.subregionEntities.length > 0) {
+              h.subregionRef.color = h.color; h.subregionRef.opacity = hs.subregionOpacity;
+            } else refreshSubregionEntities(h);
           }
 
-          // Fill — ImageryLayer: set .alpha directly; PolygonEntity: setValue; else rebuild
-          if (hs.fillOpacity > 0 && h.fillEntities.length > 0 && !colorChanged && !invertChanged) {
-            h.fillEntities.forEach(item => {
-              if (item instanceof Cesium.ImageryLayer)
-                item.alpha = hs.fillOpacity;
-              else
-                item.polygon.material.color.setValue(hexToColor(h.color).withAlpha(hs.fillOpacity));
-            });
-            h.fillOpacity = hs.fillOpacity;
-          } else if (hs.fillOpacity !== oldFillOpacity || colorChanged || invertChanged) {
-            setFillOpacity(h.key, hs.fillOpacity); // uses updated h.color + h.invert
+          // Fill — ImageryLayer: set .alpha directly; ref: update; else rebuild
+          if (hs.fillOpacity !== oldFillOpacity || colorChanged || invertChanged) {
+            if (h.fillRef && h.fillEntities.length > 0 && !h.invert && !invertChanged && !colorChanged) {
+              h.fillRef.opacity = hs.fillOpacity;
+              h.fillOpacity = hs.fillOpacity;
+            } else if (h.fillEntities.length > 0 && !h.invert && !invertChanged) {
+              // ImageryLayer or legacy
+              h.fillEntities.forEach(item => {
+                if (item instanceof Cesium.ImageryLayer) item.alpha = hs.fillOpacity;
+              });
+              h.fillOpacity = hs.fillOpacity;
+            } else {
+              setFillOpacity(h.key, hs.fillOpacity);
+            }
           }
 
           // Label visibility and style
@@ -2659,8 +2664,13 @@
         });
       }
 
-      function makePolylineEntities(polygons, color, width, opacity) {
-        const alpha = (opacity === undefined) ? 1.0 : opacity;
+      // ref may be a plain number/string (static) or { color, opacity } (live, read by CallbackProperty)
+      function makePolylineEntities(polygons, color, width, opacity, ref) {
+        const getMat = ref
+          ? new Cesium.CallbackProperty(() => hexToColor(ref.color).withAlpha(ref.opacity), false)
+          : hexToColor(color).withAlpha(opacity === undefined ? 1.0 : opacity);
+        const material = new Cesium.ColorMaterialProperty(getMat);
+
         return polygons.map(pts => {
           const raw = [...pts, pts[0]];
           // Deduplicate consecutive identical vertices (some GeoJSON features have
@@ -2675,7 +2685,7 @@
             polyline: new Cesium.PolylineGraphics({
               positions,
               width,
-              material:      new Cesium.ColorMaterialProperty(hexToColor(color).withAlpha(alpha)),
+              material,
               clampToGround: true,
             }),
           });
@@ -2699,16 +2709,18 @@
         return surface;
       }
 
-      function makeFillEntities(polygons, color, fillOpacity, invert) {
+      function makeFillEntities(polygons, color, fillOpacity, invert, ref) {
         if (invert) return makeInvertMask(polygons, color, fillOpacity);
+
+        const getMat = ref
+          ? new Cesium.CallbackProperty(() => hexToColor(ref.color).withAlpha(ref.opacity), false)
+          : hexToColor(color).withAlpha(fillOpacity);
+        const material = new Cesium.ColorMaterialProperty(getMat);
 
         const results = [];
         for (const pts of polygons) {
           const surface = toSurfacePositions(pts);
           if (surface.length < 3) continue;
-          // Synchronous pre-validation using the same tessellation path as the worker.
-          // ArcType.NONE breaks the polygon tessellator on certain geometries — use
-          // Cesium's default (GEODESIC) here and in the entity.
           try {
             const check = Cesium.PolygonGeometry.fromPositions({ positions: surface });
             if (!Cesium.PolygonGeometry.createGeometry(check)) continue;
@@ -2717,7 +2729,7 @@
             results.push(viewer.entities.add({
               polygon: new Cesium.PolygonGraphics({
                 hierarchy: new Cesium.PolygonHierarchy(surface),
-                material:  new Cesium.ColorMaterialProperty(hexToColor(color).withAlpha(fillOpacity)),
+                material,
                 outline:   false,
               }),
             }));
@@ -2871,11 +2883,19 @@
         const type  = entry.key.startsWith("country||") ? "country" : "state";
         const color = nextRegionColor();
         const DEFAULT_FILL_OPACITY = 0.25;
-        const outlineEntities = makePolylineEntities(entry.polygons, color, 2.0, 1.0);
-        const fillEntities    = makeFillEntities(entry.polygons, color, DEFAULT_FILL_OPACITY, false);
+
+        // Live refs — CallbackProperty reads from these every frame so opacity/color
+        // changes are instant with no entity rebuild or retessellation.
+        const outlineRef    = { color, opacity: 1.0 };
+        const subregionRef  = { color, opacity: 0.0 };
+        const fillRef       = { color, opacity: DEFAULT_FILL_OPACITY };
+
+        const outlineEntities = makePolylineEntities(entry.polygons, color, 2.0, 1.0, outlineRef);
+        const fillEntities    = makeFillEntities(entry.polygons, color, DEFAULT_FILL_OPACITY, false, fillRef);
 
         highlights.push({
           key: entry.key, name: entry.name, type, color,
+          outlineRef, subregionRef, fillRef,
           outlineEntities, outlineOpacity: 1.0, outlineWidth: 2.0,
           subregionEntities: [], subregionOpacity: 0.0, subregionWidth: 1.0,
           fillEntities, fillOpacity: DEFAULT_FILL_OPACITY, invert: false,
@@ -2911,10 +2931,26 @@
       function setFillOpacity(key, opacity) {
         const h = highlights.find(h => h.key === key);
         if (!h) return;
-        h.fillEntities.forEach(removeFillItem);
         h.fillOpacity = opacity;
+        // If we have a live ref and non-invert fill entities already, just update the ref
+        if (h.fillRef && h.fillEntities.length > 0 && !h.invert) {
+          h.fillRef.color   = h.color;
+          h.fillRef.opacity = opacity;
+          return;
+        }
+        // Otherwise rebuild (first time, invert mode, or color changed)
+        h.fillEntities.forEach(removeFillItem);
         const polygons = regionLookup.get(h.name)?.polygons || [];
-        h.fillEntities = opacity > 0 ? makeFillEntities(polygons, h.color, opacity, h.invert) : [];
+        if (opacity > 0) {
+          if (!h.invert) {
+            h.fillRef = h.fillRef || { color: h.color, opacity };
+            h.fillRef.color   = h.color;
+            h.fillRef.opacity = opacity;
+          }
+          h.fillEntities = makeFillEntities(polygons, h.color, opacity, h.invert, h.invert ? null : h.fillRef);
+        } else {
+          h.fillEntities = [];
+        }
       }
 
       function setFillInvert(key, invert) {
@@ -2936,6 +2972,15 @@
       }
 
       function refreshOutlineEntities(h) {
+        if (h.outlineRef) {
+          // Update the live ref — CallbackProperty picks it up next frame, no rebuild needed
+          h.outlineRef.color   = h.color;
+          h.outlineRef.opacity = h.outlineOpacity;
+          // Width change requires a rebuild (geometry change, not just material)
+          // But opacity-only changes are instant via the ref.
+          return;
+        }
+        // Fallback for entities created without a ref (legacy / groups)
         h.outlineEntities.forEach(e => viewer.entities.remove(e));
         const polygons = regionLookup.get(h.name)?.polygons || [];
         h.outlineEntities = h.outlineOpacity > 0
@@ -2944,13 +2989,23 @@
       }
 
       function refreshSubregionEntities(h) {
+        if (h.subregionRef && h.subregionEntities.length > 0) {
+          h.subregionRef.color   = h.color;
+          h.subregionRef.opacity = h.subregionOpacity;
+          return;
+        }
         h.subregionEntities.forEach(e => viewer.entities.remove(e));
         if (h.type !== "country") { h.subregionEntities = []; return; }
         const polygons = [];
         getCountryStates(h.name).forEach(e => polygons.push(...e.polygons));
-        h.subregionEntities = h.subregionOpacity > 0
-          ? makePolylineEntities(polygons, h.color, h.subregionWidth, h.subregionOpacity)
-          : [];
+        if (h.subregionOpacity > 0) {
+          h.subregionRef = h.subregionRef || { color: h.color, opacity: h.subregionOpacity };
+          h.subregionRef.color   = h.color;
+          h.subregionRef.opacity = h.subregionOpacity;
+          h.subregionEntities = makePolylineEntities(polygons, h.color, h.subregionWidth, h.subregionOpacity, h.subregionRef);
+        } else {
+          h.subregionEntities = [];
+        }
       }
 
       function makeCtrlRow(labelText, opacity, width, onOpacityChange, onWidthChange) {
@@ -3022,20 +3077,12 @@
           colorInput.addEventListener("input", (e) => {
             h.color = e.target.value;
             swatch.style.background = h.color;
-            const col = hexToColor(h.color);
-            h.outlineEntities.forEach(ent => {
-              if (ent?.polyline) ent.polyline.material = new Cesium.ColorMaterialProperty(col.withAlpha(h.outlineOpacity));
-            });
-            h.subregionEntities.forEach(ent => {
-              if (ent?.polyline) ent.polyline.material = new Cesium.ColorMaterialProperty(col.withAlpha(h.subregionOpacity));
-            });
-            if (h.invert && h.fillOpacity > 0) {
-              setFillOpacity(h.key, h.fillOpacity);
-            } else {
-              h.fillEntities.forEach(ent => {
-                if (ent?.polygon) ent.polygon.material = new Cesium.ColorMaterialProperty(col.withAlpha(h.fillOpacity));
-              });
-            }
+            // Update live refs — CallbackProperty picks up the new color next frame
+            if (h.outlineRef)   h.outlineRef.color   = h.color;
+            if (h.subregionRef) h.subregionRef.color  = h.color;
+            if (h.fillRef && !h.invert) h.fillRef.color = h.color;
+            // Invert mask is tile-based and needs a rebuild on color change
+            if (h.invert && h.fillOpacity > 0) setFillOpacity(h.key, h.fillOpacity);
             if (h.labelEntity) updateHighlightLabelStyle(h.key);
           });
 
@@ -3582,6 +3629,46 @@
             sel.appendChild(opt);
           });
       })();
+
+      async function runRegionQuery() {
+        const query = document.getElementById("regionQuery").value.trim();
+        if (!query) return;
+        const btn    = document.getElementById("regionQueryBtn");
+        const status = document.getElementById("regionQueryStatus");
+        btn.disabled = true;
+        status.style.display = "";
+        status.textContent = "Querying…";
+        try {
+          const res  = await fetch("/api/region-query", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query }),
+          });
+          const data = await res.json();
+          if (!res.ok) { status.textContent = "Error: " + (data.error || res.statusText); return; }
+          const { matches, level, count } = data;
+          if (!matches?.length) { status.textContent = "No regions matched."; return; }
+          // Create a new group named after the query, add all matches as members
+          const groupName = query.length > 40 ? query.slice(0, 37) + "…" : query;
+          createGroup(groupName);
+          const group = regionGroups[regionGroups.length - 1];
+          let added = 0;
+          for (const name of matches) {
+            if (regionLookup.has(name)) { addMemberToGroup(group.id, name); added++; }
+          }
+          status.textContent = `Created group with ${added} ${level}s.`;
+          document.getElementById("regionQuery").value = "";
+        } catch (e) {
+          status.textContent = "Request failed: " + e.message;
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      document.getElementById("regionQueryBtn").addEventListener("click", runRegionQuery);
+      document.getElementById("regionQuery").addEventListener("keydown", e => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); runRegionQuery(); }
+      });
 
       document.getElementById("borderRatioLockBtn").addEventListener("click", () => {
         borderRatioLocked = !borderRatioLocked;
