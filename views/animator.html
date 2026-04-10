@@ -3313,7 +3313,8 @@
 
       function setCountryBorderOpacity(ratio) {
         if (!countryDataSource) return;
-        countryDataSource.show = ratio > 0;
+        // Do NOT toggle countryDataSource.show — GroundPolylinePrimitive requires
+        // expensive GPU retessellation when re-shown after being hidden. Use alpha=0 instead.
         if (!countryBorderMat) {
           countryBorderMat = new Cesium.ColorMaterialProperty(hexToCesiumColor(borderColor, ratio));
         } else {
@@ -3327,7 +3328,7 @@
 
       function setStateBorderOpacity(ratio) {
         if (!stateDataSource) return;
-        stateDataSource.show = ratio > 0;
+        // Do NOT toggle stateDataSource.show — same retessellation issue as country borders.
         if (!stateBorderMat) {
           stateBorderMat = new Cesium.ColorMaterialProperty(hexToCesiumColor(borderColor, ratio));
         } else {
