@@ -3308,47 +3308,53 @@
       });
 
       // Per-layer border materials — update in-place to avoid per-entity re-assignment.
-      let countryBorderMat = null;
-      let stateBorderMat   = null;
+      let countryBorderMat   = null;
+      let stateBorderMat     = null;
+      let countryBorderAlpha = 0.7; // shared opacity read by the CallbackProperty every frame
+      let stateBorderAlpha   = 0.5;
 
       function setCountryBorderOpacity(ratio) {
         if (!countryDataSource) return;
-        // Do NOT toggle countryDataSource.show — GroundPolylinePrimitive requires
-        // expensive GPU retessellation when re-shown after being hidden. Use alpha=0 instead.
+        countryBorderAlpha = ratio;
         if (!countryBorderMat) {
-          countryBorderMat = new Cesium.ColorMaterialProperty(hexToCesiumColor(borderColor, ratio));
-        } else {
-          countryBorderMat.color.setValue(hexToCesiumColor(borderColor, ratio));
+          // CallbackProperty(isConstant:false) is evaluated every frame — just update
+          // countryBorderAlpha and Cesium picks it up with no entity reprocessing.
+          countryBorderMat = new Cesium.ColorMaterialProperty(
+            new Cesium.CallbackProperty(() => hexToCesiumColor(borderColor, countryBorderAlpha), false)
+          );
+          for (const entity of countryDataSource.entities.values) {
+            if (entity.polyline) entity.polyline.material = countryBorderMat;
+          }
         }
-        for (const entity of countryDataSource.entities.values) {
-          if (entity.polyline && entity.polyline.material !== countryBorderMat)
-            entity.polyline.material = countryBorderMat;
-        }
+        // No else needed — CallbackProperty reads countryBorderAlpha automatically.
       }
 
       function setStateBorderOpacity(ratio) {
         if (!stateDataSource) return;
-        // Do NOT toggle stateDataSource.show — same retessellation issue as country borders.
+        stateBorderAlpha = ratio;
         if (!stateBorderMat) {
-          stateBorderMat = new Cesium.ColorMaterialProperty(hexToCesiumColor(borderColor, ratio));
-        } else {
-          stateBorderMat.color.setValue(hexToCesiumColor(borderColor, ratio));
+          stateBorderMat = new Cesium.ColorMaterialProperty(
+            new Cesium.CallbackProperty(() => hexToCesiumColor(borderColor, stateBorderAlpha), false)
+          );
+          for (const entity of stateDataSource.entities.values) {
+            if (entity.polyline) entity.polyline.material = stateBorderMat;
+          }
         }
-        for (const entity of stateDataSource.entities.values) {
-          if (entity.polyline && entity.polyline.material !== stateBorderMat)
-            entity.polyline.material = stateBorderMat;
-        }
+        // No else needed — CallbackProperty reads stateBorderAlpha automatically.
       }
 
       function setBorderColor(hex) {
         borderColor = hex;
         document.getElementById('borderColorSwatch').style.background = hex;
         document.getElementById('borderColorInput').value = hex;
-        const coRatio = parseInt(document.getElementById('countryBorderOpacity').value) / 100;
-        const soRatio = parseInt(document.getElementById('stateBorderOpacity').value) / 100;
-        setCountryBorderOpacity(coRatio);
-        setStateBorderOpacity(soRatio);
-        rebuildCountyPrimitive();
+        // borderColor is read directly by the CallbackProperty closures above and by
+        // countyMaterial updates below — no need to call set*BorderOpacity for color changes.
+        // Update county color via material uniform (no rebuild needed for a color change)
+        if (countyMaterial) {
+          countyMaterial.uniforms.color = hexToCesiumColor(borderColor, countyCurrentOpacity);
+        } else if (countyCurrentOpacity > 0) {
+          rebuildCountyPrimitive();
+        }
       }
 
       // County borders — drawn directly as GroundPolylinePrimitive (no entity overhead,
@@ -3356,6 +3362,7 @@
       let countyPositions      = null; // Map<fips2, Cartesian3[][]>
       let countyLoading        = false;
       let countyPrimitive      = null; // active GroundPolylinePrimitive
+      let countyMaterial       = null; // direct ref to the primitive's Color material
       let countyFilter         = '';   // '' = all, or 2-digit state FIPS
       let countyCurrentOpacity = 0;
 
@@ -3363,6 +3370,7 @@
         if (countyPrimitive) {
           viewer.scene.primitives.remove(countyPrimitive);
           countyPrimitive = null;
+          countyMaterial  = null;
         }
         if (!countyPositions) return;
         const rings = countyFilter
@@ -3374,13 +3382,17 @@
             geometry: new Cesium.GroundPolylineGeometry({ positions, width: 1 }),
           })
         );
+        // Keep a direct reference to the material so opacity/color updates never
+        // need to go through the primitive's appearance chain (which may be
+        // inaccessible before the first render) and never trigger a rebuild.
+        countyMaterial = Cesium.Material.fromType('Color', {
+          color: hexToCesiumColor(borderColor, countyCurrentOpacity),
+        });
         countyPrimitive = viewer.scene.primitives.add(
           new Cesium.GroundPolylinePrimitive({
             geometryInstances: instances,
             appearance: new Cesium.PolylineMaterialAppearance({
-              material: Cesium.Material.fromType('Color', {
-                color: hexToCesiumColor(borderColor, countyCurrentOpacity),
-              }),
+              material:    countyMaterial,
               translucent: true,
             }),
           })
@@ -3448,11 +3460,11 @@
           if (ratio > 0) loadCountyPositions(); // async — will call rebuildCountyPrimitive() on completion
           return;
         }
-        // Always update via material uniform when possible — avoids expensive GPU retessellation.
+        // Update via direct material reference — avoids expensive GPU retessellation.
         // Do NOT remove the primitive at ratio=0; keep it alive with alpha=0 so the next
         // opacity-up is instant rather than triggering a 5-second GroundPolylinePrimitive rebuild.
-        if (countyPrimitive?.appearance?.material?.uniforms) {
-          countyPrimitive.appearance.material.uniforms.color = hexToCesiumColor(borderColor, ratio);
+        if (countyMaterial) {
+          countyMaterial.uniforms.color = hexToCesiumColor(borderColor, ratio);
         } else if (ratio > 0) {
           rebuildCountyPrimitive();
         }
