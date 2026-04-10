@@ -782,7 +782,7 @@
           <div class="section-title">Basemap</div>
           <select id="basemapSelect">
             <optgroup label="Vector (free)">
-              <option value="carto-positron" selected>Positron (CARTO)</option>
+              <option value="carto-positron">Positron (CARTO)</option>
               <option value="carto-dark">Dark Matter (CARTO)</option>
             </optgroup>
             <optgroup label="Vector (MapTiler key required)">
@@ -792,7 +792,7 @@
             <optgroup label="Aerial / Satellite">
               <option value="maptiler-satellite">Satellite (MapTiler, key required)</option>
               <option value="usgs-imagery">Aerial (USGS, US only)</option>
-              <option value="eox-s2">Sentinel-2 Cloudless (EOX)</option>
+              <option value="eox-s2" selected>Sentinel-2 Cloudless (EOX)</option>
             </optgroup>
             <optgroup label="Terrain">
               <option value="usgs-topo">Topo (USGS, US only)</option>
@@ -1075,7 +1075,7 @@
 
       // ── State ───────────────────────────────────────────────────────────────
       let viewer = null;
-      let currentBasemap = "carto-positron";
+      let currentBasemap = "eox-s2";
       let basemapShowLabels = true;
       let basemapMaxLevelOverride = null; // null = use each basemap's natural default
 
@@ -1338,16 +1338,32 @@
         const date = meta.dateType === 'daily' ? dateInput.value : null;
         const provider = await createImageryProviderForBasemap(basemap, date);
         viewer.imageryLayers.removeAll();
-        // Add a solid-color geographic-projection layer beneath the basemap so
-        // polar caps (beyond ~±85° Web Mercator coverage) show a matching color.
+        // Add a polar fill layer beneath the basemap to cover the ±85°–±90° caps
+        // that Web Mercator tiles don't reach. We fetch a level-0 tile from the
+        // real provider and serve it via GeographicTilingScheme (full ±90°), which
+        // stretches the basemap's edge pixels into the caps for a natural color match.
+        // Falls back to the hand-picked baseColor if the tile fetch fails.
         const bgColor = meta.baseColor ?? '#000000';
-        const [bgR, bgG, bgB] = [1,3,5].map(i => parseInt(bgColor.slice(i,i+2), 16));
         const geoScheme = new Cesium.GeographicTilingScheme();
-        const solidProvider = {
-          get tileWidth()        { return 1; },
-          get tileHeight()       { return 1; },
+        // Polar fill layer: covers ±85°–±90° where Web Mercator tiles don't reach.
+        // Serves the matching WM level-1 tile via GeographicTilingScheme so longitude
+        // bands align and edge pixels blend naturally into the polar caps.
+        // After fetching each tile, we sample its brightness: if it is nearly black
+        // (outside-coverage tile from regional providers like USGS), we substitute
+        // the solid baseColor instead. If CORS blocks sampling we also use the solid
+        // fallback — either way, no black quadrants.
+        const makeSolidTile = () => {
+          const c = document.createElement('canvas');
+          c.width = c.height = 1;
+          c.getContext('2d').fillStyle = bgColor;
+          c.getContext('2d').fillRect(0, 0, 1, 1);
+          return c;
+        };
+        const polarFillProvider = {
+          get tileWidth()        { return 256; },
+          get tileHeight()       { return 256; },
           get minimumLevel()     { return 0; },
-          get maximumLevel()     { return 0; },
+          get maximumLevel()     { return 2; },
           get tilingScheme()     { return geoScheme; },
           get rectangle()        { return geoScheme.rectangle; },
           get tileDiscardPolicy(){ return undefined; },
@@ -1357,17 +1373,43 @@
           get credit()           { return undefined; },
           get hasAlphaChannel()  { return false; },
           getTileCredits()       { return []; },
-          requestImage() {
-            const c = document.createElement('canvas');
-            c.width = c.height = 1;
-            const ctx = c.getContext('2d');
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, 1, 1);
-            return Promise.resolve(c);
+          requestImage(x, y, level) {
+            // Try to fetch a tile and validate it has content (brightness check).
+            // Returns the tile image, or null if it's black/empty/CORS-blocked.
+            const tryTile = (tx, ty) => {
+              try {
+                const req = provider.requestImage(tx, ty, 2);
+                const p = req instanceof Promise ? req : (req ? Promise.resolve(req) : Promise.resolve(null));
+                return p.then(tile => {
+                  if (!tile) return null;
+                  try {
+                    const c = document.createElement('canvas');
+                    c.width = c.height = 8;
+                    const ctx = c.getContext('2d');
+                    ctx.drawImage(tile, 0, 0, 8, 8);
+                    const d = ctx.getImageData(0, 0, 8, 8).data;
+                    let sum = 0;
+                    for (let i = 0; i < d.length; i += 4) sum += d[i] + d[i+1] + d[i+2];
+                    return sum / (d.length / 4 * 3) < 15 ? null : tile;
+                  } catch (e) { return null; } // CORS blocked
+                }).catch(() => null);
+              } catch (e) { return Promise.resolve(null); }
+            };
+            return (async () => {
+              const tile = await tryTile(x, y);
+              if (tile) return tile;
+              // Tile was black/empty — try x=0 (western hemisphere) which tends to
+              // have ocean/coverage data even for regional providers like USGS.
+              if (x !== 0) {
+                const fallback = await tryTile(0, y);
+                if (fallback) return fallback;
+              }
+              return makeSolidTile();
+            })();
           },
           pickFeatures() { return undefined; },
         };
-        viewer.imageryLayers.addImageryProvider(solidProvider);
+        viewer.imageryLayers.addImageryProvider(polarFillProvider);
         basemapLayer = viewer.imageryLayers.addImageryProvider(provider);
         applyBmAdjust();
         currentBasemap = basemap;
@@ -1681,7 +1723,10 @@
         }
         if (trackId.startsWith('kml_')) {
           const kml = kmlOverlays.find(k => k.id === parseInt(trackId.slice(4)));
-          return kml ? { visible: kml.visible } : null;
+          return kml ? {
+            visible: kml.visible,
+            layers: kml.layers.map(l => ({ name: l.name, opacity: l.opacity })),
+          } : null;
         }
         return null;
       }
@@ -1863,10 +1908,11 @@
           if (!kml) return;
           kml.visible = ks.visible;
           kml.dataSource.show = ks.visible;
-          if (!isPlaying) {
-            const cb = document.querySelector(`#kmlList .kml-vis[data-id="${ks.id}"]`);
-            if (cb) cb.checked = ks.visible;
-          }
+          (ks.layers || []).forEach((ls, i) => {
+            const layer = kml.layers[i];
+            if (layer && Math.abs(layer.opacity - ls.opacity) > 0.001) applyKmlLayerOpacity(layer, ls.opacity);
+          });
+          if (!isPlaying) renderKmlList();
         });
       }
 
@@ -2095,7 +2141,13 @@
           };
         }
         if (trackId.startsWith('kml_')) {
-          return { visible: alpha < 0.5 ? a.visible : b.visible };
+          return {
+            visible: alpha < 0.5 ? a.visible : b.visible,
+            layers: (a.layers || []).map((al, i) => {
+              const bl = b.layers?.[i];
+              return { name: al.name, opacity: bl !== undefined ? al.opacity + (bl.opacity - al.opacity) * alpha : al.opacity };
+            }),
+          };
         }
         return null;
       }
@@ -2288,6 +2340,7 @@
           }
 
           const state = buildStateAtTime(t);
+          applySceneState(state);
           setCameraState(state); // no-ops while MORPHING
 
           // Wait for Cesium to finish rendering this frame
@@ -4224,6 +4277,127 @@
 
       // ── KML Overlays ─────────────────────────────────────────────────────────
 
+      // Returns true if a Cesium entity has renderable geometry.
+      function hasKmlGeometry(e) {
+        return !!(e.polygon || e.polyline || e.billboard || e.label || e.point ||
+                  e.model || e.ellipse || e.rectangle || e.corridor ||
+                  e.ellipsoid || e.box || e.cylinder || e.wall);
+      }
+
+      // Returns true if entity is a descendant of ancestor via the parent chain.
+      function kmlIsDescendant(entity, ancestor) {
+        let cur = entity.parent;
+        while (cur) { if (cur === ancestor) return true; cur = cur.parent; }
+        return false;
+      }
+
+      // Captures original Cesium.Color values for each entity so opacity can be
+      // applied as a multiplier without losing the authored color.
+      function kmlStoreColors(entities) {
+        const t = Cesium.JulianDate.now();
+        const map = new Map();
+        for (const e of entities) {
+          const c = {};
+          try { if (e.polygon?.material?.color)  c.polyFill    = e.polygon.material.color.getValue(t)?.clone(); }    catch(_) {}
+          try { if (e.polygon?.outlineColor)      c.polyOutline = e.polygon.outlineColor.getValue(t)?.clone(); }      catch(_) {}
+          try { if (e.polyline?.material?.color)  c.line        = e.polyline.material.color.getValue(t)?.clone(); }   catch(_) {}
+          try { c.billboard   = e.billboard  ? (e.billboard.color?.getValue(t)  ?? Cesium.Color.WHITE).clone()  : undefined; } catch(_) {}
+          try { c.point       = e.point      ? (e.point.color?.getValue(t)      ?? Cesium.Color.WHITE).clone()  : undefined; } catch(_) {}
+          try { c.labelFill   = e.label      ? (e.label.fillColor?.getValue(t)  ?? Cesium.Color.WHITE).clone()  : undefined; } catch(_) {}
+          try { c.labelOutline= e.label      ? (e.label.outlineColor?.getValue(t)?? Cesium.Color.BLACK).clone() : undefined; } catch(_) {}
+          map.set(e.id, c);
+        }
+        return map;
+      }
+
+      // Installs CallbackProperty on each entity in a layer so Cesium evaluates
+      // the color during its own render phase — no pipeline lag, smooth opacity.
+      // Called once after layer creation; applyKmlLayerOpacity then only needs
+      // to update layer.opacity and Cesium picks it up on the next render.
+      function setupKmlLayerCallbacks(layer) {
+        for (const e of layer.entities) {
+          const c = layer.origColors.get(e.id);
+          if (!c) continue;
+          const cb = (origColor, fallback) => {
+            if (!origColor && !fallback) return undefined;
+            const base = origColor ?? fallback;
+            // Use layer.opacity directly as alpha (ignoring the KML-authored alpha,
+            // which is often baked-in semi-transparency like 0x80 = 50%).
+            // This gives intuitive 0–100% control where 100% = fully opaque.
+            return new Cesium.CallbackProperty(
+              () => new Cesium.Color(base.red, base.green, base.blue, layer.opacity),
+              false // isConstant = false → re-evaluated every frame
+            );
+          };
+          if (c.polyFill    && e.polygon?.material?.color)  e.polygon.material.color  = cb(c.polyFill);
+          if (c.polyOutline && e.polygon?.outlineColor)     e.polygon.outlineColor    = cb(c.polyOutline);
+          if (c.line        && e.polyline?.material?.color) e.polyline.material.color = cb(c.line);
+          if (c.billboard   !== undefined && e.billboard)   e.billboard.color         = cb(c.billboard,  Cesium.Color.WHITE);
+          if (c.point       !== undefined && e.point)       e.point.color             = cb(c.point,      Cesium.Color.WHITE);
+          if (c.labelFill   !== undefined && e.label)       e.label.fillColor         = cb(c.labelFill,  Cesium.Color.WHITE);
+          if (c.labelOutline!== undefined && e.label)       e.label.outlineColor      = cb(c.labelOutline, Cesium.Color.BLACK);
+        }
+      }
+
+      // Updates layer.opacity — the CallbackProperties installed by setupKmlLayerCallbacks
+      // read this value on every render, so no per-entity iteration is needed here.
+      function applyKmlLayerOpacity(layer, opacity) {
+        layer.opacity = opacity;
+      }
+
+      // Discovers KML folder structure from a loaded KmlDataSource and returns
+      // an array of layer objects, each with a name, entity list, and opacity.
+      //
+      // Strategy:
+      //   - If there are multiple top-level folders → use those as layers.
+      //   - If there is exactly one top-level folder (a wrapper) → use its direct
+      //     child folders as layers (one level deeper), so a structure like
+      //     "Temporary Places > cumulative_100.kml, cumulative_075.kml …" exposes
+      //     the named documents rather than the invisible wrapper.
+      function extractKmlLayers(dataSource) {
+        const all = dataSource.entities.values;
+        // Folder-like entities: no renderable geometry, but parent to at least one child
+        const folderSet = new Set(all.filter(e => !hasKmlGeometry(e) && all.some(c => c.parent === e)));
+
+        if (folderSet.size === 0) {
+          const entities = all.filter(hasKmlGeometry);
+          return [{ name: null, entities, opacity: 1.0, origColors: kmlStoreColors(entities) }];
+        }
+
+        // Top-level folders: their parent is not also a folder-like entity
+        const topFolders = [...folderSet].filter(f => !folderSet.has(f.parent));
+
+        // If a single wrapper folder, step into its direct child folders
+        let targetFolders;
+        if (topFolders.length === 1) {
+          const children = [...folderSet].filter(f => f.parent === topFolders[0]);
+          targetFolders = children.length > 0 ? children : topFolders;
+        } else {
+          targetFolders = topFolders;
+        }
+
+        const layers = targetFolders.map(folder => {
+          const entities = all.filter(e => hasKmlGeometry(e) && kmlIsDescendant(e, folder));
+          return { name: folder.name || 'Layer', entities, opacity: 1.0, origColors: kmlStoreColors(entities) };
+        });
+
+        // Any geometry not under a target folder
+        const orphans = all.filter(e => hasKmlGeometry(e) && !targetFolders.some(f => kmlIsDescendant(e, f)));
+        if (orphans.length > 0) {
+          layers.push({ name: 'Other', entities: orphans, opacity: 1.0, origColors: kmlStoreColors(orphans) });
+        }
+
+        // Assign zIndex so layer order matches visual stacking: index 0 renders on
+        // top, last index renders on the bottom. Cesium otherwise renders in
+        // parse order (last-parsed = topmost), which is the opposite of intuitive.
+        layers.forEach((layer, i) => {
+          const z = layers.length - 1 - i;
+          layer.entities.forEach(e => { if (e.polygon) e.polygon.zIndex = z; });
+        });
+
+        return layers;
+      }
+
       async function loadKmlFromBlob(blob) {
         const url = URL.createObjectURL(blob);
         try {
@@ -4257,7 +4431,9 @@
           reader.readAsDataURL(file);
         });
         const id = nextKmlId++;
-        kmlOverlays.push({ id, name, fileBase64, mimeType, dataSource, visible: true });
+        const layers = extractKmlLayers(dataSource);
+        layers.forEach(setupKmlLayerCallbacks);
+        kmlOverlays.push({ id, name, fileBase64, mimeType, dataSource, visible: true, layers });
         tracks['kml_' + id] = { id: 'kml_' + id, label: name, category: 'kml', color: '#ffaa00', h: 22, keyframes: [] };
         selectedTrackIds.add('kml_' + id);
         tlBuildLabels();
@@ -4289,16 +4465,41 @@
         const list = document.getElementById('kmlList');
         list.innerHTML = '';
         kmlOverlays.forEach(kml => {
-          const row = document.createElement('div');
-          row.style.cssText = 'display:flex;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid #eee;';
-          row.innerHTML = `
+          const wrap = document.createElement('div');
+          wrap.style.cssText = 'border-bottom:1px solid #eee;padding:3px 0;';
+
+          // Header row: visibility, name, fly-to, delete
+          const header = document.createElement('div');
+          header.style.cssText = 'display:flex;align-items:center;gap:4px;';
+          header.innerHTML = `
             <input type="checkbox" ${kml.visible ? 'checked' : ''} data-id="${kml.id}" class="kml-vis" style="margin:0;flex-shrink:0;">
             <span style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:12px;" title="${kml.name}">${kml.name}</span>
             <button data-id="${kml.id}" class="kml-zoom" title="Fly to" style="font-size:10px;padding:1px 5px;width:auto;">⊕</button>
             <button data-id="${kml.id}" class="kml-del" title="Remove" style="font-size:10px;padding:1px 5px;width:auto;color:#c00;border-color:#c00;">✕</button>
           `;
-          list.appendChild(row);
+          wrap.appendChild(header);
+
+          // Per-layer opacity rows (shown when file has named layers)
+          const showLayers = kml.layers.length > 1 || (kml.layers.length === 1 && kml.layers[0].name !== null);
+          if (showLayers) {
+            kml.layers.forEach((layer, li) => {
+              const layerRow = document.createElement('div');
+              layerRow.style.cssText = 'display:flex;align-items:center;gap:4px;padding:2px 0 2px 14px;';
+              layerRow.innerHTML = `
+                <span style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;color:#555;"
+                      title="${layer.name || ''}">${layer.name || 'Layer'}</span>
+                <input type="range" min="0" max="1" step="0.01" value="${layer.opacity.toFixed(2)}"
+                       data-kid="${kml.id}" data-li="${li}" class="kml-layer-opacity"
+                       style="width:60px;height:14px;margin:0;">
+                <span class="kml-layer-pct" style="font-size:10px;width:26px;text-align:right;">${Math.round(layer.opacity * 100)}%</span>
+              `;
+              wrap.appendChild(layerRow);
+            });
+          }
+
+          list.appendChild(wrap);
         });
+
         list.querySelectorAll('.kml-vis').forEach(cb =>
           cb.addEventListener('change', e => setKmlVisible(+e.target.dataset.id, e.target.checked)));
         list.querySelectorAll('.kml-zoom').forEach(btn =>
@@ -4308,6 +4509,15 @@
           }));
         list.querySelectorAll('.kml-del').forEach(btn =>
           btn.addEventListener('click', e => removeKmlOverlay(+e.target.dataset.id)));
+        list.querySelectorAll('.kml-layer-opacity').forEach(slider =>
+          slider.addEventListener('input', e => {
+            const kml = kmlOverlays.find(k => k.id === +e.target.dataset.kid);
+            const layer = kml?.layers[+e.target.dataset.li];
+            if (!layer) return;
+            applyKmlLayerOpacity(layer, +e.target.value);
+            const pct = e.target.closest('div').querySelector('.kml-layer-pct');
+            if (pct) pct.textContent = Math.round(+e.target.value * 100) + '%';
+          }));
       }
 
       document.getElementById('addKmlBtn').addEventListener('click', () => document.getElementById('kmlFileInput').click());
@@ -4979,7 +5189,10 @@
           nextKfId,
           nextGroupId,
           nextCityId,
-          kmlOverlays: kmlOverlays.map(k => ({ id: k.id, name: k.name, fileBase64: k.fileBase64, mimeType: k.mimeType, visible: k.visible })),
+          kmlOverlays: kmlOverlays.map(k => ({
+            id: k.id, name: k.name, fileBase64: k.fileBase64, mimeType: k.mimeType, visible: k.visible,
+            layerOpacities: k.layers.map(l => ({ name: l.name, opacity: l.opacity })),
+          })),
           nextKmlId,
           selectedTrackIds: Array.from(selectedTrackIds),
         };
@@ -5030,7 +5243,7 @@
         basemapShowLabels = project.basemapShowLabels ?? true;
         basemapMaxLevelOverride = project.basemapMaxLevelOverride ?? null;
         const look = {
-          basemap:    project.currentBasemap ?? 'carto-positron',
+          basemap:    project.currentBasemap ?? 'eox-s2',
           brightness: project.bmAdjust?.brightness ?? 1.0,
           contrast:   project.bmAdjust?.contrast   ?? 1.0,
           saturation: project.bmAdjust?.saturation ?? 1.0,
@@ -5144,7 +5357,13 @@
             const dataSource = await loadKmlFromBlob(blob);
             dataSource.show = saved.visible ?? true;
             viewer.dataSources.add(dataSource);
-            kmlOverlays.push({ id: saved.id, name: saved.name, fileBase64: saved.fileBase64, mimeType: saved.mimeType, dataSource, visible: saved.visible ?? true });
+            const layers = extractKmlLayers(dataSource);
+            layers.forEach(setupKmlLayerCallbacks);
+            (saved.layerOpacities ?? []).forEach((lo, i) => {
+              const layer = layers[i];
+              if (layer && lo.opacity !== undefined && lo.opacity !== 1.0) applyKmlLayerOpacity(layer, lo.opacity);
+            });
+            kmlOverlays.push({ id: saved.id, name: saved.name, fileBase64: saved.fileBase64, mimeType: saved.mimeType, dataSource, visible: saved.visible ?? true, layers });
             tracks['kml_' + saved.id] = { id: 'kml_' + saved.id, label: saved.name, category: 'kml', color: '#ffaa00', h: 22, keyframes: [] };
           } catch (err) {
             console.error('[KML] Failed to restore:', saved.name, err);
