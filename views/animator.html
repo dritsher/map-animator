@@ -1420,6 +1420,24 @@
       // Values mirror bmAdjust: brightness/contrast/saturation 0-2, hue in degrees, gamma 0-2.
 
       let defaultRegionColor = "#ff9900";
+
+      // Curated map-friendly palette (Tableau-inspired, visually distinct on dark/light basemaps)
+      const REGION_PALETTE = [
+        "#4e79a7", // blue
+        "#f28e2b", // orange
+        "#e15759", // red
+        "#76b7b2", // teal
+        "#59a14f", // green
+        "#edc948", // yellow
+        "#b07aa1", // purple
+        "#ff9da7", // pink
+        "#9c755f", // brown
+        "#bab0ac", // gray
+      ];
+      let regionPaletteIdx = 0;
+      function nextRegionColor() {
+        return REGION_PALETTE[regionPaletteIdx++ % REGION_PALETTE.length];
+      }
       let defaultCityColor   = "#ffffff";
       let defaultCityDotSize = 8;
 
@@ -2599,7 +2617,11 @@
         // Populate datalist
         const dl = document.getElementById("regionDatalist");
         dl.innerHTML = "";
-        [...regionLookup.keys()].sort().forEach(str => {
+        // Order: countries first, then states, then counties (added later by loadCountyPositions)
+        const entries = [...regionLookup.entries()];
+        const countries = entries.filter(([,e]) => e.key.startsWith('country||')).map(([k]) => k).sort();
+        const states    = entries.filter(([,e]) => e.key.startsWith('state||')).map(([k]) => k).sort();
+        [...countries, ...states].forEach(str => {
           const opt = document.createElement("option");
           opt.value = str;
           dl.appendChild(opt);
@@ -2847,14 +2869,16 @@
         if (highlights.some(h => h.key === entry.key)) return; // no duplicates
 
         const type  = entry.key.startsWith("country||") ? "country" : "state";
-        const color = defaultRegionColor;
+        const color = nextRegionColor();
+        const DEFAULT_FILL_OPACITY = 0.25;
         const outlineEntities = makePolylineEntities(entry.polygons, color, 2.0, 1.0);
+        const fillEntities    = makeFillEntities(entry.polygons, color, DEFAULT_FILL_OPACITY, false);
 
         highlights.push({
           key: entry.key, name: entry.name, type, color,
           outlineEntities, outlineOpacity: 1.0, outlineWidth: 2.0,
           subregionEntities: [], subregionOpacity: 0.0, subregionWidth: 1.0,
-          fillEntities: [], fillOpacity: 0, invert: false,
+          fillEntities, fillOpacity: DEFAULT_FILL_OPACITY, invert: false,
           showLabel: false, labelText: entry.name.split(' (')[0], labelEntity: null,
           labelColor: color,
           labelFontSize: 14, labelFontWeight: 'normal', labelFontFamily: 'Arial',
@@ -3042,6 +3066,23 @@
             if (h.labelEntity) h.labelEntity.label.text = h.labelText;
           });
 
+          const flyBtn = document.createElement("button");
+          flyBtn.className = "hl-toggle";
+          flyBtn.textContent = "✈";
+          flyBtn.title = "Fly to region";
+          flyBtn.addEventListener("click", () => {
+            const polygons = regionLookup.get(h.name)?.polygons;
+            if (!polygons?.length) return;
+            // BoundingSphere handles antimeridian-crossing regions (e.g. Alaska) correctly.
+            // offset pitch=-90 forces the camera directly overhead so large regions
+            // (like the US spanning Alaska→Puerto Rico) don't appear shifted south.
+            const sphere = Cesium.BoundingSphere.fromPoints(polygons.flat());
+            viewer.camera.flyToBoundingSphere(sphere, {
+              duration: 1.5,
+              offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-90), sphere.radius * 2.5),
+            });
+          });
+
           const removeBtn = document.createElement("button");
           removeBtn.className = "hl-remove";
           removeBtn.textContent = "×";
@@ -3049,6 +3090,7 @@
 
           header.appendChild(swatch);
           header.appendChild(nameEl);
+          header.appendChild(flyBtn);
           header.appendChild(labelBtn);
           header.appendChild(labelTextInput);
           header.appendChild(removeBtn);
