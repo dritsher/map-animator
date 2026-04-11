@@ -367,6 +367,8 @@
       .group-ai-meta { color: #666; margin-bottom: 2px; }
       .group-ai-filters { font-family: monospace; font-size: 10px; color: #555; background: #e4ecff; padding: 2px 5px; border-radius: 3px; margin-bottom: 2px; word-break: break-all; }
       .group-ai-source { color: #888; font-size: 10px; margin-top: 3px; }
+      .group-ai-src-link { color: #2a5ab8; text-decoration: none; }
+      .group-ai-src-link:hover { text-decoration: underline; }
 
       /* ── City list ─────────────────────────────────────────────────────────── */
       #citySearchRow {
@@ -3798,11 +3800,11 @@
           });
           const data = await res.json();
           if (!res.ok) { status.textContent = "Error: " + (data.error || res.statusText); return; }
-          const { matches, level, count, filterSpec } = data;
+          const { matches, level, count, filterSpec, sources } = data;
           if (!matches?.length) { status.textContent = "No regions matched."; return; }
           // Create a new group named after the query, add all matches as members
           const groupName = query.length > 40 ? query.slice(0, 37) + "…" : query;
-          createGroup(groupName, { query, level, filterSpec, count });
+          createGroup(groupName, { query, level, filterSpec, count, sources });
           const group = regionGroups[regionGroups.length - 1];
           let added = 0;
           for (const name of matches) {
@@ -4061,7 +4063,7 @@
             const aiDetail = document.createElement("div");
             aiDetail.className = "group-ai-detail";
             aiDetail.style.display = "none";
-            const { query: aq, level: al, filterSpec: afs, count: ac } = group.aiMeta;
+            const { query: aq, level: al, filterSpec: afs, count: ac, sources: asrc } = group.aiMeta;
             let detailHtml = `<div class="group-ai-query">"${aq}"</div>`;
             detailHtml += `<div class="group-ai-meta">Level: ${al} · ${ac} matched</div>`;
             if (afs?.filters?.length) {
@@ -4071,7 +4073,13 @@
               detailHtml += `<div class="group-ai-filters">world knowledge · ${afs.names.length} names</div>`;
             }
             if (afs?.sort_by) detailHtml += `<div class="group-ai-filters">sorted by ${afs.sort_by} ${afs.sort_dir ?? ''}${afs.limit ? ` · top ${afs.limit}` : ''}</div>`;
-            detailHtml += `<div class="group-ai-source">Data: US Census ACS 2022 · MIT MEDSL election results</div>`;
+            if (asrc?.length) {
+              const srcHtml = asrc.map(s => s.url
+                ? `<a href="${s.url}" target="_blank" rel="noopener" class="group-ai-src-link">${s.name}</a>`
+                : `<span>${s.name}</span>`
+              ).join(" · ");
+              detailHtml += `<div class="group-ai-source">Data: ${srcHtml}</div>`;
+            }
             aiDetail.innerHTML = detailHtml;
             aiToggle.addEventListener("click", () => {
               const open = aiDetail.style.display === "";

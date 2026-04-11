@@ -114,6 +114,66 @@ function applyFilters(record, filters, logic) {
   return logic === "or" ? results.some(Boolean) : results.every(Boolean);
 }
 
+// Map queryable fields to their data sources
+const FIELD_SOURCES = {
+  population:               { name: "US Census ACS 2022",            url: "https://www.census.gov/data/developers/data-sets/acs-5year.html" },
+  median_age:               { name: "US Census ACS 2022",            url: "https://www.census.gov/data/developers/data-sets/acs-5year.html" },
+  median_household_income:  { name: "US Census ACS 2022",            url: "https://www.census.gov/data/developers/data-sets/acs-5year.html" },
+  poverty_pct:              { name: "US Census ACS 2022",            url: "https://www.census.gov/data/developers/data-sets/acs-5year.html" },
+  unemployment_pct:         { name: "US Census ACS 2022",            url: "https://www.census.gov/data/developers/data-sets/acs-5year.html" },
+  bachelors_pct:            { name: "US Census ACS 2022",            url: "https://www.census.gov/data/developers/data-sets/acs-5year.html" },
+  election_2016_winner:     { name: "MIT Election Data + Science Lab", url: "https://electionlab.mit.edu/data" },
+  election_2016_rep:        { name: "MIT Election Data + Science Lab", url: "https://electionlab.mit.edu/data" },
+  election_2016_dem:        { name: "MIT Election Data + Science Lab", url: "https://electionlab.mit.edu/data" },
+  election_2016_rep_pct:    { name: "MIT Election Data + Science Lab", url: "https://electionlab.mit.edu/data" },
+  election_2020_winner:     { name: "MIT Election Data + Science Lab", url: "https://electionlab.mit.edu/data" },
+  election_2020_rep:        { name: "MIT Election Data + Science Lab", url: "https://electionlab.mit.edu/data" },
+  election_2020_dem:        { name: "MIT Election Data + Science Lab", url: "https://electionlab.mit.edu/data" },
+  election_2020_rep_pct:    { name: "MIT Election Data + Science Lab", url: "https://electionlab.mit.edu/data" },
+  election_2024_winner:     { name: "2024 County Election Results",   url: "https://github.com/tonmcg/US_County_Level_Election_Results_08-20" },
+  election_2024_rep:        { name: "2024 County Election Results",   url: "https://github.com/tonmcg/US_County_Level_Election_Results_08-20" },
+  election_2024_dem:        { name: "2024 County Election Results",   url: "https://github.com/tonmcg/US_County_Level_Election_Results_08-20" },
+  election_2024_rep_pct:    { name: "2024 County Election Results",   url: "https://github.com/tonmcg/US_County_Level_Election_Results_08-20" },
+  obesity_pct:              { name: "CDC PLACES 2024",               url: "https://www.cdc.gov/places/" },
+  smoking_pct:              { name: "CDC PLACES 2024",               url: "https://www.cdc.gov/places/" },
+  diabetes_pct:             { name: "CDC PLACES 2024",               url: "https://www.cdc.gov/places/" },
+  no_insurance_pct:         { name: "CDC PLACES 2024",               url: "https://www.cdc.gov/places/" },
+  gdp_per_capita:           { name: "World Bank Open Data",          url: "https://data.worldbank.org/" },
+  life_expectancy:          { name: "World Bank Open Data",          url: "https://data.worldbank.org/" },
+  co2_per_capita:           { name: "World Bank Open Data",          url: "https://data.worldbank.org/" },
+};
+
+const WORLD_KNOWLEDGE_SOURCE = { name: "Claude AI world knowledge", url: null };
+const WORLD_BANK_POPULATION  = { name: "World Bank Open Data",      url: "https://data.worldbank.org/" };
+
+function inferSources(filterSpec, level) {
+  const { filters = [], names = [], sort_by } = filterSpec;
+
+  // Name/geography-based queries use world knowledge, not a data file
+  if (names.length) {
+    if (level === "country") return [WORLD_KNOWLEDGE_SOURCE, WORLD_BANK_POPULATION];
+    return [WORLD_KNOWLEDGE_SOURCE];
+  }
+
+  // Collect all fields referenced (filter fields + sort field)
+  const fields = [...filters.map(f => f.field), ...(sort_by ? [sort_by] : [])];
+
+  if (level === "country") {
+    // Country data filters → World Bank
+    return fields.some(f => FIELD_SOURCES[f])
+      ? [{ name: "World Bank Open Data", url: "https://data.worldbank.org/" }]
+      : [WORLD_KNOWLEDGE_SOURCE];
+  }
+
+  // Deduplicate by source name
+  const seen = new Map();
+  for (const field of fields) {
+    const src = FIELD_SOURCES[field];
+    if (src && !seen.has(src.name)) seen.set(src.name, src);
+  }
+  return seen.size > 0 ? [...seen.values()] : [WORLD_KNOWLEDGE_SOURCE];
+}
+
 router.post("/api/region-query", async (req, res) => {
   const { query } = req.body || {};
   if (!query?.trim()) return res.status(400).json({ error: "Missing query" });
@@ -229,7 +289,7 @@ router.post("/api/region-query", async (req, res) => {
   if (limit) records = records.slice(0, limit);
 
   const matches = records.map(r => r.name);
-  res.json({ level, filterSpec, matches, count: matches.length });
+  res.json({ level, filterSpec, matches, count: matches.length, sources: inferSources(filterSpec, level) });
 });
 
 const sessions = new Map(); // sessionId -> { dir, frameCount }
