@@ -3823,14 +3823,15 @@
           const group = regionGroups[regionGroups.length - 1];
           let added = 0;
           for (const name of matches) {
-            if (regionLookup.has(name)) {
-              addMemberToGroup(group.id, name); added++;
-            } else if (level === "state") {
-              // State names returned as "Texas" but stored as "Texas (United States of America)"
+            if (level === "state") {
+              // Always use US-state-specific lookup — plain `name` key may match the country instead
+              // (e.g. "Georgia" the country is stored as "Georgia"; the US state is "Georgia (United States of America)")
               const key = [...regionLookup.keys()].find(k =>
                 k.startsWith(name + " (") && regionLookup.get(k).key.startsWith("state||United States of America||")
               );
               if (key) { addMemberToGroup(group.id, key); added++; }
+            } else if (regionLookup.has(name)) {
+              addMemberToGroup(group.id, name); added++;
             } else if (level === "country") {
               // AI may return "United States" but lookup has "United States of America" — fuzzy match
               const nameLower = name.toLowerCase();
