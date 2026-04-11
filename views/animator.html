@@ -358,6 +358,15 @@
       .group-members { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
       .group-members li { display: flex; align-items: center; gap: 4px; padding: 2px 4px; font-size: 11px; color: #555; }
       .group-member-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .group-ai-row { margin: 4px 0 2px; }
+      .group-ai-toggle { width: auto; margin: 0; padding: 2px 7px; font-size: 11px; background: #e8f0ff; border: 1px solid #b0c4f0; color: #2a5ab8; border-radius: 10px; cursor: pointer; }
+      .group-ai-toggle:hover { background: #d0e0ff; }
+      .group-ai-toggle-open { background: #d0e0ff; }
+      .group-ai-detail { margin-top: 5px; padding: 6px 8px; background: #f0f4ff; border: 1px solid #c8d8f8; border-radius: 4px; font-size: 11px; }
+      .group-ai-query { font-style: italic; color: #333; margin-bottom: 3px; }
+      .group-ai-meta { color: #666; margin-bottom: 2px; }
+      .group-ai-filters { font-family: monospace; font-size: 10px; color: #555; background: #e4ecff; padding: 2px 5px; border-radius: 3px; margin-bottom: 2px; word-break: break-all; }
+      .group-ai-source { color: #888; font-size: 10px; margin-top: 3px; }
 
       /* ── City list ─────────────────────────────────────────────────────────── */
       #citySearchRow {
@@ -848,6 +857,7 @@
             <optgroup label="Vector (MapTiler key required)">
               <option value="maptiler-streets">Streets</option>
               <option value="maptiler-basic">Basic</option>
+              <option value="maptiler-backdrop">Basic (no labels)</option>
             </optgroup>
             <optgroup label="Aerial / Satellite">
               <option value="maptiler-satellite">Satellite (MapTiler, key required)</option>
@@ -1185,6 +1195,7 @@
       const BASEMAP_META = {
         'maptiler-streets':       { source: 'MapTiler / OpenStreetMap',               resolution: 'Vector (unlimited zoom)', rights: 'API key required; free tier (100k tiles/month)', baseColor: '#c8d8e5' },
         'maptiler-basic':         { source: 'MapTiler / OpenStreetMap',               resolution: 'Vector (unlimited zoom)', rights: 'API key required; free tier (100k tiles/month)', baseColor: '#c8d8e5' },
+        'maptiler-backdrop':      { source: 'MapTiler / OpenStreetMap',               resolution: 'Vector (unlimited zoom)', rights: 'API key required; free tier (100k tiles/month)', baseColor: '#c8d8e5' },
         'maptiler-satellite':     { source: 'MapTiler satellite imagery',             resolution: '~0.5m urban / ~5m elsewhere', rights: 'API key required; free tier (100k tiles/month)', baseColor: '#000811' },
         'carto-positron':         { source: 'CARTO / OpenStreetMap',                  resolution: 'Vector (unlimited zoom)', rights: 'Free with attribution; no key required', labelToggle: true, baseColor: '#d4dadc' },
         'carto-dark':             { source: 'CARTO / OpenStreetMap',                  resolution: 'Vector (unlimited zoom)', rights: 'Free with attribution; no key required', labelToggle: true, baseColor: '#0e0e0e' },
@@ -1268,6 +1279,13 @@
         if (basemap === "maptiler-basic") {
           return new Cesium.UrlTemplateImageryProvider({
             url: mtUrl("maps/basic-v2/256"),
+            credit: "© MapTiler © OpenStreetMap contributors",
+            ...(maxLevel !== undefined && { maximumLevel: maxLevel }),
+          });
+        }
+        if (basemap === "maptiler-backdrop") {
+          return new Cesium.UrlTemplateImageryProvider({
+            url: mtUrl("maps/backdrop/256"),
             credit: "© MapTiler © OpenStreetMap contributors",
             ...(maxLevel !== undefined && { maximumLevel: maxLevel }),
           });
@@ -1401,9 +1419,6 @@
 
       async function applyBasemap(basemap) {
         if (!viewer) return;
-        // On mobile: no imagery tiles — solid color globe only to avoid memory crashes
-        const isMobBM = navigator.maxTouchPoints > 1 || /iPhone|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 1366;
-        if (isMobBM) { updateBasemapInfo(basemap); return; }
         updateBasemapInfo(basemap);
         const dateInput = document.getElementById('basemapDateInput');
         const meta = BASEMAP_META[basemap] || {};
@@ -1721,11 +1736,11 @@
 
         const isMobile = navigator.maxTouchPoints > 1 || /iPhone|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 1366;
         if (isMobile) {
-          viewer.scene.globe.maximumScreenSpaceError = 8;
+          viewer.scene.globe.maximumScreenSpaceError = 16; // coarser tiles → fewer fetched on zoom
           viewer.scene.globe.preloadSiblings = false;
           viewer.scene.globe.preloadAncestors = false;
           viewer.scene.globe.enableLighting = false;
-          viewer.scene.globe.tileCacheSize = 10;
+          viewer.scene.globe.tileCacheSize = 25;
           viewer.scene.globe.loadingDescendantLimit = 2;
           viewer.scene.skyAtmosphere.show = false;
           viewer.scene.globe.showGroundAtmosphere = false;
@@ -1734,10 +1749,10 @@
           viewer.scene.moon.show = false;
           viewer.scene.skyBox.show = true;
           viewer.targetFrameRate = 30;
-          // Remove all imagery tile layers — use solid color globe instead.
-          // Tile loading is the primary cause of memory accumulation and crashes on iOS.
-          viewer.imageryLayers.removeAll();
-          viewer.scene.globe.baseColor = new Cesium.Color(0.15, 0.20, 0.30, 1.0);
+          currentBasemap = 'carto-dark'; // dark basemap — light borders pop against dark background
+          basemapShowLabels = false;         // hide labels on mobile
+          document.getElementById('basemapSelect').value = 'carto-dark';
+          document.getElementById('basemapLabelsCheck').checked = false;
         } else {
           viewer.scene.globe.maximumScreenSpaceError = 2;
           viewer.scene.globe.preloadSiblings = true;
@@ -3783,11 +3798,11 @@
           });
           const data = await res.json();
           if (!res.ok) { status.textContent = "Error: " + (data.error || res.statusText); return; }
-          const { matches, level, count } = data;
+          const { matches, level, count, filterSpec } = data;
           if (!matches?.length) { status.textContent = "No regions matched."; return; }
           // Create a new group named after the query, add all matches as members
           const groupName = query.length > 40 ? query.slice(0, 37) + "…" : query;
-          createGroup(groupName);
+          createGroup(groupName, { query, level, filterSpec, count });
           const group = regionGroups[regionGroups.length - 1];
           let added = 0;
           for (const name of matches) {
@@ -3884,7 +3899,7 @@
           : [];
       }
 
-      function createGroup(name) {
+      function createGroup(name, aiMeta = null) {
         if (!name) return;
         regionGroups.push({
           id: nextGroupId++,
@@ -3899,6 +3914,7 @@
           members: [],
           entities: [],
           fillEntities: [],
+          aiMeta, // { query, level, filterSpec, count } — set when created via AI query
         });
         const newGroup = regionGroups[regionGroups.length - 1];
         tracks['group_'+newGroup.id] = { id:'group_'+newGroup.id, label:'Group: '+name, category:'group',
@@ -4034,6 +4050,37 @@
           });
           fillRow.append(fillLabel, fillSlider, fillPct, invertBtn);
           body.appendChild(fillRow);
+
+          // AI sourcing row (only shown for AI-generated groups)
+          if (group.aiMeta) {
+            const aiRow = document.createElement("div");
+            aiRow.className = "group-ai-row";
+            const aiToggle = document.createElement("button");
+            aiToggle.className = "group-ai-toggle";
+            aiToggle.textContent = "✦ AI query";
+            const aiDetail = document.createElement("div");
+            aiDetail.className = "group-ai-detail";
+            aiDetail.style.display = "none";
+            const { query: aq, level: al, filterSpec: afs, count: ac } = group.aiMeta;
+            let detailHtml = `<div class="group-ai-query">"${aq}"</div>`;
+            detailHtml += `<div class="group-ai-meta">Level: ${al} · ${ac} matched</div>`;
+            if (afs?.filters?.length) {
+              const fStr = afs.filters.map(f => `${f.field} ${f.op} ${JSON.stringify(f.value)}`).join(` ${afs.logic ?? 'and'} `);
+              detailHtml += `<div class="group-ai-filters">${fStr}</div>`;
+            } else if (afs?.names?.length) {
+              detailHtml += `<div class="group-ai-filters">world knowledge · ${afs.names.length} names</div>`;
+            }
+            if (afs?.sort_by) detailHtml += `<div class="group-ai-filters">sorted by ${afs.sort_by} ${afs.sort_dir ?? ''}${afs.limit ? ` · top ${afs.limit}` : ''}</div>`;
+            detailHtml += `<div class="group-ai-source">Data: US Census ACS 2022 · MIT MEDSL election results</div>`;
+            aiDetail.innerHTML = detailHtml;
+            aiToggle.addEventListener("click", () => {
+              const open = aiDetail.style.display === "";
+              aiDetail.style.display = open ? "none" : "";
+              aiToggle.classList.toggle("group-ai-toggle-open", !open);
+            });
+            aiRow.append(aiToggle, aiDetail);
+            body.appendChild(aiRow);
+          }
 
           // Member add row (reuses the shared regionDatalist)
           const addRow = document.createElement("div");

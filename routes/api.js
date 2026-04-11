@@ -27,40 +27,73 @@ function getRegionData() {
 const FIELD_DOCS = `
 Query types:
 
-1. level "county" or "state" — filter US regions by data fields:
+1. level "county" — filter US counties by data fields:
 
-  County fields:
+  Fields:
+    name                       — county display name, e.g. "Travis County, Texas"
     state                      — state name, e.g. "Texas"
     population                 — total population (integer)
     median_age                 — median age in years (float)
     median_household_income    — median household income in USD (integer)
+    poverty_pct                — % of population below poverty line (float)
+    unemployment_pct           — unemployment rate % (float)
+    bachelors_pct              — % of adults with bachelor's degree or higher (float)
     election_2016_winner       — "Republican" or "Democrat"
     election_2016_rep          — Republican vote count (integer)
     election_2016_dem          — Democrat vote count (integer)
     election_2020_winner       — "Republican" or "Democrat"
     election_2020_rep          — Republican vote count (integer)
     election_2020_dem          — Democrat vote count (integer)
+    election_2024_winner       — "Republican" or "Democrat"
+    election_2024_rep          — Republican vote count (integer)
+    election_2024_dem          — Democrat vote count (integer)
+    obesity_pct                — % of adults who are obese (float)
+    smoking_pct                — % of adults who currently smoke (float)
+    diabetes_pct               — % of adults with diagnosed diabetes (float)
+    no_insurance_pct           — % of adults aged 18–64 without health insurance (float)
 
-  State fields:
+2. level "state" — filter US states by data fields, OR return by name/geography:
+
+  Fields:
+    name                       — state name, e.g. "California"
     population                 — total population (integer)
     median_age                 — median age in years (float)
     median_household_income    — median household income in USD (integer)
+    poverty_pct                — % of population below poverty line (float)
+    unemployment_pct           — unemployment rate % (float)
+    bachelors_pct              — % of adults with bachelor's degree or higher (float)
     election_2016_winner       — "Republican" or "Democrat"
-    election_2016_rep_pct      — Republican vote percentage (float, 0–100)
+    election_2016_rep_pct      — Republican vote % (float, 0–100)
     election_2020_winner       — "Republican" or "Democrat"
-    election_2020_rep_pct      — Republican vote percentage (float, 0–100)
+    election_2020_rep_pct      — Republican vote % (float, 0–100)
+    election_2024_winner       — "Republican" or "Democrat"
+    election_2024_rep_pct      — Republican vote % (float, 0–100)
+    obesity_pct                — % of adults who are obese (population-weighted from counties, float)
+    smoking_pct                — % of adults who currently smoke (float)
+    diabetes_pct               — % of adults with diagnosed diabetes (float)
+    no_insurance_pct           — % of adults aged 18–64 without health insurance (float)
 
-  Operators: eq, ne, gt, lt, gte, lte, in (value is an array for "in")
-  Logic: "and" (default) or "or"
-  For top-N / bottom-N queries: set sort_by to the field, sort_dir to "desc" or "asc", and limit to N.
+  IMPORTANT: "state" is a county-only field. State records use "name" for the state name.
+  For name/geography-based state queries (e.g. "states starting with N", "landlocked states",
+  "states in the South"), ALWAYS use the "names" array from world knowledge rather than filters.
 
-2. level "country" — use your world knowledge to return a list of country names.
-   Set filters to [] and populate "names" with the matching country names in English
-   (e.g. "Germany", "France"). Use this for geopolitical, geographic, or cultural groupings.
+3. level "country" — filter countries by data fields OR return by name/geography:
+
+  Fields (World Bank data):
+    population                 — total population (integer)
+    gdp_per_capita             — GDP per capita in USD (float)
+    life_expectancy            — life expectancy at birth in years (float)
+    co2_per_capita             — CO₂ emissions per capita in metric tons (float)
+
+  For geopolitical/geographic groupings (NATO, EU, landlocked, etc.) use "names" from world knowledge.
+  For data-based queries (e.g. "countries with GDP per capita over $50k") use filters.
+
+Operators: eq, ne, gt, lt, gte, lte, in (value is array), startswith, contains
+Logic: "and" (default) or "or"
+For top-N / bottom-N: set sort_by, sort_dir ("asc"/"desc"), and limit.
 `.trim();
 
 function applyFilters(record, filters, logic) {
-  if (!filters.length) return false; // empty filter matches nothing
   const results = filters.map(({ field, op, value }) => {
     const v = record[field];
     if (v === null || v === undefined) return false;
@@ -71,8 +104,10 @@ function applyFilters(record, filters, logic) {
       case "lt":  return v < value;
       case "gte": return v >= value;
       case "lte": return v <= value;
-      case "in":  return Array.isArray(value) &&
-                         value.some(x => String(x).toLowerCase() === String(v).toLowerCase());
+      case "in":         return Array.isArray(value) &&
+                                value.some(x => String(x).toLowerCase() === String(v).toLowerCase());
+      case "startswith": return String(v).toLowerCase().startsWith(String(value).toLowerCase());
+      case "contains":   return String(v).toLowerCase().includes(String(value).toLowerCase());
       default:    return false;
     }
   });
@@ -112,7 +147,7 @@ router.post("/api/region-query", async (req, res) => {
                 type: "object",
                 properties: {
                   field: { type: "string" },
-                  op:    { type: "string", enum: ["eq","ne","gt","lt","gte","lte","in"] },
+                  op:    { type: "string", enum: ["eq","ne","gt","lt","gte","lte","in","startswith","contains"] },
                   value: {},
                 },
                 required: ["field", "op", "value"],
@@ -121,7 +156,7 @@ router.post("/api/region-query", async (req, res) => {
             names: {
               type: "array",
               items: { type: "string" },
-              description: "For country-level queries: list of country names in English based on world knowledge.",
+              description: "For country or state queries answerable from world knowledge: list of names directly (e.g. NATO members, states starting with C, landlocked states). Preferred over filters for name/geography-based state queries.",
             },
             sort_by:  { type: "string", description: "Field to sort results by (for top-N or bottom-N queries)." },
             sort_dir: { type: "string", enum: ["asc", "desc"], description: "Sort direction. Use 'desc' for largest/highest, 'asc' for smallest/lowest." },
@@ -154,16 +189,30 @@ router.post("/api/region-query", async (req, res) => {
 
   let records = []; // [{ name, sortVal }]
   if (level === "country") {
-    // AI returns country names directly from world knowledge
+    if (names.length) {
+      // World-knowledge path: AI returns country names directly
+      records = names.map(n => ({ name: n, sortVal: null }));
+    } else if (filters.length && data.countries) {
+      // Data-filter path: filter World Bank country records
+      for (const [name, record] of Object.entries(data.countries)) {
+        if (applyFilters(record, filters, logic))
+          records.push({ name, sortVal: sort_by ? record[sort_by] : null });
+      }
+    }
+  } else if (level === "state" && names.length) {
+    // AI answered from world knowledge — use names directly
     records = names.map(n => ({ name: n, sortVal: null }));
   } else if (level === "county") {
     for (const [fips, record] of Object.entries(data.counties)) {
-      if (applyFilters(record, filters, logic))
-        records.push({ name: record.display_name, sortVal: sort_by ? record[sort_by] : null });
+      // Expose display_name as "name" field for name-pattern filters
+      const r = { ...record, name: record.display_name };
+      if (!filters.length || applyFilters(r, filters, logic))
+        records.push({ name: record.display_name, sortVal: sort_by ? r[sort_by] : null });
     }
   } else {
+    // level === "state"
     for (const [fips, record] of Object.entries(data.states)) {
-      if (applyFilters(record, filters, logic))
+      if (!filters.length || applyFilters(record, filters, logic))
         records.push({ name: record.name, sortVal: sort_by ? record[sort_by] : null });
     }
   }
