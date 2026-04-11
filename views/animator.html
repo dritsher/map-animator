@@ -3813,7 +3813,7 @@
             } else if (level === "state") {
               // State names returned as "Texas" but stored as "Texas (United States of America)"
               const key = [...regionLookup.keys()].find(k =>
-                k.startsWith(name + " (") && regionLookup.get(k).key.startsWith("state||")
+                k.startsWith(name + " (") && regionLookup.get(k).key.startsWith("state||United States of America||")
               );
               if (key) { addMemberToGroup(group.id, key); added++; }
             } else if (level === "country") {
@@ -3873,6 +3873,11 @@
       // ── Region Groups ───────────────────────────────────────────────────────
       let regionGroups = [];
       let nextGroupId  = 1;
+      const GROUP_COLORS = [
+        '#3b82f6','#ef4444','#22c55e','#f59e0b','#a855f7',
+        '#06b6d4','#f97316','#ec4899','#84cc16','#14b8a6',
+      ];
+      let nextGroupColorIdx = 0;
 
       function getGroupPolygons(group) {
         const all = [];
@@ -3906,11 +3911,11 @@
         regionGroups.push({
           id: nextGroupId++,
           name,
-          color: "#3388ff",
+          color: GROUP_COLORS[nextGroupColorIdx++ % GROUP_COLORS.length],
           outlineOpacity: 1.0,
           outlineWidth: 2.0,
           outlineRef: null,
-          fillOpacity: 0,
+          fillOpacity: 0.3,
           fillRef: null,
           invert: false,
           members: [],
