@@ -765,10 +765,70 @@
         padding: 6px 16px;
         font-size: 13px;
       }
+
+      /* ── Mobile layout ───────────────────────────────────────────────────── */
+      #mobileSidebarToggle {
+        display: none;
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        z-index: 1000;
+        background: rgba(255,255,255,0.92);
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        padding: 6px 10px;
+        font-size: 20px;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      }
+
+      @media (max-width: 1366px) {
+        #app {
+          grid-template-columns: 1fr;
+          grid-template-rows: minmax(0, 1fr) auto;
+        }
+        #sidebar {
+          grid-column: 1;
+          grid-row: 1;
+          position: fixed;
+          top: 0; left: 0; bottom: 0;
+          width: min(340px, 90vw);
+          z-index: 600;
+          transform: translateX(-100%);
+          transition: transform 0.25s ease;
+          box-shadow: 2px 0 12px rgba(0,0,0,0.18);
+        }
+        #sidebar.mobile-open {
+          transform: translateX(0);
+        }
+        #cesiumPane {
+          grid-column: 1;
+          grid-row: 1;
+        }
+        #tlFooter {
+          grid-column: 1;
+        }
+        #mobileSidebarToggle {
+          display: block;
+          z-index: 700;
+        }
+        #mobileSidebarOverlay {
+          display: none;
+          position: absolute;
+          inset: 0;
+          background: rgba(0,0,0,0.35);
+          z-index: 550;
+        }
+        #mobileSidebarOverlay.mobile-open {
+          display: block;
+        }
+      }
     </style>
   </head>
   <body>
+    <button id="mobileSidebarToggle" title="Toggle menu">☰</button>
     <div id="app">
+      <div id="mobileSidebarOverlay"></div>
       <div id="sidebar">
         <h2>Map Animator</h2>
 
@@ -1341,6 +1401,9 @@
 
       async function applyBasemap(basemap) {
         if (!viewer) return;
+        // On mobile: no imagery tiles — solid color globe only to avoid memory crashes
+        const isMobBM = navigator.maxTouchPoints > 1 || /iPhone|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 1366;
+        if (isMobBM) { updateBasemapInfo(basemap); return; }
         updateBasemapInfo(basemap);
         const dateInput = document.getElementById('basemapDateInput');
         const meta = BASEMAP_META[basemap] || {};
@@ -1608,8 +1671,22 @@
 
       // ── Cesium Init ─────────────────────────────────────────────────────────
       function initViewer() {
+        const _isMobile = navigator.maxTouchPoints > 1 || /iPhone|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 1366;
 
+        // Check WebGL support before attempting to load Cesium
+        const testCanvas = document.createElement("canvas");
+        const gl = testCanvas.getContext("webgl2") || testCanvas.getContext("webgl");
+        if (!gl) {
+          document.getElementById("cesiumContainer").innerHTML =
+            `<div style="display:flex;align-items:center;justify-content:center;height:100%;background:#111;color:#eee;text-align:center;padding:24px;font-family:Arial,sans-serif;">
+              <div><h2 style="color:#fff;">WebGL Not Available</h2>
+              <p>This browser does not support WebGL, which is required to display the map.</p>
+              <p>Try opening this page in Safari on desktop, or enable WebGL in your browser settings.</p></div>
+            </div>`;
+          return;
+        }
 
+        try {
         viewer = new Cesium.Viewer("cesiumContainer", {
           animation: false,
           timeline: false,
@@ -1624,9 +1701,8 @@
           // Use the smooth mathematical ellipsoid until a Cesium-native terrain
           // source (e.g. Ion World Terrain) is available.
           terrainProvider: new Cesium.EllipsoidTerrainProvider(),
-          contextOptions: {
-            webgl: { preserveDrawingBuffer: true },
-          },
+          // preserveDrawingBuffer needed for screenshot export — skip on mobile to save GPU memory
+          ...(_isMobile ? {} : { contextOptions: { webgl: { preserveDrawingBuffer: true } } }),
         });
 
         // Update the tile-level indicator whenever the camera moves
@@ -1642,19 +1718,41 @@
         viewer.scene.fog.enabled = true;
         viewer.scene.fog.density = 0.0002;
         viewer.scene.fog.minimumBrightness = 0.85;
-        viewer.scene.globe.maximumScreenSpaceError = 2;
-        viewer.scene.globe.preloadSiblings = true;
-        viewer.scene.globe.preloadAncestors = true;
-        viewer.scene.globe.enableLighting = true;
-        viewer.scene.light = new Cesium.SunLight({ color: Cesium.Color.WHITE, intensity: 3.0 });
-        viewer.scene.skyAtmosphere.show = true;
-        viewer.scene.globe.showGroundAtmosphere = true;
-        viewer.shadows = true;
-        viewer.scene.shadowMap.enabled = true;
-        viewer.scene.shadowMap.softShadows = true;
-        viewer.scene.moon.show = true;
-        viewer.scene.sun.show = true;
-        viewer.scene.skyBox.show = true;
+
+        const isMobile = navigator.maxTouchPoints > 1 || /iPhone|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 1366;
+        if (isMobile) {
+          viewer.scene.globe.maximumScreenSpaceError = 8;
+          viewer.scene.globe.preloadSiblings = false;
+          viewer.scene.globe.preloadAncestors = false;
+          viewer.scene.globe.enableLighting = false;
+          viewer.scene.globe.tileCacheSize = 10;
+          viewer.scene.globe.loadingDescendantLimit = 2;
+          viewer.scene.skyAtmosphere.show = false;
+          viewer.scene.globe.showGroundAtmosphere = false;
+          viewer.shadows = false;
+          viewer.scene.shadowMap.enabled = false;
+          viewer.scene.moon.show = false;
+          viewer.scene.skyBox.show = true;
+          viewer.targetFrameRate = 30;
+          // Remove all imagery tile layers — use solid color globe instead.
+          // Tile loading is the primary cause of memory accumulation and crashes on iOS.
+          viewer.imageryLayers.removeAll();
+          viewer.scene.globe.baseColor = new Cesium.Color(0.15, 0.20, 0.30, 1.0);
+        } else {
+          viewer.scene.globe.maximumScreenSpaceError = 2;
+          viewer.scene.globe.preloadSiblings = true;
+          viewer.scene.globe.preloadAncestors = true;
+          viewer.scene.globe.enableLighting = true;
+          viewer.scene.light = new Cesium.SunLight({ color: Cesium.Color.WHITE, intensity: 3.0 });
+          viewer.scene.skyAtmosphere.show = true;
+          viewer.scene.globe.showGroundAtmosphere = true;
+          viewer.shadows = true;
+          viewer.scene.shadowMap.enabled = true;
+          viewer.scene.shadowMap.softShadows = true;
+          viewer.scene.moon.show = true;
+          viewer.scene.sun.show = true;
+          viewer.scene.skyBox.show = true;
+        }
 
         // When a polygon tessellation error reaches the scene:
         // 1. Remove all fill entities immediately so the bad geometry is gone.
@@ -1672,6 +1770,16 @@
         setTimeout(() => { updateBasemapInfo(currentBasemap); applyBasemap(currentBasemap); }, 0);
 
         setStatus("Ready. Add keyframes to build an animation.");
+        } catch (e) {
+          console.error("Cesium init failed:", e);
+          document.getElementById("cesiumContainer").innerHTML =
+            `<div style="display:flex;align-items:center;justify-content:center;height:100%;background:#111;color:#eee;text-align:center;padding:24px;font-family:Arial,sans-serif;">
+              <div><h2 style="color:#fff;">Map Could Not Load</h2>
+              <p>The 3D map failed to initialize, likely due to memory or WebGL limitations on this device.</p>
+              <p>For the full experience, open this page on a desktop browser.</p>
+              <p style="font-size:11px;color:#aaa;margin-top:16px;">${e.message || e}</p></div>
+            </div>`;
+        }
       }
 
       // ── Camera Helpers ──────────────────────────────────────────────────────
@@ -1723,7 +1831,7 @@
         }
         if (trackId.startsWith('group_')) {
           const g = regionGroups.find(g => g.id === parseInt(trackId.slice(6)));
-          return g ? { color:g.color, fillOpacity:g.fillOpacity, invert:g.invert } : null;
+          return g ? { color:g.color, fillOpacity:g.fillOpacity, invert:g.invert, outlineOpacity:g.outlineOpacity??1, outlineWidth:g.outlineWidth??2 } : null;
         }
         if (trackId.startsWith('city_')) {
           const m = cityMarkers.find(m => m.id === parseInt(trackId.slice(5)));
@@ -1880,20 +1988,29 @@
         (state.groupStates || []).forEach(gs => {
           const g = regionGroups.find(g => g.id === gs.id);
           if (!g) return;
-          const oldColor = g.color, oldInvert = g.invert, oldFillOpacity = g.fillOpacity;
-          g.color  = gs.color;
-          g.invert = gs.invert;
-          const colorChanged  = oldColor  !== gs.color;
-          const invertChanged = oldInvert !== gs.invert;
-          if (gs.fillOpacity > 0 && g.fillEntities.length > 0 && !colorChanged && !invertChanged) {
-            g.fillEntities.forEach(item => {
-              if (item instanceof Cesium.ImageryLayer)
-                item.alpha = gs.fillOpacity;
-              else
-                item.polygon.material.color.setValue(hexToColor(g.color).withAlpha(gs.fillOpacity));
-            });
-            g.fillOpacity = gs.fillOpacity;
-          } else if (gs.fillOpacity !== oldFillOpacity || colorChanged || invertChanged) {
+          const colorChanged  = g.color !== gs.color;
+          const invertChanged = g.invert !== gs.invert;
+          const widthChanged  = (g.outlineWidth??2) !== (gs.outlineWidth??g.outlineWidth??2);
+          const newOutlineOpacity = gs.outlineOpacity ?? g.outlineOpacity ?? 1;
+          g.color        = gs.color;
+          g.invert       = gs.invert;
+          g.outlineWidth = gs.outlineWidth ?? g.outlineWidth ?? 2;
+
+          // Outline: fast-path via CallbackProperty ref
+          if (g.outlineRef && !colorChanged && !widthChanged) {
+            g.outlineRef.color   = g.color;
+            g.outlineRef.opacity = newOutlineOpacity;
+            g.outlineOpacity     = newOutlineOpacity;
+          } else {
+            g.outlineOpacity = newOutlineOpacity;
+          }
+
+          // Fill: fast-path via CallbackProperty ref
+          if (g.fillRef && g.fillEntities.length > 0 && !g.invert && !colorChanged && !invertChanged) {
+            g.fillRef.color   = g.color;
+            g.fillRef.opacity = gs.fillOpacity;
+            g.fillOpacity     = gs.fillOpacity;
+          } else if (gs.fillOpacity !== g.fillOpacity || colorChanged || invertChanged || widthChanged) {
             g.fillOpacity = gs.fillOpacity;
             refreshGroupEntities(g);
           }
@@ -2136,8 +2253,10 @@
         }
         if (trackId.startsWith('group_')) {
           return {
-            color:       lerpColor(a.color, b.color, alpha),
-            fillOpacity: a.fillOpacity + (b.fillOpacity - a.fillOpacity) * alpha,
+            color:          lerpColor(a.color, b.color, alpha),
+            fillOpacity:    a.fillOpacity    + (b.fillOpacity    - a.fillOpacity)    * alpha,
+            outlineOpacity: (a.outlineOpacity??1) + ((b.outlineOpacity??1) - (a.outlineOpacity??1)) * alpha,
+            outlineWidth:   (a.outlineWidth??2)   + ((b.outlineWidth??2)   - (a.outlineWidth??2))   * alpha,
             invert: alpha < 0.5 ? a.invert : b.invert,
           };
         }
@@ -2509,7 +2628,7 @@
         return new Cesium.Color(r, g, b, 1.0);
       }
 
-      function patchDataSourceEntities(ds, borderWidth, zIndex = 0) {
+      function patchDataSourceEntities(ds, borderWidth, zIndex = 0, clamp = true) {
         const now = Cesium.JulianDate.now();
         const toRemove = [];
 
@@ -2549,8 +2668,8 @@
               positions:     positions,
               width:         borderWidth || DEFAULT_WIDTH,
               material:      new Cesium.ColorMaterialProperty(DEFAULT_OUTLINE),
-              clampToGround: true,
-              zIndex:        zIndex,
+              clampToGround: clamp,
+              zIndex:        clamp ? zIndex : undefined,
             });
           } catch (e) {}
         }
@@ -2567,21 +2686,41 @@
         document.getElementById('bordersLoadingBar').style.display = '';
         setBordersLoadingProgress(5, 'Loading countries…');
 
-        countryDataSource = await Cesium.GeoJsonDataSource.load("/data/countries.geojson", {
+        const isMob = navigator.maxTouchPoints > 1 || /iPhone|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 1366;
+        const countriesUrl = isMob ? "/data/countries-mobile.geojson" : "/data/countries.geojson";
+        const statesUrl    = isMob ? "/data/states-mobile.geojson"    : "/data/states.geojson";
+
+        countryDataSource = await Cesium.GeoJsonDataSource.load(countriesUrl, {
           fill:        Cesium.Color.WHITE.withAlpha(0.0),
           stroke:      DEFAULT_OUTLINE,
           strokeWidth: DEFAULT_WIDTH,
         });
-        patchDataSourceEntities(countryDataSource, DEFAULT_WIDTH, 2);
+        // On mobile: use simplified GeoJSON + non-clamped polylines (no GroundPolylinePrimitive GPU tessellation)
+        patchDataSourceEntities(countryDataSource, DEFAULT_WIDTH, 2, !isMob);
+        if (isMob) {
+          // Shared CallbackProperty — set once so opacity slider only updates countryBorderAlpha (no entity iteration)
+          const cbCountry = new Cesium.ColorMaterialProperty(
+            new Cesium.CallbackProperty(() => hexToCesiumColor(borderColor, countryBorderAlpha), false)
+          );
+          for (const e of countryDataSource.entities.values)
+            if (e.polyline) e.polyline.material = cbCountry;
+        }
         viewer.dataSources.add(countryDataSource);
         setBordersLoadingProgress(45, 'Loading states…');
 
-        stateDataSource = await Cesium.GeoJsonDataSource.load("/data/states.geojson", {
+        stateDataSource = await Cesium.GeoJsonDataSource.load(statesUrl, {
           fill:        Cesium.Color.WHITE.withAlpha(0.0),
           stroke:      DEFAULT_OUTLINE,
           strokeWidth: DEFAULT_WIDTH * 0.6,
         });
-        patchDataSourceEntities(stateDataSource, DEFAULT_WIDTH * 0.6, 1);
+        patchDataSourceEntities(stateDataSource, DEFAULT_WIDTH * 0.6, 1, !isMob);
+        if (isMob) {
+          const cbState = new Cesium.ColorMaterialProperty(
+            new Cesium.CallbackProperty(() => hexToCesiumColor(borderColor, stateBorderAlpha), false)
+          );
+          for (const e of stateDataSource.entities.values)
+            if (e.polyline) e.polyline.material = cbState;
+        }
         viewer.dataSources.add(stateDataSource);
         setBordersLoadingProgress(85, 'Building region index…');
 
@@ -3391,34 +3530,32 @@
       let countryBorderAlpha = 0.7; // shared opacity read by the CallbackProperty every frame
       let stateBorderAlpha   = 0.5;
 
+      const _isMobBorder = () => navigator.maxTouchPoints > 1 || /iPhone|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 1366;
+
       function setCountryBorderOpacity(ratio) {
         if (!countryDataSource) return;
         countryBorderAlpha = ratio;
+        if (_isMobBorder()) return; // CallbackProperty reads countryBorderAlpha every frame
         if (!countryBorderMat) {
-          // CallbackProperty(isConstant:false) is evaluated every frame — just update
-          // countryBorderAlpha and Cesium picks it up with no entity reprocessing.
           countryBorderMat = new Cesium.ColorMaterialProperty(
             new Cesium.CallbackProperty(() => hexToCesiumColor(borderColor, countryBorderAlpha), false)
           );
-          for (const entity of countryDataSource.entities.values) {
+          for (const entity of countryDataSource.entities.values)
             if (entity.polyline) entity.polyline.material = countryBorderMat;
-          }
         }
-        // No else needed — CallbackProperty reads countryBorderAlpha automatically.
       }
 
       function setStateBorderOpacity(ratio) {
         if (!stateDataSource) return;
         stateBorderAlpha = ratio;
+        if (_isMobBorder()) return; // CallbackProperty reads stateBorderAlpha every frame
         if (!stateBorderMat) {
           stateBorderMat = new Cesium.ColorMaterialProperty(
             new Cesium.CallbackProperty(() => hexToCesiumColor(borderColor, stateBorderAlpha), false)
           );
-          for (const entity of stateDataSource.entities.values) {
+          for (const entity of stateDataSource.entities.values)
             if (entity.polyline) entity.polyline.material = stateBorderMat;
-          }
         }
-        // No else needed — CallbackProperty reads stateBorderAlpha automatically.
       }
 
       function setBorderColor(hex) {
@@ -3654,7 +3791,25 @@
           const group = regionGroups[regionGroups.length - 1];
           let added = 0;
           for (const name of matches) {
-            if (regionLookup.has(name)) { addMemberToGroup(group.id, name); added++; }
+            if (regionLookup.has(name)) {
+              addMemberToGroup(group.id, name); added++;
+            } else if (level === "state") {
+              // State names returned as "Texas" but stored as "Texas (United States of America)"
+              const key = [...regionLookup.keys()].find(k =>
+                k.startsWith(name + " (") && regionLookup.get(k).key.startsWith("state||")
+              );
+              if (key) { addMemberToGroup(group.id, key); added++; }
+            } else if (level === "country") {
+              // AI may return "United States" but lookup has "United States of America" — fuzzy match
+              const nameLower = name.toLowerCase();
+              const candidates = [...regionLookup.keys()].filter(k =>
+                regionLookup.get(k).key.startsWith("country||") &&
+                (k.toLowerCase().startsWith(nameLower) || nameLower.startsWith(k.toLowerCase()))
+              );
+              // Pick shortest candidate — avoids "United States Minor Outlying Islands" over "United States of America"
+              const key = candidates.sort((a, b) => a.length - b.length)[0];
+              if (key) { addMemberToGroup(group.id, key); added++; }
+            }
           }
           status.textContent = `Created group with ${added} ${level}s.`;
           document.getElementById("regionQuery").value = "";
@@ -3715,9 +3870,17 @@
         group.entities.forEach(e => viewer.entities.remove(e));
         group.fillEntities.forEach(removeFillItem);
         const polygons = getGroupPolygons(group);
-        group.entities    = makePolylineEntities(polygons, group.color, 2.0, 1.0);
+        if (!group.outlineRef) group.outlineRef = { color: group.color, opacity: group.outlineOpacity ?? 1 };
+        if (!group.fillRef)    group.fillRef    = { color: group.color, opacity: group.fillOpacity };
+        group.outlineRef.color   = group.color;
+        group.outlineRef.opacity = group.outlineOpacity ?? 1;
+        group.fillRef.color      = group.color;
+        group.fillRef.opacity    = group.fillOpacity;
+        group.entities    = (group.outlineOpacity ?? 1) > 0
+          ? makePolylineEntities(polygons, group.color, group.outlineWidth ?? 2, group.outlineOpacity ?? 1, group.outlineRef)
+          : [];
         group.fillEntities = group.fillOpacity > 0
-          ? makeFillEntities(polygons, group.color, group.fillOpacity, group.invert)
+          ? makeFillEntities(polygons, group.color, group.fillOpacity, group.invert, group.invert ? null : group.fillRef)
           : [];
       }
 
@@ -3727,7 +3890,11 @@
           id: nextGroupId++,
           name,
           color: "#3388ff",
+          outlineOpacity: 1.0,
+          outlineWidth: 2.0,
+          outlineRef: null,
           fillOpacity: 0,
+          fillRef: null,
           invert: false,
           members: [],
           entities: [],
@@ -3807,42 +3974,66 @@
           nameEl.className = "group-name";
           nameEl.textContent = group.name;
 
-          // Fill opacity slider
-          const fillSlider = document.createElement("input");
-          fillSlider.type = "range";
-          fillSlider.min = "0"; fillSlider.max = "100"; fillSlider.step = "10";
-          fillSlider.value = String(Math.round(group.fillOpacity * 100));
-          fillSlider.className = "hl-ctrl-slider";
-          fillSlider.addEventListener("input", e => {
-            group.fillOpacity = parseInt(e.target.value) / 100;
-            refreshGroupEntities(group);
-          });
-
-          // Fill / mask toggle
-          const invertBtn = document.createElement("button");
-          invertBtn.className = "hl-toggle" + (group.invert ? " hl-toggle-active" : "");
-          invertBtn.textContent = group.invert ? "mask" : "fill";
-          invertBtn.addEventListener("click", () => {
-            group.invert = !group.invert;
-            if (group.invert && group.fillOpacity === 0) group.fillOpacity = 0.5;
-            fillSlider.value = String(Math.round(group.fillOpacity * 100));
-            invertBtn.className = "hl-toggle" + (group.invert ? " hl-toggle-active" : "");
-            invertBtn.textContent = group.invert ? "mask" : "fill";
-            refreshGroupEntities(group);
-          });
-
           // Delete group
           const delBtn = document.createElement("button");
           delBtn.className = "hl-remove";
           delBtn.textContent = "×";
           delBtn.addEventListener("click", () => deleteGroup(group.id));
 
-          header.append(swatch, nameEl, fillSlider, invertBtn, delBtn);
+          header.append(swatch, nameEl, delBtn);
           card.appendChild(header);
 
           // ── Body ────────────────────────────────────────────────────────────
           const body = document.createElement("div");
           body.className = "group-body";
+
+          // Outline row
+          body.appendChild(makeCtrlRow(
+            "Outline", group.outlineOpacity ?? 1, group.outlineWidth ?? 2,
+            (opacity) => {
+              group.outlineOpacity = opacity;
+              if (group.outlineRef) { group.outlineRef.color = group.color; group.outlineRef.opacity = opacity; }
+              else refreshGroupEntities(group);
+            },
+            (width) => { group.outlineWidth = width; refreshGroupEntities(group); }
+          ));
+
+          // Fill row
+          const fillRow = document.createElement("div");
+          fillRow.className = "hl-ctrl-row";
+          const fillLabel = document.createElement("span");
+          fillLabel.className = "hl-ctrl-label";
+          fillLabel.textContent = "Fill";
+          const fillSlider = document.createElement("input");
+          fillSlider.type = "range";
+          fillSlider.min = "0"; fillSlider.max = "100"; fillSlider.step = "5";
+          fillSlider.value = String(Math.round(group.fillOpacity * 100));
+          fillSlider.className = "hl-ctrl-slider";
+          const fillPct = document.createElement("span");
+          fillPct.className = "hl-ctrl-pct";
+          fillPct.textContent = Math.round(group.fillOpacity * 100) + "%";
+          fillSlider.addEventListener("input", e => {
+            fillPct.textContent = e.target.value + "%";
+            group.fillOpacity = parseInt(e.target.value) / 100;
+            if (group.fillRef && group.fillEntities.length > 0 && !group.invert) {
+              group.fillRef.color   = group.color;
+              group.fillRef.opacity = group.fillOpacity;
+            } else {
+              refreshGroupEntities(group);
+            }
+          });
+          const invertBtn = document.createElement("button");
+          invertBtn.className = "hl-toggle" + (group.invert ? " hl-toggle-active" : "");
+          invertBtn.textContent = group.invert ? "mask" : "fill";
+          invertBtn.addEventListener("click", () => {
+            group.invert = !group.invert;
+            if (group.invert && group.fillOpacity === 0) { group.fillOpacity = 0.5; fillSlider.value = "50"; fillPct.textContent = "50%"; }
+            invertBtn.className = "hl-toggle" + (group.invert ? " hl-toggle-active" : "");
+            invertBtn.textContent = group.invert ? "mask" : "fill";
+            refreshGroupEntities(group);
+          });
+          fillRow.append(fillLabel, fillSlider, fillPct, invertBtn);
+          body.appendChild(fillRow);
 
           // Member add row (reuses the shared regionDatalist)
           const addRow = document.createElement("div");
@@ -5586,7 +5777,10 @@
       updateProgressUI(0);
       initViewer();
       // Apply the currently-selected export resolution so the viewport is WYSIWYG from the start
+      // Skip on mobile — let Cesium fill the screen at native resolution
       (() => {
+        const isMob = navigator.maxTouchPoints > 1 || /iPhone|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 1366;
+        if (isMob) return;
         const sel = document.getElementById("resolutionSelect");
         const [w, h] = sel.value.split("x").map(Number);
         setViewerResolution(w, h);
@@ -5596,6 +5790,17 @@
       tlBuildLabels();
       tlInitEvents();
       tlRenderLoop();
+
+      // ── Mobile sidebar toggle ─────────────────────────────────────────────
+      (() => {
+        const toggleBtn = document.getElementById("mobileSidebarToggle");
+        const overlay   = document.getElementById("mobileSidebarOverlay");
+        const sidebar   = document.getElementById("sidebar");
+        function openSidebar()  { sidebar.classList.add("mobile-open");    overlay.classList.add("mobile-open");    toggleBtn.textContent = "✕"; }
+        function closeSidebar() { sidebar.classList.remove("mobile-open"); overlay.classList.remove("mobile-open"); toggleBtn.textContent = "☰"; }
+        toggleBtn.addEventListener("click", () => sidebar.classList.contains("mobile-open") ? closeSidebar() : openSidebar());
+        overlay.addEventListener("click", closeSidebar);
+      })();
     </script>
 
     <div id="modalOverlay">

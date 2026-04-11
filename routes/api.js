@@ -25,32 +25,42 @@ function getRegionData() {
 // ── /api/region-query ────────────────────────────────────────────────────────
 
 const FIELD_DOCS = `
-Available fields for "county" level:
-  state                      — state name, e.g. "Texas"
-  population                 — total population (integer)
-  median_age                 — median age in years (float)
-  median_household_income    — median household income in USD (integer)
-  election_2016_winner       — "Republican" or "Democrat"
-  election_2016_rep          — Republican vote count (integer)
-  election_2016_dem          — Democrat vote count (integer)
-  election_2020_winner       — "Republican" or "Democrat"
-  election_2020_rep          — Republican vote count (integer)
-  election_2020_dem          — Democrat vote count (integer)
+Query types:
 
-Available fields for "state" level:
-  population                 — total population (integer)
-  median_age                 — median age in years (float)
-  median_household_income    — median household income in USD (integer)
-  election_2016_winner       — "Republican" or "Democrat"
-  election_2016_rep_pct      — Republican vote percentage (float, 0–100)
-  election_2020_winner       — "Republican" or "Democrat"
-  election_2020_rep_pct      — Republican vote percentage (float, 0–100)
+1. level "county" or "state" — filter US regions by data fields:
 
-Operators: eq, ne, gt, lt, gte, lte, in (value is an array for "in")
-Logic: "and" (default) or "or"
+  County fields:
+    state                      — state name, e.g. "Texas"
+    population                 — total population (integer)
+    median_age                 — median age in years (float)
+    median_household_income    — median household income in USD (integer)
+    election_2016_winner       — "Republican" or "Democrat"
+    election_2016_rep          — Republican vote count (integer)
+    election_2016_dem          — Democrat vote count (integer)
+    election_2020_winner       — "Republican" or "Democrat"
+    election_2020_rep          — Republican vote count (integer)
+    election_2020_dem          — Democrat vote count (integer)
+
+  State fields:
+    population                 — total population (integer)
+    median_age                 — median age in years (float)
+    median_household_income    — median household income in USD (integer)
+    election_2016_winner       — "Republican" or "Democrat"
+    election_2016_rep_pct      — Republican vote percentage (float, 0–100)
+    election_2020_winner       — "Republican" or "Democrat"
+    election_2020_rep_pct      — Republican vote percentage (float, 0–100)
+
+  Operators: eq, ne, gt, lt, gte, lte, in (value is an array for "in")
+  Logic: "and" (default) or "or"
+  For top-N / bottom-N queries: set sort_by to the field, sort_dir to "desc" or "asc", and limit to N.
+
+2. level "country" — use your world knowledge to return a list of country names.
+   Set filters to [] and populate "names" with the matching country names in English
+   (e.g. "Germany", "France"). Use this for geopolitical, geographic, or cultural groupings.
 `.trim();
 
 function applyFilters(record, filters, logic) {
+  if (!filters.length) return false; // empty filter matches nothing
   const results = filters.map(({ field, op, value }) => {
     const v = record[field];
     if (v === null || v === undefined) return false;
@@ -94,7 +104,7 @@ router.post("/api/region-query", async (req, res) => {
         input_schema: {
           type: "object",
           properties: {
-            level:   { type: "string", enum: ["county", "state"] },
+            level:   { type: "string", enum: ["county", "state", "country"] },
             logic:   { type: "string", enum: ["and", "or"] },
             filters: {
               type: "array",
@@ -108,6 +118,14 @@ router.post("/api/region-query", async (req, res) => {
                 required: ["field", "op", "value"],
               },
             },
+            names: {
+              type: "array",
+              items: { type: "string" },
+              description: "For country-level queries: list of country names in English based on world knowledge.",
+            },
+            sort_by:  { type: "string", description: "Field to sort results by (for top-N or bottom-N queries)." },
+            sort_dir: { type: "string", enum: ["asc", "desc"], description: "Sort direction. Use 'desc' for largest/highest, 'asc' for smallest/lowest." },
+            limit:    { type: "integer", description: "Maximum number of results to return (for top-N queries)." },
           },
           required: ["level", "filters"],
         },
@@ -129,24 +147,39 @@ router.post("/api/region-query", async (req, res) => {
     return res.status(422).json({ error: "Could not interpret query", detail: msg });
   }
 
-  const { level, filters, logic = "and" } = filterSpec;
-  if (!["county", "state"].includes(level) || !Array.isArray(filters)) {
+  const { level, filters = [], names = [], logic = "and", sort_by, sort_dir, limit } = filterSpec;
+  if (!["county", "state", "country"].includes(level)) {
     return res.status(422).json({ error: "Invalid filter spec from AI", spec: filterSpec });
   }
 
-  // Apply filters to actual data — no hallucination possible here
-  const matches = [];
-  if (level === "county") {
+  let records = []; // [{ name, sortVal }]
+  if (level === "country") {
+    // AI returns country names directly from world knowledge
+    records = names.map(n => ({ name: n, sortVal: null }));
+  } else if (level === "county") {
     for (const [fips, record] of Object.entries(data.counties)) {
-      if (applyFilters(record, filters, logic)) matches.push(record.display_name);
+      if (applyFilters(record, filters, logic))
+        records.push({ name: record.display_name, sortVal: sort_by ? record[sort_by] : null });
     }
   } else {
-    const STATE_FIPS = data.states;
     for (const [fips, record] of Object.entries(data.states)) {
-      if (applyFilters(record, filters, logic)) matches.push(record.name);
+      if (applyFilters(record, filters, logic))
+        records.push({ name: record.name, sortVal: sort_by ? record[sort_by] : null });
     }
   }
 
+  if (sort_by) {
+    const dir = sort_dir === "asc" ? 1 : -1;
+    records.sort((a, b) => {
+      if (a.sortVal == null && b.sortVal == null) return 0;
+      if (a.sortVal == null) return 1;
+      if (b.sortVal == null) return -1;
+      return dir * (a.sortVal - b.sortVal);
+    });
+  }
+  if (limit) records = records.slice(0, limit);
+
+  const matches = records.map(r => r.name);
   res.json({ level, filterSpec, matches, count: matches.length });
 });
 
