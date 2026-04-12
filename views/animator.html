@@ -373,6 +373,20 @@
         background: #888; border-radius: 8px;
         padding: 1px 5px; flex-shrink: 0; line-height: 14px;
       }
+      .group-icon-btn {
+        width: auto; margin: 0; padding: 0 3px; font-size: 13px;
+        background: none; border: none; cursor: pointer; opacity: 0.9; flex-shrink: 0;
+        line-height: 1;
+      }
+      .group-icon-btn:hover { opacity: 1; }
+      .group-icon-btn-off { opacity: 0.3; }
+      .group-icon-btn-on  { opacity: 1; filter: drop-shadow(0 0 3px currentColor); }
+      .group-members-toggle {
+        font-size: 11px; color: #555; padding: 3px 2px 2px;
+        cursor: pointer; user-select: none; display: flex; align-items: center; gap: 3px;
+      }
+      .group-members-toggle:hover { color: #222; }
+      .group-members-arrow { font-size: 9px; color: #888; }
       .group-ai-row { margin: 4px 0 2px; }
       .group-ai-toggle { width: auto; margin: 0; padding: 2px 7px; font-size: 11px; background: #e8f0ff; border: 1px solid #b0c4f0; color: #2a5ab8; border-radius: 10px; cursor: pointer; }
       .group-ai-toggle:hover { background: #d0e0ff; }
@@ -3920,6 +3934,9 @@
         group.fillEntities = group.fillOpacity > 0
           ? makeFillEntities(polygons, group.color, group.fillOpacity, group.invert, group.invert ? null : group.fillRef)
           : [];
+        group.entities.forEach(e => { e.show = group.visible !== false; });
+        group.fillEntities.forEach(item => { if (item.entity) item.entity.show = group.visible !== false; });
+        updateGroupLabel(group);
       }
 
       function createGroup(name, aiMeta = null) {
@@ -3937,6 +3954,10 @@
           members: [],
           entities: [],
           fillEntities: [],
+          visible: true,
+          showLabel: false,
+          labelEntity: null,
+          membersCollapsed: false,
           aiMeta, // { query, level, filterSpec, count } — set when created via AI query
         });
         const newGroup = regionGroups[regionGroups.length - 1];
@@ -3954,11 +3975,48 @@
         const gid = g.id;
         g.entities.forEach(e => viewer.entities.remove(e));
         g.fillEntities.forEach(removeFillItem);
+        if (g.labelEntity) viewer.entities.remove(g.labelEntity);
         regionGroups.splice(idx, 1);
         delete tracks['group_' + gid];
         selectedTrackIds.delete('group_' + gid);
         tlBuildLabels();
         renderGroupList();
+      }
+
+      function setGroupVisible(group, visible) {
+        group.visible = visible;
+        group.entities.forEach(e => { e.show = visible; });
+        group.fillEntities.forEach(item => { if (item.entity) item.entity.show = visible; });
+        if (group.labelEntity) group.labelEntity.show = visible && group.showLabel;
+      }
+
+      function updateGroupLabel(group) {
+        if (group.labelEntity) { viewer.entities.remove(group.labelEntity); group.labelEntity = null; }
+        if (!group.showLabel || !group.members.length) return;
+        // Compute centroid of all group polygons via bounding sphere
+        const allPos = [];
+        for (const m of group.members) {
+          const entry = regionLookup.get(m.name);
+          if (entry?.polygons) for (const poly of entry.polygons) allPos.push(...poly);
+        }
+        if (!allPos.length) return;
+        const center = Cesium.BoundingSphere.fromPoints(allPos).center;
+        group.labelEntity = viewer.entities.add({
+          position: center,
+          label: {
+            text: group.name,
+            font: 'bold 13px sans-serif',
+            fillColor: Cesium.Color.WHITE,
+            outlineColor: hexToCesiumColor(group.color, 1),
+            outlineWidth: 3,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+            pixelOffset: new Cesium.Cartesian2(0, -4),
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            show: group.visible,
+          },
+        });
       }
 
       function addMemberToGroup(groupId, displayStr) {
@@ -4014,13 +4072,37 @@
           countBadge.textContent = group.members.length;
           countBadge.title = `${group.members.length} region${group.members.length !== 1 ? "s" : ""}`;
 
+          // Visibility toggle
+          const visBtn = document.createElement("button");
+          visBtn.className = "group-icon-btn" + (group.visible !== false ? "" : " group-icon-btn-off");
+          visBtn.textContent = "👁";
+          visBtn.title = group.visible !== false ? "Hide group" : "Show group";
+          visBtn.addEventListener("click", () => {
+            const nowVisible = group.visible === false;
+            setGroupVisible(group, nowVisible);
+            visBtn.classList.toggle("group-icon-btn-off", !nowVisible);
+            visBtn.title = nowVisible ? "Hide group" : "Show group";
+          });
+
+          // Label toggle
+          const labelBtn = document.createElement("button");
+          labelBtn.className = "group-icon-btn" + (group.showLabel ? " group-icon-btn-on" : "");
+          labelBtn.textContent = "🏷";
+          labelBtn.title = group.showLabel ? "Hide label" : "Show label on map";
+          labelBtn.addEventListener("click", () => {
+            group.showLabel = !group.showLabel;
+            labelBtn.classList.toggle("group-icon-btn-on", group.showLabel);
+            labelBtn.title = group.showLabel ? "Hide label" : "Show label on map";
+            updateGroupLabel(group);
+          });
+
           // Delete group
           const delBtn = document.createElement("button");
           delBtn.className = "hl-remove";
           delBtn.textContent = "×";
           delBtn.addEventListener("click", () => deleteGroup(group.id));
 
-          header.append(colorInput, nameEl, countBadge, delBtn);
+          header.append(colorInput, nameEl, countBadge, visBtn, labelBtn, delBtn);
           card.appendChild(header);
 
           // ── Body ────────────────────────────────────────────────────────────
@@ -4135,9 +4217,20 @@
           addRow.append(searchInput, addBtn);
           body.appendChild(addRow);
 
-          // Member list
+          // Collapsible member list
+          const membersToggle = document.createElement("div");
+          membersToggle.className = "group-members-toggle";
+          membersToggle.innerHTML = `<span class="group-members-arrow">${group.membersCollapsed ? "▶" : "▼"}</span> <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${group.color};vertical-align:middle;margin-right:3px;"></span>Members`;
+          body.appendChild(membersToggle);
+
           const ul = document.createElement("ul");
           ul.className = "group-members";
+          ul.style.display = group.membersCollapsed ? "none" : "";
+          membersToggle.addEventListener("click", () => {
+            group.membersCollapsed = !group.membersCollapsed;
+            ul.style.display = group.membersCollapsed ? "none" : "";
+            membersToggle.querySelector(".group-members-arrow").textContent = group.membersCollapsed ? "▶" : "▼";
+          });
           for (const m of group.members) {
             const li = document.createElement("li");
             const label = document.createElement("span");
