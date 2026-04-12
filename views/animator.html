@@ -3935,7 +3935,7 @@
           ? makeFillEntities(polygons, group.color, group.fillOpacity, group.invert, group.invert ? null : group.fillRef)
           : [];
         group.entities.forEach(e => { e.show = group.visible !== false; });
-        group.fillEntities.forEach(item => { if (item.entity) item.entity.show = group.visible !== false; });
+        group.fillEntities.forEach(item => { item.show = group.visible !== false; });
         updateGroupLabel(group);
       }
 
@@ -3986,7 +3986,7 @@
       function setGroupVisible(group, visible) {
         group.visible = visible;
         group.entities.forEach(e => { e.show = visible; });
-        group.fillEntities.forEach(item => { if (item.entity) item.entity.show = visible; });
+        group.fillEntities.forEach(item => { item.show = visible; });
         if (group.labelEntity) group.labelEntity.show = visible && group.showLabel;
       }
 
