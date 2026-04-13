@@ -292,6 +292,67 @@ router.post("/api/region-query", async (req, res) => {
   res.json({ level, filterSpec, matches, count: matches.length, sources: inferSources(filterSpec, level) });
 });
 
+// ── /api/city-query ──────────────────────────────────────────────────────────
+
+router.post("/api/city-query", async (req, res) => {
+  const { query } = req.body || {};
+  if (!query?.trim()) return res.status(400).json({ error: "Missing query" });
+
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" });
+
+  const anthropic = new Anthropic({ apiKey: key });
+  let result;
+  try {
+    const msg = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      system: `You generate ordered lists of cities for map route visualization. Return cities that best match the user's query. Provide accurate latitude/longitude coordinates.`,
+      tools: [{
+        name: "city_list",
+        description: "Return an ordered list of cities matching the query, suitable for drawing a route on a map.",
+        input_schema: {
+          type: "object",
+          properties: {
+            label: { type: "string", description: "Short descriptive name for this group of cities (max 40 chars)." },
+            cities: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  name:    { type: "string", description: "City name in English" },
+                  country: { type: "string", description: "Country name in English (e.g. 'United States of America', 'France')" },
+                  state:   { type: "string", description: "State or province abbreviation where applicable (e.g. 'NY', 'CA', 'TX' for US cities; 'ON' for Canadian cities). Omit for countries that don't use states/provinces." },
+                  lat:     { type: "number", description: "Latitude" },
+                  lon:     { type: "number", description: "Longitude" },
+                },
+                required: ["name", "country", "lat", "lon"],
+              },
+            },
+          },
+          required: ["cities"],
+        },
+      }],
+      tool_choice: { type: "tool", name: "city_list" },
+      messages: [{ role: "user", content: query }],
+    });
+
+    const toolUse = msg.content.find(b => b.type === "tool_use");
+    if (!toolUse) throw new Error("No tool_use block in response");
+    result = toolUse.input;
+  } catch (e) {
+    console.error("[city-query]", e.message);
+    const msg = e.message || "";
+    if (msg.includes("credit balance") || msg.includes("billing"))
+      return res.status(402).json({ error: "Anthropic API credits needed — add credits at console.anthropic.com" });
+    if (msg.includes("401") || msg.includes("authentication"))
+      return res.status(401).json({ error: "Invalid Anthropic API key" });
+    return res.status(422).json({ error: "Could not interpret query", detail: msg });
+  }
+
+  res.json({ cities: result.cities || [], label: result.label || null, count: (result.cities || []).length });
+});
+
 const sessions = new Map(); // sessionId -> { dir, frameCount }
 
 function makeSessionId() {

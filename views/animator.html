@@ -33,14 +33,14 @@
         grid-column: 1;
         grid-row: 1 / 3;
         border-right: 1px solid #ccc;
-        padding: 16px;
-        overflow: auto;
-        background: #fafafa;
+        padding: 12px 12px 0;
+        overflow: hidden;
+        background: #f4f5f7;
         min-width: 0;
         min-height: 0;
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 0;
       }
 
       #projectBar {
@@ -121,6 +121,7 @@
         line-height: 1.4;
       }
       .tl-bar-btn:hover { color: #fff; background: #333; border-color: #666; }
+      .tl-transport-active { color: #7bf !important; border-color: #4a8 !important; background: #1a2a3a !important; }
       #tlZoomLabel {
         font-size: 11px;
         color: #888;
@@ -398,6 +399,48 @@
       .group-ai-source { color: #888; font-size: 10px; margin-top: 3px; }
       .group-ai-src-link { color: #2a5ab8; text-decoration: none; }
       .group-ai-src-link:hover { text-decoration: underline; }
+
+      /* ── City Route Groups ──────────────────────────────────────────────────── */
+      #routeGroupCreateRow { display: flex; gap: 6px; margin-bottom: 6px; }
+      #routeGroupCreateRow input { flex: 1; margin: 0; }
+      #routeGroupCreateRow button { width: auto; margin: 0; white-space: nowrap; }
+      #cityRouteQueryRow { margin-bottom: 4px; }
+      #cityRouteQueryStatus { font-size: 10px; color: #888; margin-top: 2px; }
+      .route-group-card {
+        background: #f5f5f5; border: 1px solid #ddd; border-radius: 5px;
+        margin-bottom: 6px; padding: 6px 8px; font-size: 12px;
+      }
+      .route-group-header {
+        display: flex; align-items: center; gap: 5px; margin-bottom: 4px;
+      }
+      .route-group-color { width: 18px; height: 18px; border-radius: 3px; border: 1px solid #aaa; padding: 0; cursor: pointer; flex-shrink: 0; margin: 0; }
+      .route-group-name { flex: 1; font-weight: 600; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .route-group-count { font-size: 10px; color: #888; background: #e0e0e0; border-radius: 8px; padding: 1px 6px; flex-shrink: 0; }
+      .route-group-icon-btn { background: none; border: none; padding: 2px 4px; cursor: pointer; font-size: 13px; opacity: 0.6; width: auto; margin: 0; }
+      .route-group-icon-btn:hover { opacity: 1; }
+      .route-group-icon-btn-off { opacity: 0.25; }
+      .route-style-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 5px; }
+      .route-style-row label { font-size: 10px; color: #888; margin: 0; width: auto; }
+      .route-style-btn {
+        background: #fff; border: 1px solid #ccc; border-radius: 3px;
+        padding: 2px 7px; font-size: 11px; cursor: pointer; width: auto; margin: 0;
+      }
+      .route-style-btn.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+      .route-width-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+      .route-width-row label { font-size: 10px; color: #888; margin: 0; width: auto; }
+      .route-width-row input[type=range] { flex: 1; margin: 0; height: 4px; }
+      .route-width-val { font-size: 10px; color: #555; width: 18px; text-align: right; }
+      .route-city-add-row { display: flex; gap: 4px; margin-bottom: 4px; }
+      .route-city-add-row input { flex: 1; margin: 0; font-size: 11px; padding: 3px 5px; }
+      .route-city-add-row button { width: auto; margin: 0; padding: 2px 8px; font-size: 11px; }
+      .route-cities-toggle { font-size: 10px; color: #888; cursor: pointer; user-select: none; display: flex; align-items: center; gap: 3px; margin-bottom: 3px; }
+      .route-cities-toggle:hover { color: #555; }
+      .route-city-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+      .route-city-item { display: flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 4px; background: #fff; border: 1px solid #e0e0e0; border-radius: 3px; }
+      .route-city-item span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .route-city-reorder { background: none; border: none; padding: 0 3px; cursor: pointer; font-size: 11px; color: #888; width: auto; margin: 0; line-height: 1; }
+      .route-city-reorder:hover { color: #333; }
+      .route-city-remove { background: none; border: none; padding: 0 3px; cursor: pointer; font-size: 12px; color: #b00; width: auto; margin: 0; line-height: 1; }
 
       /* ── City list ─────────────────────────────────────────────────────────── */
       #citySearchRow {
@@ -822,6 +865,142 @@
         box-shadow: 0 2px 6px rgba(0,0,0,0.2);
       }
 
+      /* ── CSS Variables ───────────────────────────────────────────────────── */
+      :root {
+        --accent: #3b82f6;
+        --accent-hover: #2563eb;
+        --tab-border: #e0e2e6;
+        --text-muted: #6b7280;
+        --text-strong: #1f2937;
+      }
+
+      #sidebar > h2 { flex-shrink: 0; margin-bottom: 8px; }
+      #projectBar { flex-shrink: 0; }
+
+      /* ── Annotations / Story tab ──────────────────────────────────────────── */
+      #annOverlayRoot {
+        position: absolute; inset: 0; pointer-events: none; z-index: 10; overflow: hidden;
+      }
+      .ann-overlay {
+        position: absolute; pointer-events: none; box-sizing: border-box;
+        line-height: 1.3; white-space: pre-wrap; word-break: break-word;
+      }
+      .ann-preset-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px;
+      }
+      .ann-preset-btn {
+        font-size: 11px; padding: 5px 4px; text-align: center;
+        border: 1px solid #c8d0e8; border-radius: 4px; background: #eef0fa;
+        color: #334; cursor: pointer; width: auto; margin: 0; line-height: 1.3;
+      }
+      .ann-preset-btn:hover { background: #dde0f5; border-color: #99b; }
+      .ann-card {
+        border: 1px solid #ddd; border-radius: 5px; margin-bottom: 6px;
+        background: #fafafa; font-size: 12px; overflow: hidden;
+      }
+      .ann-card-header {
+        display: flex; align-items: center; gap: 5px; padding: 5px 8px; background: #ececec;
+      }
+      .ann-card-title {
+        flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden;
+        text-overflow: ellipsis; font-size: 12px; color: #333;
+      }
+      .ann-card-body { padding: 6px 8px; display: flex; flex-direction: column; gap: 5px; }
+      .ann-row { display: flex; align-items: center; gap: 5px; }
+      .ann-label { width: 50px; flex-shrink: 0; font-size: 11px; color: #666; }
+      .ann-anchor-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
+      .ann-anchor-cell {
+        height: 18px; border: 1px solid #ccc; border-radius: 2px; background: #eee;
+        cursor: pointer; font-size: 9px; display: flex; align-items: center;
+        justify-content: center; padding: 0; margin: 0; width: auto; min-width: 0;
+      }
+      .ann-anchor-cell:hover { background: #dde; border-color: #99b; }
+      .ann-anchor-cell.active { background: #334; border-color: #667; color: #ddf; }
+      .ann-textarea {
+        width: 100%; box-sizing: border-box; font-size: 12px; font-family: inherit;
+        resize: vertical; min-height: 2.5em; padding: 3px 5px;
+        border: 1px solid #ccc; border-radius: 4px; line-height: 1.4; margin: 0;
+      }
+      .ann-icon-btn {
+        background: none; border: none; cursor: pointer; font-size: 14px;
+        padding: 0 3px; width: auto; margin: 0; opacity: 0.6; line-height: 1;
+      }
+      .ann-icon-btn:hover { opacity: 1; }
+      .ann-type-btn {
+        font-size: 10px; padding: 2px 7px; border: 1px solid #bbb; border-radius: 3px;
+        background: #eee; cursor: pointer; width: auto; margin: 0; color: #444;
+      }
+      .ann-type-btn:hover { background: #dde; border-color: #99b; }
+      .ann-type-btn.active { background: #334; color: #ddf; border-color: #667; }
+
+      /* ── Tab bar ──────────────────────────────────────────────────────────── */
+      #sidebarTabs {
+        display: flex;
+        gap: 0;
+        border-bottom: 2px solid var(--tab-border);
+        flex-shrink: 0;
+        margin: 6px 0 0;
+      }
+      .tab-btn {
+        flex: 1;
+        padding: 7px 2px;
+        font-size: 12px;
+        font-weight: 600;
+        border: none;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px;
+        border-radius: 0;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        letter-spacing: 0.03em;
+        width: auto;
+        margin-left: 0;
+        margin-right: 0;
+        margin-top: 0;
+      }
+      .tab-btn:hover { color: var(--text-strong); background: #eceef2; }
+      .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); background: transparent; }
+
+      /* ── Tab panels ───────────────────────────────────────────────────────── */
+      .tab-panel {
+        display: none;
+        flex-direction: column;
+        gap: 8px;
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        min-height: 0;
+        padding: 10px 0 10px;
+      }
+      .tab-panel.active { display: flex; }
+
+      /* ── Collapsible sections ─────────────────────────────────────────────── */
+      .section { margin-bottom: 0; }
+      .section-title {
+        cursor: pointer;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        gap: 0;
+        font-weight: bold;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #888;
+        margin-bottom: 0;
+      }
+      .section-title-arrow {
+        margin-left: auto;
+        font-size: 10px;
+        color: #bbb;
+        transition: transform 0.15s;
+        line-height: 1;
+      }
+      .section.collapsed .section-title-arrow { transform: rotate(-90deg); }
+      .section.collapsed .section-body { display: none; }
+      .section-body { padding-top: 8px; display: flex; flex-direction: column; gap: 0; }
+
       @media (max-width: 1366px) {
         #app {
           grid-template-columns: 1fr;
@@ -878,8 +1057,20 @@
           <input type="file" id="loadProjectInput" accept=".json" style="display:none;" />
         </div>
 
+        <div id="sidebarTabs">
+          <button class="tab-btn active" data-tab="map">Map</button>
+          <button class="tab-btn" data-tab="layers">Layers</button>
+          <button class="tab-btn" data-tab="story">Story</button>
+          <button class="tab-btn" data-tab="animate">Animate</button>
+          <button class="tab-btn" data-tab="export">Export</button>
+        </div>
+
+        <!-- ═══ MAP TAB ══════════════════════════════════════════════════════ -->
+        <div id="tab-map" class="tab-panel active">
+
         <div class="section">
-          <div class="section-title">Basemap</div>
+          <div class="section-title">Basemap <span class="section-title-arrow">▾</span></div>
+          <div class="section-body">
           <select id="basemapSelect">
             <optgroup label="Vector (free)">
               <option value="carto-positron">Positron (CARTO)</option>
@@ -963,10 +1154,12 @@
             <button class="scene-mode-btn" data-mode="columbus">◎ Columbus</button>
             <button class="scene-mode-btn" data-mode="2d">🗺 Flat 2D</button>
           </div>
+          </div><!-- /section-body Basemap -->
         </div>
 
         <div class="section">
-          <div class="section-title">Looks</div>
+          <div class="section-title">Looks <span class="section-title-arrow">▾</span></div>
+          <div class="section-body">
           <div class="looks-row">
             <select id="looksSelect"></select>
             <button id="deleteLookBtn" title="Delete this look">×</button>
@@ -981,10 +1174,12 @@
             <label style="margin-left:4px;">City</label>
             <input type="color" id="defaultCityColorPicker" value="#ffffff" title="Default color for new cities" />
           </div>
+          </div><!-- /section-body Looks -->
         </div>
 
         <div class="section">
-          <div class="section-title">Time of Day</div>
+          <div class="section-title">Time of Day <span class="section-title-arrow">▾</span></div>
+          <div class="section-body">
           <div class="tod-row">
             <input type="range" id="todSlider" min="0" max="1440" value="720" step="1" />
             <span class="tod-time" id="todDisplay">12:00</span>
@@ -992,10 +1187,17 @@
           <div style="display:flex; justify-content:space-between; font-size:11px; color:#aaa; margin-top:2px;">
             <span>Midnight</span><span>Noon</span><span>Midnight</span>
           </div>
+          </div><!-- /section-body Time of Day -->
         </div>
 
+        </div><!-- /tab-map -->
+
+        <!-- ═══ LAYERS TAB ════════════════════════════════════════════════════ -->
+        <div id="tab-layers" class="tab-panel">
+
         <div class="section">
-          <div class="section-title">Regions</div>
+          <div class="section-title">Regions <span class="section-title-arrow">▾</span></div>
+          <div class="section-body">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
             <span style="font-size:12px;color:#555;">Borders</span>
             <div style="display:flex;align-items:center;gap:5px;">
@@ -1040,10 +1242,12 @@
             <button id="addRegionBtn">+</button>
           </div>
           <div id="highlightList"></div>
+          </div><!-- /section-body Regions -->
         </div>
 
         <div class="section">
-          <div class="section-title">Region Groups</div>
+          <div class="section-title">Region Groups <span class="section-title-arrow">▾</span></div>
+          <div class="section-body">
           <div id="groupCreateRow">
             <input type="text" id="groupNameInput" placeholder="Group name…" autocomplete="off" />
             <button id="addGroupBtn">+ New</button>
@@ -1058,16 +1262,16 @@
           </div>
           <div id="regionQueryStatus" style="font-size:10px;color:#888;margin-top:2px;display:none;"></div>
           <div id="groupList"></div>
+          </div><!-- /section-body Region Groups -->
         </div>
 
         <div class="section">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-            <div class="section-title" style="margin-bottom:0;">Cities</div>
-            <div id="cityClipboardBar" style="display:none;align-items:center;gap:4px;">
-              <span style="font-size:10px;color:#aaa;">⎘ style copied</span>
-              <button id="applyStyleToAllBtn" style="font-size:10px;padding:2px 6px;width:auto;margin:0;">Apply to all</button>
-              <button id="clearClipboardBtn" style="font-size:10px;padding:2px 5px;width:auto;margin:0;color:#888;background:none;border:1px solid #555;">✕</button>
-            </div>
+          <div class="section-title" style="margin-bottom:0;">Cities <span class="section-title-arrow">▾</span></div>
+          <div class="section-body">
+          <div id="cityClipboardBar" style="display:none;align-items:center;gap:4px;margin-bottom:4px;">
+            <span style="font-size:10px;color:#aaa;">⎘ style copied</span>
+            <button id="applyStyleToAllBtn" style="font-size:10px;padding:2px 6px;width:auto;margin:0;">Apply to all</button>
+            <button id="clearClipboardBtn" style="font-size:10px;padding:2px 5px;width:auto;margin:0;color:#888;background:none;border:1px solid #555;">✕</button>
           </div>
           <div id="citySearchRow">
             <input type="text" id="citySearch" list="cityDatalist"
@@ -1077,17 +1281,69 @@
             <div id="geocodeResults"></div>
           </div>
           <ul id="cityList"></ul>
+          </div><!-- /section-body Cities -->
         </div>
 
         <div class="section">
-          <div class="section-title">KML Overlays</div>
+          <div class="section-title">City Routes <span class="section-title-arrow">▾</span></div>
+          <div class="section-body">
+          <div id="routeGroupCreateRow">
+            <input type="text" id="routeGroupNameInput" placeholder="Route name…" autocomplete="off" />
+            <button id="addRouteGroupBtn">+ New</button>
+          </div>
+          <div id="cityRouteQueryRow">
+            <textarea id="cityRouteQuery" rows="2"
+              placeholder='Ask AI: "10 largest cities in Europe"'
+              autocomplete="off"
+              style="width:100%;box-sizing:border-box;font-size:11px;resize:vertical;min-height:2.5em;padding:3px 5px;line-height:1.4;font-family:inherit;border:1px solid #ccc;border-radius:4px;margin-bottom:4px;"></textarea>
+            <button id="cityRouteQueryBtn" style="width:auto;padding:2px 10px;font-size:11px;">Ask AI</button>
+          </div>
+          <div id="cityRouteQueryStatus" style="font-size:10px;color:#888;margin-top:2px;display:none;"></div>
+          <div id="routeGroupList"></div>
+          </div><!-- /section-body City Routes -->
+        </div>
+
+        <div class="section">
+          <div class="section-title">KML Overlays <span class="section-title-arrow">▾</span></div>
+          <div class="section-body">
           <button id="addKmlBtn" style="width:100%;margin-bottom:2px;">+ Add KML / KMZ…</button>
           <input type="file" id="kmlFileInput" accept=".kml,.kmz" style="display:none;">
           <div id="kmlList"></div>
+          </div><!-- /section-body KML Overlays -->
         </div>
 
+        </div><!-- /tab-layers -->
+
+        <!-- ═══ STORY TAB ═════════════════════════════════════════════════════ -->
+        <div id="tab-story" class="tab-panel">
+
         <div class="section">
-          <div class="section-title">Keyframes</div>
+          <div class="section-title">Annotations <span class="section-title-arrow">▾</span></div>
+          <div class="section-body">
+          <div class="ann-preset-grid">
+            <button class="ann-preset-btn" data-preset="lower-third">Lower Third</button>
+            <button class="ann-preset-btn" data-preset="title">Title Card</button>
+            <button class="ann-preset-btn" data-preset="callout">Callout (Globe)</button>
+            <button class="ann-preset-btn" data-preset="caption">Caption</button>
+            <button class="ann-preset-btn" data-preset="chapter" style="grid-column:1/-1;">Chapter Marker</button>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:6px;">
+            <input type="text" id="annNameInput" placeholder="Annotation text…" autocomplete="off"
+              style="flex:1;margin:0;font-size:12px;padding:4px 6px;" />
+            <button id="addAnnotationBtn" style="width:auto;margin:0;padding:4px 8px;font-size:12px;">+ Add</button>
+          </div>
+          <div id="annotationList"></div>
+          </div><!-- /section-body -->
+        </div>
+
+        </div><!-- /tab-story -->
+
+        <!-- ═══ ANIMATE TAB ════════════════════════════════════════════════════ -->
+        <div id="tab-animate" class="tab-panel">
+
+        <div class="section">
+          <div class="section-title">Keyframes <span class="section-title-arrow">▾</span></div>
+          <div class="section-body">
           <ul id="keyframeList"></ul>
           <div style="margin-top: 8px;">
             <button id="addKeyframeBtn" class="primary">+ Add Keyframe at Playhead</button>
@@ -1096,10 +1352,12 @@
             <label style="margin-bottom: 2px;">Duration (seconds)</label>
             <input type="number" id="totalDuration" value="10" min="1" max="300" step="1" />
           </div>
+          </div><!-- /section-body Keyframes -->
         </div>
 
         <div class="section">
-          <div class="section-title">Playback</div>
+          <div class="section-title">Playback <span class="section-title-arrow">▾</span></div>
+          <div class="section-body">
           <div id="playheadDisplay">0.0s / 10.0s</div>
           <div id="progressBar"><div id="progressFill"></div></div>
           <div class="row">
@@ -1116,10 +1374,17 @@
               <option value="4">4x</option>
             </select>
           </div>
+          </div><!-- /section-body Playback -->
         </div>
 
+        </div><!-- /tab-animate -->
+
+        <!-- ═══ EXPORT TAB ════════════════════════════════════════════════════ -->
+        <div id="tab-export" class="tab-panel">
+
         <div class="section">
-          <div class="section-title">Export</div>
+          <div class="section-title">Export <span class="section-title-arrow">▾</span></div>
+          <div class="section-body">
           <label style="margin-bottom: 2px;">Resolution</label>
           <select id="resolutionSelect">
             <optgroup label="Landscape">
@@ -1142,13 +1407,28 @@
             <option value="60">60 fps</option>
           </select>
           <button id="exportBtn">Export Frames</button>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #e0e0e0;">
+            <div style="font-size:11px;font-weight:600;color:#666;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.04em;">After Effects</div>
+            <div style="font-size:11px;color:#888;margin-bottom:5px;line-height:1.4;">Exports a <code style="font-size:10px;background:#eee;padding:1px 3px;border-radius:2px;">.jsx</code> script — run it in AE via File → Scripts → Run Script File. Creates null layers at the screen positions of your cities and globe annotations, frame by frame.</div>
+            <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:#555;cursor:pointer;margin-bottom:5px;">
+              <input type="checkbox" id="aeNullCities" checked style="margin:0;" /> Include cities
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:#555;cursor:pointer;margin-bottom:6px;">
+              <input type="checkbox" id="aeNullAnnotations" checked style="margin:0;" /> Include globe annotations
+            </label>
+            <button id="exportAeNullsBtn">Export AE Nulls (.jsx)</button>
+          </div>
+          </div><!-- /section-body Export -->
         </div>
 
-        <div id="status"></div>
+        </div><!-- /tab-export -->
+
+        <div id="status" style="font-size:12px;color:#888;flex-shrink:0;padding-bottom:8px;"></div>
       </div>
 
       <div id="cesiumPane">
         <div id="cesiumContainer"></div>
+        <div id="annOverlayRoot"></div>
         <div id="cesiumCreditSink" style="display:none;"></div>
       </div>
 
@@ -1165,6 +1445,18 @@
           <div class="tl-bar-sep"></div>
           <button class="tl-bar-btn" id="tlSelectAll"  title="Select all tracks for keyframe capture">All</button>
           <button class="tl-bar-btn" id="tlSelectNone" title="Deselect all tracks">None</button>
+          <div class="tl-bar-sep"></div>
+          <button class="tl-bar-btn" id="tlRevBtn"  title="Reverse (J)">◀</button>
+          <button class="tl-bar-btn" id="tlPlayBtn" title="Play / Pause (L / K)">▶</button>
+          <button class="tl-bar-btn" id="tlStopBtn" title="Stop">■</button>
+          <div class="tl-bar-sep"></div>
+          <button class="tl-bar-btn" id="tlAddKfBtn" title="Add keyframe at playhead" style="color:#7bf;border-color:#4a7;">+ KF</button>
+          <div class="tl-bar-sep" id="tlEaseSep" style="display:none;"></div>
+          <span id="tlEaseLabel" style="display:none;font-size:10px;color:#888;">Ease:</span>
+          <button class="tl-bar-btn tl-ease-btn" id="tlEaseLin"     data-ease="linear"       title="Linear"       style="display:none;">—</button>
+          <button class="tl-bar-btn tl-ease-btn" id="tlEaseIn"      data-ease="ease-in"      title="Ease In"      style="display:none;">In</button>
+          <button class="tl-bar-btn tl-ease-btn" id="tlEaseOut"     data-ease="ease-out"     title="Ease Out"     style="display:none;">Out</button>
+          <button class="tl-bar-btn tl-ease-btn" id="tlEaseInOut"   data-ease="ease-in-out"  title="Ease In+Out"  style="display:none;">S</button>
           <span id="tlCurrentTime">0.0s</span>
         </div>
         <div id="tlBody">
@@ -1197,6 +1489,7 @@
       let selectedTrackIds = new Set(['camera']); // tracks that receive "Add Keyframe"
 
       let isPlaying = false;
+      let playbackDirection = 1; // 1 = forward, -1 = reverse
       let playStartMs = null;
       let playStartT  = 0;
       let playbackT   = 0;  // current playback time in seconds
@@ -1909,6 +2202,10 @@
             layers: kml.layers.map(l => ({ name: l.name, opacity: l.opacity })),
           } : null;
         }
+        if (trackId.startsWith('ann_')) {
+          const ann = annotations.find(a => a.id === parseInt(trackId.slice(4)));
+          return ann ? { opacity: ann.opacity } : null;
+        }
         return null;
       }
 
@@ -2100,6 +2397,12 @@
           });
           if (!isPlaying) renderKmlList();
         });
+        (state.annStates || []).forEach(as => {
+          const ann = annotations.find(a => a.id === as.id);
+          if (!ann) return;
+          ann.opacity = as.opacity;
+          applyAnnotationOpacity(ann);
+        });
       }
 
       // ── Keyframes ───────────────────────────────────────────────────────────
@@ -2135,7 +2438,7 @@
         const track = tracks[trackId];
         if (!track) return;
         track.keyframes = track.keyframes.filter(k => k.id !== kfId);
-        if (tlSelectedKf?.kfId === kfId) tlSelectedKf = null;
+        if (tlSelectedKf?.kfId === kfId) { tlSelectedKf = null; updateEaseBar(); }
         if (trackId === 'camera') {
           if (selectedKfId === kfId) selectedKfId = track.keyframes[0]?.id ?? null;
           renderKeyframeList();
@@ -2236,6 +2539,16 @@
         return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
       }
 
+      // ── Easing ─────────────────────────────────────────────────────────────
+      function applyEase(t, ease) {
+        switch (ease) {
+          case 'ease-in':     return t * t;
+          case 'ease-out':    return t * (2 - t);
+          case 'ease-in-out': return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+          default:            return t; // linear
+        }
+      }
+
       // Interpolate a single track at time t. Returns the interpolated state object or null.
       function interpolateTrack(trackId, t) {
         const track = tracks[trackId];
@@ -2248,7 +2561,8 @@
         for (let j = 0; j < kfs.length - 1; j++) { if (t <= kfs[j+1].time) { i = j; break; } }
         const a = kfs[i], b = kfs[i+1];
         const span = b.time - a.time;
-        const alpha = span > 0 ? (t - a.time) / span : 1;
+        const rawAlpha = span > 0 ? (t - a.time) / span : 1;
+        const alpha = applyEase(rawAlpha, a.ease || 'linear');
         if (trackId === 'camera') {
           return {
             lon:     a.lon     + (b.lon     - a.lon)     * alpha,
@@ -2337,6 +2651,9 @@
             }),
           };
         }
+        if (trackId.startsWith('ann_')) {
+          return { opacity: (a.opacity??1) + ((b.opacity??1) - (a.opacity??1)) * alpha };
+        }
         return null;
       }
 
@@ -2381,6 +2698,13 @@
             return { id: k.id, ...ks };
           });
         }
+        const annAnimated = annotations.filter(a => (tracks['ann_'+a.id]?.keyframes.length ?? 0) > 0);
+        if (annAnimated.length > 0) {
+          state.annStates = annAnimated.map(a => {
+            const as = interpolateTrack('ann_' + a.id, t);
+            return { id: a.id, ...as };
+          });
+        }
         return state;
       }
 
@@ -2392,17 +2716,29 @@
           `${Math.min(100, (t / dur) * 100)}%`;
       }
 
+      function updateTransportBtns() {
+        const fwd = isPlaying && playbackDirection > 0;
+        const rev = isPlaying && playbackDirection < 0;
+        document.getElementById("playBtn").textContent = fwd ? "⏸ Pause" : "▶ Play";
+        document.getElementById("tlRevBtn") .classList.toggle("tl-transport-active", rev);
+        document.getElementById("tlPlayBtn").classList.toggle("tl-transport-active", fwd);
+      }
+
       function animationFrame(nowMs) {
         if (!isPlaying) return;
 
-        const elapsed = (nowMs - playStartMs) / 1000 * playbackSpeed();
+        const elapsed = (nowMs - playStartMs) / 1000 * playbackSpeed() * playbackDirection;
         playbackT = playStartT + elapsed;
 
         const dur = totalDuration();
         if (playbackT >= dur) {
           playbackT = dur;
           isPlaying = false;
-          document.getElementById("playBtn").textContent = "▶ Play";
+          updateTransportBtns();
+        } else if (playbackT <= 0) {
+          playbackT = 0;
+          isPlaying = false;
+          updateTransportBtns();
         }
 
         // Trigger morph when playback crosses a keyframe with a new scene mode
@@ -2423,22 +2759,34 @@
         if (!Object.values(tracks).some(tr => tr.keyframes.length >= 2)) {
           setStatus("Need at least 2 keyframes in at least one track to play."); return;
         }
-        if (playbackT >= totalDuration()) {
-          playbackT = 0;
-          syncSceneModeToTime(0);
-        }
+        if (playbackT >= totalDuration()) { playbackT = 0; syncSceneModeToTime(0); }
+        playbackDirection = 1;
         isPlaying = true;
         playStartMs = performance.now();
         playStartT  = playbackT;
-        lastPlaybackMode = getSceneModeAtTime(playbackT); // reset so first frame doesn't re-trigger
-        document.getElementById("playBtn").textContent = "⏸ Pause";
+        lastPlaybackMode = getSceneModeAtTime(playbackT);
+        updateTransportBtns();
+        animRaf = requestAnimationFrame(animationFrame);
+      }
+
+      function startReverse() {
+        if (!Object.values(tracks).some(tr => tr.keyframes.length >= 2)) {
+          setStatus("Need at least 2 keyframes in at least one track to reverse."); return;
+        }
+        if (playbackT <= 0) { playbackT = totalDuration(); syncSceneModeToTime(playbackT); }
+        playbackDirection = -1;
+        isPlaying = true;
+        playStartMs = performance.now();
+        playStartT  = playbackT;
+        lastPlaybackMode = getSceneModeAtTime(playbackT);
+        updateTransportBtns();
         animRaf = requestAnimationFrame(animationFrame);
       }
 
       function pausePlayback() {
         isPlaying = false;
         if (animRaf) cancelAnimationFrame(animRaf);
-        document.getElementById("playBtn").textContent = "▶ Play";
+        updateTransportBtns();
         syncControlsToState(buildStateAtTime(playbackT));
       }
 
@@ -2578,6 +2926,128 @@
         btn.disabled = false;
         setViewerResolution(null); // restore grid-fill layout after export
         setStatus("Export complete.");
+      }
+
+      // ── After Effects null object export ────────────────────────────────────
+      async function exportAENulls() {
+        const hasTracks = Object.values(tracks).some(tr => tr.keyframes.length >= 2);
+        if (!hasTracks) { setStatus("Need at least 2 keyframes to export."); return; }
+
+        const includeCities      = document.getElementById('aeNullCities').checked;
+        const includeAnnotations = document.getElementById('aeNullAnnotations').checked;
+
+        // Collect points to track
+        const points = [];
+        if (includeCities) {
+          cityMarkers.forEach(m => {
+            if (m.lat != null && m.lon != null) {
+              points.push({ name: m.name || ('City ' + m.id), lat: m.lat, lon: m.lon });
+            }
+          });
+        }
+        if (includeAnnotations) {
+          annotations.filter(a => a.type === 'globe' && a.lat != null && a.lon != null).forEach(a => {
+            points.push({ name: a.text || ('Ann ' + a.id), lat: a.lat, lon: a.lon });
+          });
+        }
+        if (!points.length) { setStatus("No cities or globe annotations to track."); return; }
+
+        const [compW, compH] = document.getElementById("resolutionSelect").value.split("x").map(Number);
+        const fps = parseInt(document.getElementById("framerateSelect").value);
+        const dur = totalDuration();
+        const totalFrames = Math.ceil(dur * fps);
+        const btn = document.getElementById("exportAeNullsBtn");
+        btn.disabled = true;
+        setStatus("Sampling camera positions…");
+
+        // Save current state
+        const savedT = playbackT;
+
+        // Pre-convert points to Cartesian3
+        const cartesians = points.map(p => Cesium.Cartesian3.fromDegrees(p.lon, p.lat));
+
+        // For each point, an array of [x, y] per frame (null if off-screen)
+        const frameData = points.map(() => []);
+
+        // Canvas dimensions at sampling time (may differ from comp dimensions — normalise)
+        const canvasW = viewer.scene.canvas.width;
+        const canvasH = viewer.scene.canvas.height;
+
+        const scratchCart2 = new Cesium.Cartesian2();
+
+        for (let f = 0; f <= totalFrames; f++) {
+          const t = Math.min(f / fps, dur);
+          const state = buildStateAtTime(t);
+          setCameraState(state);
+
+          cartesians.forEach((cart, pi) => {
+            const screen = viewer.scene.cartesianToCanvasCoordinates(cart, scratchCart2);
+            if (screen) {
+              // Normalise to comp resolution
+              const x = (screen.x / canvasW) * compW;
+              const y = (screen.y / canvasH) * compH;
+              frameData[pi].push([parseFloat(x.toFixed(2)), parseFloat(y.toFixed(2))]);
+            } else {
+              // Point behind globe — use previous position or comp center
+              const prev = frameData[pi].length ? frameData[pi][frameData[pi].length - 1] : [compW / 2, compH / 2];
+              frameData[pi].push(prev);
+            }
+          });
+        }
+
+        // Restore
+        playbackT = savedT;
+        const restoredState = buildStateAtTime(savedT);
+        setCameraState(restoredState);
+
+        // Build JSX
+        const pointsJSON = JSON.stringify(points.map((p, pi) => ({
+          name: p.name,
+          frames: frameData[pi],
+        })));
+
+        const jsx = `// Generated by Map Animator — run via File > Scripts > Run Script File in After Effects
+(function () {
+  var compW    = ${compW};
+  var compH    = ${compH};
+  var fps      = ${fps};
+  var dur      = ${parseFloat(dur.toFixed(3))};
+  var points   = ${pointsJSON};
+
+  var comp = app.project.items.addComp(
+    "Map Animator Nulls", compW, compH, 1, dur, fps
+  );
+  comp.bgColor = [0, 0, 0];
+
+  for (var i = 0; i < points.length; i++) {
+    var pt    = points[i];
+    var layer = comp.layers.addNull(dur);
+    layer.name  = pt.name;
+    layer.label = (i % 16) + 1;
+    layer.threeDLayer = false;
+
+    var pos = layer.property("Position");
+    pos.setValueAtTime(0, pt.frames[0]);
+    for (var f = 0; f < pt.frames.length; f++) {
+      pos.setValueAtTime(f / fps, pt.frames[f]);
+    }
+  }
+
+  alert("Map Animator: created " + points.length + " null layer" +
+    (points.length === 1 ? "" : "s") + " in comp \\"" + comp.name + "\\".");
+})();
+`;
+
+        const blob = new Blob([jsx], { type: 'application/octet-stream' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = 'map-animator-nulls.jsx';
+        a.click();
+        URL.revokeObjectURL(url);
+
+        btn.disabled = false;
+        setStatus(`Exported ${points.length} null${points.length === 1 ? '' : 's'} (${totalFrames + 1} frames each).`);
       }
 
       // Apply an explicit export resolution to the viewport so the user sees
@@ -4275,6 +4745,481 @@
       let kmlOverlays = []; // { id, name, fileBase64, mimeType, dataSource, visible }
       let nextKmlId   = 1;
 
+      // ── Annotations ─────────────────────────────────────────────────────────
+      let annotations      = [];
+      let nextAnnotationId = 1;
+
+      const ANCHOR_POSITIONS = [
+        'top-left','top-center','top-right',
+        'center-left','center','center-right',
+        'bottom-left','bottom-center','bottom-right',
+      ];
+      const ANCHOR_LABELS = ['↖','↑','↗','←','·','→','↙','↓','↘'];
+
+      const ANN_PRESETS = {
+        'lower-third': {
+          text: 'Lower Third Title', type: 'screen', anchor: 'bottom-left',
+          offsetX: 40, offsetY: -70, fontSize: 24, fontWeight: 'bold',
+          color: '#ffffff', bgColor: '#000000', bgOpacity: 0.72, padding: 12, borderRadius: 4,
+        },
+        'title': {
+          text: 'Title', type: 'screen', anchor: 'center',
+          offsetX: 0, offsetY: -80, fontSize: 54, fontWeight: 'bold',
+          color: '#ffffff', bgColor: '#000000', bgOpacity: 0, padding: 0, borderRadius: 0,
+        },
+        'callout': {
+          text: 'Location', type: 'globe', lat: 48.85, lon: 2.35,
+          floatDir: 'NE', floatKm: 400, lineEnd: 'arrow', lineStyle: 'solid', showDot: true, dotSize: 8,
+          fontSize: 15, fontWeight: 'bold',
+          color: '#ffffff', bgColor: '#000000', bgOpacity: 0.75, padding: 8, borderRadius: 10,
+        },
+        'caption': {
+          text: 'Source: …', type: 'screen', anchor: 'bottom-center',
+          offsetX: 0, offsetY: -12, fontSize: 13, fontWeight: 'normal',
+          color: '#bbbbbb', bgColor: '#000000', bgOpacity: 0, padding: 0, borderRadius: 0,
+        },
+        'chapter': {
+          text: 'Chapter', type: 'screen', anchor: 'top-center',
+          offsetX: 0, offsetY: 18, fontSize: 34, fontWeight: 'bold',
+          color: '#ffffff', bgColor: '#0d1b2a', bgOpacity: 0.88, padding: 16, borderRadius: 6,
+        },
+      };
+
+      function annAnchorStyle(anchor, ox, oy) {
+        const M = 20, s = {};
+        const parts = anchor.split('-');
+        if (parts.includes('top'))    s.top    = (M + oy) + 'px';
+        if (parts.includes('bottom')) s.bottom = (M - oy) + 'px';
+        if (parts.includes('left'))   s.left   = (M + ox) + 'px';
+        if (parts.includes('right'))  s.right  = (M - ox) + 'px';
+        if (anchor === 'top-center' || anchor === 'bottom-center') {
+          s.left = '50%'; s.transform = `translateX(calc(-50% + ${ox}px))`;
+        }
+        if (anchor === 'center-left' || anchor === 'center-right') {
+          s.top = '50%'; s.transform = `translateY(calc(-50% + ${oy}px))`;
+        }
+        if (anchor === 'center') {
+          s.left = '50%'; s.top = '50%';
+          s.transform = `translate(calc(-50% + ${ox}px), calc(-50% + ${oy}px))`;
+        }
+        return s;
+      }
+
+      function hexToRgb01(hex) {
+        const h = (hex||'#000000').replace('#','');
+        return [parseInt(h.slice(0,2),16)/255, parseInt(h.slice(2,4),16)/255, parseInt(h.slice(4,6),16)/255];
+      }
+
+      function buildAnnotationEl(ann) {
+        if (ann.el) ann.el.remove();
+        const el = document.createElement('div');
+        el.className = 'ann-overlay';
+        el.dataset.annId = ann.id;
+        const pos = annAnchorStyle(ann.anchor||'bottom-left', ann.offsetX||0, ann.offsetY||0);
+        Object.assign(el.style, pos);
+        el.style.fontSize   = (ann.fontSize||24) + 'px';
+        el.style.fontWeight = ann.fontWeight || 'bold';
+        el.style.fontFamily = ann.fontFamily || 'Arial, sans-serif';
+        el.style.color      = ann.color || '#ffffff';
+        const bgOp = ann.bgOpacity ?? 0;
+        if (bgOp > 0) {
+          const [r,g,b] = hexToRgb01(ann.bgColor || '#000000');
+          el.style.background   = `rgba(${Math.round(r*255)},${Math.round(g*255)},${Math.round(b*255)},${bgOp})`;
+          el.style.padding      = (ann.padding||10) + 'px';
+          el.style.borderRadius = (ann.borderRadius||4) + 'px';
+        } else {
+          el.style.textShadow = '0 1px 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.6)';
+        }
+        el.style.opacity  = ann.opacity ?? 1;
+        el.textContent    = ann.text || '';
+        document.getElementById('annOverlayRoot').appendChild(el);
+        ann.el = el;
+      }
+
+      const FLOAT_DIR_ANGLES = { N:0, NE:45, E:90, SE:135, S:180, SW:225, W:270, NW:315 };
+      const FLOAT_DIR_HORIZ  = { N:'CENTER', NE:'LEFT',  E:'LEFT',  SE:'LEFT',  S:'CENTER', SW:'RIGHT', W:'RIGHT', NW:'RIGHT' };
+      const FLOAT_DIR_VERT   = { N:'BOTTOM', NE:'BOTTOM',E:'CENTER',SE:'TOP',   S:'TOP',    SW:'TOP',   W:'CENTER',NW:'BOTTOM' };
+
+      function computeCalloutOffset(lat, lon, dirStr, floatKm) {
+        const dirRad = Cesium.Math.toRadians(FLOAT_DIR_ANGLES[dirStr] ?? 45);
+        const dist   = (floatKm ?? 300) / 6371;
+        const latRad = Cesium.Math.toRadians(lat);
+        return {
+          lat: lat + Cesium.Math.toDegrees(dist * Math.cos(dirRad)),
+          lon: lon + Cesium.Math.toDegrees(dist * Math.sin(dirRad) / Math.cos(latRad)),
+        };
+      }
+
+      function buildAnnotationGlobeEntity(ann) {
+        if (ann.entity) {
+          (Array.isArray(ann.entity) ? ann.entity : [ann.entity]).forEach(e => viewer.entities.remove(e));
+          ann.entity = null;
+        }
+        if (ann.lat == null || ann.lon == null) return;
+
+        const [cr,cg,cb]   = hexToRgb01(ann.color   || '#ffffff');
+        const [br,bg_b,bb] = hexToRgb01(ann.bgColor || '#000000');
+        const bgOp      = ann.bgOpacity ?? 0.7;
+        const op        = ann.opacity   ?? 1;
+        const lineEnd   = ann.lineEnd   ?? 'arrow';
+        const lineStyle = ann.lineStyle ?? 'solid';
+        const floatDir  = ann.floatDir  ?? 'NE';
+        const showDot   = ann.showDot   ?? true;
+        const ALT       = 5000; // m — above most terrain, keeps line visible
+
+        const offset    = computeCalloutOffset(ann.lat, ann.lon, floatDir, ann.floatKm ?? 300);
+        const anchorPos = Cesium.Cartesian3.fromDegrees(ann.lon,    ann.lat,    ALT);
+        const labelPos  = Cesium.Cartesian3.fromDegrees(offset.lon, offset.lat, ALT);
+
+        const entities = [];
+
+        // ① Label at offset position
+        entities.push(viewer.entities.add({
+          position: labelPos,
+          label: {
+            text:             ann.text || '',
+            font:             `${ann.fontWeight||'bold'} ${ann.fontSize||15}px ${ann.fontFamily||'Arial'}`,
+            fillColor:        new Cesium.Color(cr, cg, cb, op),
+            showBackground:   bgOp > 0,
+            backgroundColor:  new Cesium.Color(br, bg_b, bb, bgOp * op),
+            backgroundPadding:new Cesium.Cartesian2(ann.padding||6, Math.ceil((ann.padding||6)*0.6)),
+            horizontalOrigin: Cesium.HorizontalOrigin[FLOAT_DIR_HORIZ[floatDir] || 'CENTER'],
+            verticalOrigin:   Cesium.VerticalOrigin[FLOAT_DIR_VERT[floatDir]   || 'BOTTOM'],
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            style: Cesium.LabelStyle.FILL,
+          },
+        }));
+
+        // ② Leader line / arrow
+        if (lineEnd !== 'none') {
+          const lineWidth = lineEnd === 'arrow' ? 14 : (ann.lineWidth ?? 2);
+          let material;
+          if (lineEnd === 'arrow') {
+            material = new Cesium.PolylineArrowMaterialProperty(
+              new Cesium.CallbackProperty(() => new Cesium.Color(cr, cg, cb, (ann.opacity??1) * 0.9), false)
+            );
+          } else if (lineStyle === 'dashed') {
+            material = new Cesium.PolylineDashMaterialProperty({
+              color: new Cesium.CallbackProperty(() => new Cesium.Color(cr, cg, cb, (ann.opacity??1) * 0.85), false),
+              dashLength: 16,
+            });
+          } else {
+            material = new Cesium.ColorMaterialProperty(
+              new Cesium.CallbackProperty(() => new Cesium.Color(cr, cg, cb, (ann.opacity??1) * 0.85), false)
+            );
+          }
+          const arrowDir = ann.arrowDir ?? 'out'; // 'out' = anchor→label, 'in' = label→anchor
+          entities.push(viewer.entities.add({
+            polyline: {
+              positions: arrowDir === 'in' ? [labelPos, anchorPos] : [anchorPos, labelPos],
+              width: lineWidth,
+              material,
+              arcType: Cesium.ArcType.NONE,
+              clampToGround: false,
+            },
+          }));
+        }
+
+        // ③ Anchor dot at precise point
+        if (showDot) {
+          entities.push(viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(ann.lon, ann.lat, ALT),
+            point: {
+              pixelSize: ann.dotSize ?? 8,
+              color: new Cesium.CallbackProperty(() => new Cesium.Color(cr, cg, cb, ann.opacity ?? 1), false),
+              outlineColor: new Cesium.Color(0, 0, 0, 0.7),
+              outlineWidth: 1.5,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            },
+          }));
+        }
+
+        ann.entity = entities;
+      }
+
+      function applyAnnotationOpacity(ann) {
+        const op = ann.opacity ?? 1;
+        if (ann.type === 'screen' && ann.el) {
+          ann.el.style.opacity = op;
+          return;
+        }
+        if (ann.type === 'globe' && ann.entity?.length) {
+          // Label (entity[0]) uses static Cesium.Color — must be updated explicitly
+          const [cr,cg,cb]   = hexToRgb01(ann.color   || '#ffffff');
+          const [br,bg_b,bb] = hexToRgb01(ann.bgColor || '#000000');
+          const bgOp = ann.bgOpacity ?? 0.7;
+          const lbl = ann.entity[0];
+          if (lbl?.label) {
+            lbl.label.fillColor       = new Cesium.Color(cr, cg, cb, op);
+            lbl.label.backgroundColor = new Cesium.Color(br, bg_b, bb, bgOp * op);
+          }
+          // Polyline and dot use CallbackProperty reading ann.opacity — update automatically
+        }
+      }
+
+      function rebuildAnnotation(ann) {
+        if (ann.type === 'screen') {
+          if (ann.entity) {
+            (Array.isArray(ann.entity) ? ann.entity : [ann.entity]).forEach(e => viewer.entities.remove(e));
+            ann.entity = null;
+          }
+          buildAnnotationEl(ann);
+        } else {
+          if (ann.el) { ann.el.remove(); ann.el = null; }
+          buildAnnotationGlobeEntity(ann);
+        }
+        if (tracks['ann_'+ann.id]) {
+          const t = ann.text || '';
+          tracks['ann_'+ann.id].label = t.length > 20 ? t.slice(0,20)+'…' : t;
+        }
+      }
+
+      function createAnnotation(fields) {
+        const ann = Object.assign({
+          id: nextAnnotationId++, text: 'Annotation', type: 'screen',
+          anchor: 'bottom-left', offsetX: 40, offsetY: -70,
+          lat: null, lon: null, fontFamily: 'Arial',
+          floatDir: 'NE', floatKm: 300, lineEnd: 'arrow', lineStyle: 'solid',
+          lineWidth: 2, showDot: true, dotSize: 8,
+          fontSize: 24, fontWeight: 'bold', color: '#ffffff',
+          bgColor: '#000000', bgOpacity: 0.72, padding: 12, borderRadius: 4,
+          opacity: 1, el: null, entity: null,
+        }, fields);
+        annotations.push(ann);
+        const lbl = ann.text.length > 20 ? ann.text.slice(0,20)+'…' : ann.text;
+        tracks['ann_'+ann.id] = { id:'ann_'+ann.id, label:lbl, category:'annotation', color:'#f0a050', h:22, keyframes:[] };
+        if (ann.type === 'screen') buildAnnotationEl(ann);
+        else buildAnnotationGlobeEntity(ann);
+        renderAnnotationList();
+        tlBuildLabels();
+        return ann;
+      }
+
+      function deleteAnnotation(id) {
+        const idx = annotations.findIndex(a => a.id === id);
+        if (idx === -1) return;
+        const ann = annotations[idx];
+        if (ann.el) ann.el.remove();
+        if (ann.entity) (Array.isArray(ann.entity)?ann.entity:[ann.entity]).forEach(e=>viewer.entities.remove(e));
+        delete tracks['ann_'+id];
+        annotations.splice(idx, 1);
+        renderAnnotationList();
+        tlBuildLabels();
+      }
+
+      function renderAnnotationList() {
+        const list = document.getElementById('annotationList');
+        if (!list) return;
+        if (!annotations.length) {
+          list.innerHTML = '<div style="font-size:11px;color:#aaa;text-align:center;padding:8px 0;">Use a preset above or + Add to create an annotation.</div>';
+          return;
+        }
+        list.innerHTML = '';
+        annotations.forEach(ann => {
+          const hasKf = (tracks['ann_'+ann.id]?.keyframes.length ?? 0) > 0;
+          const card = document.createElement('div');
+          card.className = 'ann-card';
+          card.innerHTML = `
+            <div class="ann-card-header">
+              <span class="ann-card-title" title="${ann.text}">${ann.text||'(no text)'}</span>
+              <button class="ann-icon-btn" data-vis="${ann.id}" title="${ann.opacity>0?'Hide':'Show'}">${ann.opacity>0?'👁':'🙈'}</button>
+              <button class="ann-icon-btn" data-del="${ann.id}" style="color:#b00;" title="Delete">×</button>
+            </div>
+            <div class="ann-card-body">
+              <textarea class="ann-textarea" data-text="${ann.id}" rows="2">${ann.text||''}</textarea>
+              <div class="ann-row">
+                <span class="ann-label">Type</span>
+                <button class="ann-type-btn ${ann.type==='screen'?'active':''}" data-type-screen="${ann.id}">Screen</button>
+                <button class="ann-type-btn ${ann.type==='globe'?'active':''}" data-type-globe="${ann.id}">Globe</button>
+              </div>
+              ${ann.type==='screen' ? `
+              <div class="ann-row" style="align-items:flex-start;">
+                <span class="ann-label" style="padding-top:3px;">Position</span>
+                <div class="ann-anchor-grid" style="flex:1;">
+                  ${ANCHOR_POSITIONS.map((p,i)=>`<button class="ann-anchor-cell${ann.anchor===p?' active':''}" data-anchor="${ann.id}:${p}" title="${p}">${ANCHOR_LABELS[i]}</button>`).join('')}
+                </div>
+                <div style="display:flex;flex-direction:column;gap:3px;margin-left:5px;">
+                  <input type="number" value="${ann.offsetX||0}" data-ox="${ann.id}" placeholder="X" style="width:36px;font-size:10px;padding:1px 3px;border:1px solid #ccc;border-radius:3px;margin:0;text-align:center;" />
+                  <input type="number" value="${ann.offsetY||0}" data-oy="${ann.id}" placeholder="Y" style="width:36px;font-size:10px;padding:1px 3px;border:1px solid #ccc;border-radius:3px;margin:0;text-align:center;" />
+                </div>
+              </div>` : `
+              <div class="ann-row">
+                <span class="ann-label">Lat / Lon</span>
+                <input type="number" value="${ann.lat??0}" data-lat="${ann.id}" step="0.1" style="width:58px;font-size:10px;padding:1px 3px;border:1px solid #ccc;border-radius:3px;margin:0;" />
+                <input type="number" value="${ann.lon??0}" data-lon="${ann.id}" step="0.1" style="width:58px;font-size:10px;padding:1px 3px;border:1px solid #ccc;border-radius:3px;margin:0;" />
+              </div>
+              <div class="ann-row" style="align-items:flex-start;">
+                <span class="ann-label" style="padding-top:3px;">Direction</span>
+                <div class="ann-anchor-grid" style="flex:1;">
+                  ${['NW','N','NE','W',null,'E','SW','S','SE'].map((d,i) =>
+                    d === null
+                      ? `<div style="display:flex;align-items:center;justify-content:center;font-size:11px;color:#bbb;pointer-events:none;">●</div>`
+                      : `<button class="ann-anchor-cell${(ann.floatDir??'NE')===d?' active':''}" data-floatdir="${ann.id}:${d}">${d}</button>`
+                  ).join('')}
+                </div>
+                <div style="display:flex;flex-direction:column;gap:2px;margin-left:5px;align-items:center;">
+                  <span style="font-size:9px;color:#888;line-height:1;">km</span>
+                  <input type="number" value="${ann.floatKm??300}" data-floatkm="${ann.id}" min="10" max="5000" step="50"
+                    style="width:42px;font-size:10px;padding:1px 3px;border:1px solid #ccc;border-radius:3px;margin:0;text-align:center;" />
+                </div>
+              </div>
+              <div class="ann-row">
+                <span class="ann-label">Line</span>
+                <button class="ann-type-btn${(ann.lineEnd??'arrow')==='arrow'?' active':''}" data-lineend="${ann.id}:arrow">→ Arrow</button>
+                <button class="ann-type-btn${(ann.lineEnd??'arrow')==='line'?' active':''}" data-lineend="${ann.id}:line">— Line</button>
+                <button class="ann-type-btn${(ann.lineEnd??'arrow')==='none'?' active':''}" data-lineend="${ann.id}:none">None</button>
+              </div>
+              ${(ann.lineEnd??'arrow')==='arrow' ? `
+              <div class="ann-row">
+                <span class="ann-label">Points</span>
+                <button class="ann-type-btn${(ann.arrowDir??'out')==='out'?' active':''}" data-arrowdir="${ann.id}:out">→ To label</button>
+                <button class="ann-type-btn${(ann.arrowDir??'out')==='in'?' active':''}" data-arrowdir="${ann.id}:in">← To map</button>
+              </div>` : ''}
+              ${(ann.lineEnd??'arrow')==='line' ? `
+              <div class="ann-row">
+                <span class="ann-label">Style</span>
+                <button class="ann-type-btn${(ann.lineStyle??'solid')==='solid'?' active':''}" data-linestyle="${ann.id}:solid">Solid</button>
+                <button class="ann-type-btn${(ann.lineStyle??'solid')==='dashed'?' active':''}" data-linestyle="${ann.id}:dashed">Dashed</button>
+              </div>` : ''}
+              <div class="ann-row">
+                <span class="ann-label">Dot</span>
+                <label style="margin:0;font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;">
+                  <input type="checkbox" ${(ann.showDot??true)?'checked':''} data-showdot="${ann.id}" style="margin:0;"/>
+                  Anchor dot
+                </label>
+                ${(ann.showDot??true) ? `<input type="number" value="${ann.dotSize??8}" data-dotsize="${ann.id}" min="3" max="24"
+                  style="width:34px;font-size:10px;padding:1px 3px;border:1px solid #ccc;border-radius:3px;margin:0;text-align:center;" title="Dot size (px)" />` : ''}
+              </div>`}
+              <div class="ann-row">
+                <span class="ann-label">Font</span>
+                <input type="number" value="${ann.fontSize||24}" data-fontsize="${ann.id}" min="8" max="120"
+                  style="width:38px;font-size:10px;padding:1px 3px;border:1px solid #ccc;border-radius:3px;margin:0;text-align:center;" />
+                <select data-fontweight="${ann.id}" style="font-size:10px;padding:1px 2px;border:1px solid #ccc;border-radius:3px;height:auto;margin:0;flex:1;">
+                  <option value="normal" ${ann.fontWeight==='normal'?'selected':''}>Regular</option>
+                  <option value="bold" ${ann.fontWeight==='bold'?'selected':''}>Bold</option>
+                </select>
+              </div>
+              <div class="ann-row">
+                <span class="ann-label">Color</span>
+                <input type="color" value="${ann.color||'#ffffff'}" data-color="${ann.id}"
+                  style="width:28px;height:20px;padding:1px;border:1px solid #ccc;border-radius:3px;cursor:pointer;margin:0;" />
+                <span style="font-size:10px;color:#888;margin-left:4px;">Bg</span>
+                <input type="color" value="${ann.bgColor||'#000000'}" data-bgcolor="${ann.id}"
+                  style="width:28px;height:20px;padding:1px;border:1px solid #ccc;border-radius:3px;cursor:pointer;margin:0;" />
+                <input type="range" min="0" max="100" value="${Math.round((ann.bgOpacity??0)*100)}" data-bgop="${ann.id}"
+                  style="flex:1;margin:0;height:3px;" />
+                <span data-bgop-val="${ann.id}" style="font-size:10px;color:#888;width:24px;text-align:right;">${Math.round((ann.bgOpacity??0)*100)}%</span>
+              </div>
+              <div class="ann-row">
+                <span class="ann-label">Opacity</span>
+                <input type="range" min="0" max="100" value="${Math.round((ann.opacity??1)*100)}" data-annop="${ann.id}"
+                  style="flex:1;margin:0;height:3px;" ${hasKf?'title="Controlled by keyframes" style="flex:1;margin:0;height:3px;opacity:0.4;"':''} />
+                <span data-annop-val="${ann.id}" style="font-size:10px;color:#888;width:24px;text-align:right;">${Math.round((ann.opacity??1)*100)}%</span>
+              </div>
+            </div>`;
+          list.appendChild(card);
+        });
+
+        // Wire events (delegated pattern)
+        list.querySelectorAll('[data-text]').forEach(el => el.addEventListener('input', () => {
+          const ann = annotations.find(a=>a.id===+el.dataset.text); if(!ann) return;
+          ann.text = el.value;
+          el.closest('.ann-card').querySelector('.ann-card-title').textContent = ann.text||'(no text)';
+          if(tracks['ann_'+ann.id]) tracks['ann_'+ann.id].label = (ann.text||'').slice(0,20)+(ann.text.length>20?'…':'');
+          if(ann.type==='screen'&&ann.el) ann.el.textContent=ann.text;
+          else if(ann.entity?.[0]?.label) ann.entity[0].label.text=ann.text;
+          tlBuildLabels();
+        }));
+        list.querySelectorAll('[data-vis]').forEach(btn => btn.addEventListener('click', () => {
+          const ann = annotations.find(a=>a.id===+btn.dataset.vis); if(!ann) return;
+          ann.opacity = ann.opacity>0 ? 0 : 1;
+          applyAnnotationOpacity(ann); renderAnnotationList();
+        }));
+        list.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => deleteAnnotation(+btn.dataset.del)));
+        list.querySelectorAll('[data-type-screen]').forEach(btn => btn.addEventListener('click', () => {
+          const ann = annotations.find(a=>a.id===+btn.dataset.typeScreen); if(!ann||ann.type==='screen') return;
+          ann.type='screen'; ann.anchor=ann.anchor||'bottom-left'; rebuildAnnotation(ann); renderAnnotationList();
+        }));
+        list.querySelectorAll('[data-type-globe]').forEach(btn => btn.addEventListener('click', () => {
+          const ann = annotations.find(a=>a.id===+btn.dataset.typeGlobe); if(!ann||ann.type==='globe') return;
+          ann.type='globe'; ann.lat=ann.lat??0; ann.lon=ann.lon??0; rebuildAnnotation(ann); renderAnnotationList();
+        }));
+        list.querySelectorAll('[data-anchor]').forEach(btn => btn.addEventListener('click', () => {
+          const [idStr,pos] = btn.dataset.anchor.split(':');
+          const ann = annotations.find(a=>a.id===+idStr); if(!ann) return;
+          ann.anchor=pos; rebuildAnnotation(ann); renderAnnotationList();
+        }));
+        const numField = (attr, prop, rebuild=true) => list.querySelectorAll(`[data-${attr}]`).forEach(el => el.addEventListener('change', () => {
+          const ann = annotations.find(a=>a.id===+el.dataset[attr.replace(/-./g,m=>m[1].toUpperCase())]); if(!ann) return;
+          ann[prop]=+el.value; if(rebuild) rebuildAnnotation(ann);
+        }));
+        numField('ox',      'offsetX');
+        numField('oy',      'offsetY');
+        numField('lat',     'lat');
+        numField('lon',     'lon');
+        numField('fontsize','fontSize');
+        list.querySelectorAll('[data-leader]').forEach(el => el.addEventListener('change', () => {
+          const ann = annotations.find(a=>a.id===+el.dataset.leader); if(!ann) return;
+          ann.leaderLine=el.checked; rebuildAnnotation(ann);
+        }));
+        list.querySelectorAll('[data-floatdir]').forEach(btn => btn.addEventListener('click', () => {
+          const [idStr,dir] = btn.dataset.floatdir.split(':');
+          const ann = annotations.find(a=>a.id===+idStr); if(!ann) return;
+          ann.floatDir=dir; rebuildAnnotation(ann); renderAnnotationList();
+        }));
+        list.querySelectorAll('[data-floatkm]').forEach(el => el.addEventListener('change', () => {
+          const ann = annotations.find(a=>a.id===+el.dataset.floatkm); if(!ann) return;
+          ann.floatKm=+el.value; rebuildAnnotation(ann);
+        }));
+        list.querySelectorAll('[data-lineend]').forEach(btn => btn.addEventListener('click', () => {
+          const [idStr,val] = btn.dataset.lineend.split(':');
+          const ann = annotations.find(a=>a.id===+idStr); if(!ann) return;
+          ann.lineEnd=val; rebuildAnnotation(ann); renderAnnotationList();
+        }));
+        list.querySelectorAll('[data-arrowdir]').forEach(btn => btn.addEventListener('click', () => {
+          const [idStr,val] = btn.dataset.arrowdir.split(':');
+          const ann = annotations.find(a=>a.id===+idStr); if(!ann) return;
+          ann.arrowDir=val; rebuildAnnotation(ann); renderAnnotationList();
+        }));
+        list.querySelectorAll('[data-linestyle]').forEach(btn => btn.addEventListener('click', () => {
+          const [idStr,val] = btn.dataset.linestyle.split(':');
+          const ann = annotations.find(a=>a.id===+idStr); if(!ann) return;
+          ann.lineStyle=val; rebuildAnnotation(ann); renderAnnotationList();
+        }));
+        list.querySelectorAll('[data-showdot]').forEach(el => el.addEventListener('change', () => {
+          const ann = annotations.find(a=>a.id===+el.dataset.showdot); if(!ann) return;
+          ann.showDot=el.checked; rebuildAnnotation(ann); renderAnnotationList();
+        }));
+        list.querySelectorAll('[data-dotsize]').forEach(el => el.addEventListener('change', () => {
+          const ann = annotations.find(a=>a.id===+el.dataset.dotsize); if(!ann) return;
+          ann.dotSize=+el.value; rebuildAnnotation(ann);
+        }));
+        list.querySelectorAll('[data-fontweight]').forEach(el => el.addEventListener('change', () => {
+          const ann = annotations.find(a=>a.id===+el.dataset.fontweight); if(!ann) return;
+          ann.fontWeight=el.value; rebuildAnnotation(ann);
+        }));
+        list.querySelectorAll('[data-color]').forEach(el => el.addEventListener('input', () => {
+          const ann = annotations.find(a=>a.id===+el.dataset.color); if(!ann) return;
+          ann.color=el.value; rebuildAnnotation(ann);
+        }));
+        list.querySelectorAll('[data-bgcolor]').forEach(el => el.addEventListener('input', () => {
+          const ann = annotations.find(a=>a.id===+el.dataset.bgcolor); if(!ann) return;
+          ann.bgColor=el.value; rebuildAnnotation(ann);
+        }));
+        list.querySelectorAll('[data-bgop]').forEach(el => el.addEventListener('input', () => {
+          const ann = annotations.find(a=>a.id===+el.dataset.bgop); if(!ann) return;
+          ann.bgOpacity=+el.value/100;
+          el.closest('.ann-card').querySelector(`[data-bgop-val="${ann.id}"]`).textContent=el.value+'%';
+          rebuildAnnotation(ann);
+        }));
+        list.querySelectorAll('[data-annop]').forEach(el => el.addEventListener('input', () => {
+          const ann = annotations.find(a=>a.id===+el.dataset.annop); if(!ann) return;
+          ann.opacity=+el.value/100;
+          el.closest('.ann-card').querySelector(`[data-annop-val="${ann.id}"]`).textContent=el.value+'%';
+          applyAnnotationOpacity(ann);
+        }));
+      }
+
       let cityStyleClipboard = null;
       const CITY_STYLE_FIELDS = [
         'color','labelColor','dotSize','showLabel','fontSize','fontWeight','fontStyle','fontFamily',
@@ -4784,6 +5729,747 @@
         hideGeocodeResults();
       });
 
+      // ── City Route Groups ────────────────────────────────────────────────────
+
+      const COUNTRY_ABBREV = {
+        'United States of America': 'USA', 'United States': 'USA',
+        'United Kingdom': 'UK', 'Russia': 'RUS', 'China': 'CHN',
+        'Germany': 'GER', 'France': 'FRA', 'Italy': 'ITA', 'Spain': 'ESP',
+        'Canada': 'CAN', 'Australia': 'AUS', 'Brazil': 'BRA', 'India': 'IND',
+        'Japan': 'JPN', 'South Korea': 'KOR', 'Mexico': 'MEX',
+        'Argentina': 'ARG', 'South Africa': 'ZAF', 'Nigeria': 'NGA',
+        'Egypt': 'EGY', 'Saudi Arabia': 'SAU', 'Turkey': 'TUR',
+        'Netherlands': 'NLD', 'Belgium': 'BEL', 'Sweden': 'SWE',
+        'Norway': 'NOR', 'Denmark': 'DNK', 'Finland': 'FIN',
+        'Poland': 'POL', 'Ukraine': 'UKR', 'Switzerland': 'CHE',
+        'Austria': 'AUT', 'Portugal': 'PRT', 'Greece': 'GRC',
+        'New Zealand': 'NZL', 'Indonesia': 'IDN', 'Pakistan': 'PAK',
+        'Bangladesh': 'BGD', 'Vietnam': 'VNM', 'Thailand': 'THA',
+        'Philippines': 'PHL', 'Malaysia': 'MYS', 'Singapore': 'SGP',
+        'Israel': 'ISR', 'Iran': 'IRN', 'Iraq': 'IRQ',
+        'Colombia': 'COL', 'Chile': 'CHL', 'Peru': 'PER',
+        'Venezuela': 'VEN', 'Czech Republic': 'CZE', 'Romania': 'ROU',
+        'Hungary': 'HUN', 'Morocco': 'MAR', 'Kenya': 'KEN',
+        'Ethiopia': 'ETH', 'Ghana': 'GHA', 'Tanzania': 'TZA',
+      };
+
+      function routeCityDisplayName(city) {
+        const country = COUNTRY_ABBREV[city.country] || city.country;
+        if (city.state) return `${city.name}, ${city.state} (${country})`;
+        return `${city.name} (${country})`;
+      }
+
+      let cityRouteGroups   = [];
+      let nextRouteGroupId  = 1;
+      let nextRouteColorIdx = 0;
+
+      function arcPositions(cityA, cityB, numPts) {
+        const gd = new Cesium.EllipsoidGeodesic(
+          Cesium.Cartographic.fromDegrees(cityA.lon, cityA.lat),
+          Cesium.Cartographic.fromDegrees(cityB.lon, cityB.lat)
+        );
+        const dist = gd.surfaceDistance;
+        const maxH = dist * 0.30; // 30% of surface distance as peak height
+        const pts = [];
+        for (let i = 0; i <= numPts; i++) {
+          const t = i / numPts;
+          const pt = gd.interpolateUsingSurfaceDistance(t * dist);
+          const h  = Math.sin(Math.PI * t) * maxH;
+          pts.push(Cesium.Cartesian3.fromRadians(pt.longitude, pt.latitude, h));
+        }
+        return pts;
+      }
+
+      function buildRouteEntities(group) {
+        group.entities.forEach(e => viewer.entities.remove(e));
+        group.entities = [];
+        if ((group.lineStyle ?? 'line') === 'none') return;
+        const cities = group.cities;
+        if (cities.length < 2) return;
+
+        const color   = Cesium.Color.fromCssColorString(group.color);
+        const w       = group.width ?? 2;
+        const n       = cities.length - 1;
+        const isArrow = (group.lineShape ?? 'straight') === 'arrow';
+        const isArc   = (group.lineShape ?? 'straight') === 'arc';
+
+        let lineMat;
+        if (group.lineStyle === 'dashed') lineMat = new Cesium.PolylineDashMaterialProperty({ color, dashLength: 20, gapColor: Cesium.Color.TRANSPARENT });
+        else if (group.lineStyle === 'dotted') lineMat = new Cesium.PolylineDashMaterialProperty({ color, dashLength: 6, gapColor: Cesium.Color.TRANSPARENT });
+        else lineMat = color;
+
+        for (let i = 0; i < n; i++) {
+          const seg = i; // capture
+          const a = cities[i], b = cities[i + 1];
+
+          // show: CallbackProperty so visibility updates without entity rebuild
+          const showCb = new Cesium.CallbackProperty(() => {
+            if (group.visible === false) return false;
+            const sf = (group.routeStart ?? 0) / 100;
+            const ef = (group.routeEnd   ?? 100) / 100;
+            if (isArrow) return (seg + 0.5) / n >= sf && (seg + 0.5) / n <= ef;
+            return Math.max(0, sf * n - seg) < Math.min(1, ef * n - seg);
+          }, false);
+
+          let positions, material, lineWidth;
+
+          if (isArrow) {
+            positions = Cesium.Cartesian3.fromDegreesArray([a.lon, a.lat, b.lon, b.lat]);
+            material  = new Cesium.PolylineArrowMaterialProperty(color);
+            lineWidth = Math.max(w * 4, 12);
+          } else if (isArc) {
+            const arcPts = arcPositions(a, b, 48); // precomputed once per segment
+            positions = new Cesium.CallbackProperty(() => {
+              const sf = (group.routeStart ?? 0) / 100;
+              const ef = (group.routeEnd   ?? 100) / 100;
+              const t0 = Math.max(0, sf * n - seg);
+              const t1 = Math.min(1, ef * n - seg);
+              if (t0 >= t1) return arcPts.slice(0, 2);
+              const si = Math.floor(t0 * 48), ei = Math.ceil(t1 * 48);
+              const pts = arcPts.slice(si, Math.min(ei + 1, arcPts.length));
+              return pts.length >= 2 ? pts : arcPts.slice(0, 2);
+            }, false);
+            material  = lineMat;
+            lineWidth = w;
+          } else {
+            const posA = Cesium.Cartesian3.fromDegrees(a.lon, a.lat);
+            const posB = Cesium.Cartesian3.fromDegrees(b.lon, b.lat);
+            positions = new Cesium.CallbackProperty(() => {
+              const sf = (group.routeStart ?? 0) / 100;
+              const ef = (group.routeEnd   ?? 100) / 100;
+              const t0 = Math.max(0, sf * n - seg);
+              const t1 = Math.min(1, ef * n - seg);
+              return [
+                Cesium.Cartesian3.lerp(posA, posB, t0, new Cesium.Cartesian3()),
+                Cesium.Cartesian3.lerp(posA, posB, t1, new Cesium.Cartesian3()),
+              ];
+            }, false);
+            material  = lineMat;
+            lineWidth = w;
+          }
+
+          group.entities.push(viewer.entities.add({
+            polyline: { positions, show: showCb, width: lineWidth, material, clampToGround: false }
+          }));
+        }
+      }
+
+      function _routeLabelProps(group, text, cx, cy, prefix = 'label') {
+        const p = prefix;
+        const lo       = group[`${p}Opacity`]        ?? 1.0;
+        const defSize  = p === 'gl' ? 28 : 14;
+        const defBold  = p === 'gl' ? 'bold' : 'normal';
+        const labelCol = Cesium.Color.fromCssColorString(group[`${p}Color`] ?? group.color);
+        const fs = group[`${p}FontStyle`]  ?? 'normal';
+        const fw = group[`${p}FontWeight`] ?? defBold;
+        const fz = group[`${p}FontSize`]   ?? defSize;
+        const ff = group[`${p}FontFamily`] ?? 'Arial';
+        const fontStr = `${fs === 'italic' ? 'italic ' : ''}${fw === 'bold' ? 'bold ' : ''}${fz}px ${ff}`;
+        return {
+          text,
+          font: fontStr,
+          fillColor: labelCol.withAlpha(lo),
+          outlineColor: Cesium.Color.BLACK.withAlpha(lo),
+          outlineWidth: group[`${p}OutlineWidth`] ?? 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          showBackground: group[`${p}ShowBackground`] ?? false,
+          backgroundColor: Cesium.Color.fromCssColorString(group[`${p}BgColor`] ?? '#000000')
+            .withAlpha((group[`${p}BgOpacity`] ?? 0.5) * lo),
+          backgroundPadding: new Cesium.Cartesian2(group[`${p}BgPadX`] ?? 5, group[`${p}BgPadY`] ?? 3),
+          pixelOffset: new Cesium.Cartesian2(cx, cy),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          show: group.visible !== false,
+        };
+      }
+
+      function buildRouteCityMarkers(group) {
+        group.cityEntities.forEach(e => viewer.entities.remove(e));
+        group.cityEntities = [];
+        if (!group.showCityLabels || !group.cities.length) return;
+        const dotCol = Cesium.Color.fromCssColorString(group.color);
+        const show = group.visible !== false;
+        for (const city of group.cities) {
+          const e = viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(city.lon, city.lat),
+            point: new Cesium.PointGraphics({
+              pixelSize: 6,
+              color: dotCol,
+              outlineColor: Cesium.Color.BLACK,
+              outlineWidth: 1,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              show,
+            }),
+            label: new Cesium.LabelGraphics({
+              ..._routeLabelProps(group, city.name, group.labelOffsetX ?? 4, group.labelOffsetY ?? 0),
+              show,
+              horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+              verticalOrigin: Cesium.VerticalOrigin.CENTER,
+            }),
+          });
+          group.cityEntities.push(e);
+        }
+      }
+
+      function buildRouteGroupLabel(group) {
+        if (group.labelEntity) { viewer.entities.remove(group.labelEntity); group.labelEntity = null; }
+        if (!group.showLabel || !group.cities.length) return;
+        const lat = group.cities.reduce((s, c) => s + c.lat, 0) / group.cities.length;
+        const lon = group.cities.reduce((s, c) => s + c.lon, 0) / group.cities.length;
+        group.labelEntity = viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(lon, lat),
+          label: {
+            ..._routeLabelProps(group, group.name, group.glOffsetX ?? 0, group.glOffsetY ?? 0, 'gl'),
+            horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+            verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          }
+        });
+      }
+
+      function buildRouteLabels(group) {
+        buildRouteCityMarkers(group);
+        buildRouteGroupLabel(group);
+      }
+
+      function createCityRouteGroup(name, cities = [], aiMeta = null) {
+        if (!name) return;
+        const group = {
+          id: nextRouteGroupId++,
+          name,
+          color: GROUP_COLORS[nextRouteColorIdx++ % GROUP_COLORS.length],
+          lineStyle: 'line',
+          lineShape: 'straight',
+          routeStart: 0,
+          routeEnd: 100,
+          width: 2,
+          visible: true,
+          citiesCollapsed: false,
+          cityLabelStyleCollapsed: true,
+          glStyleCollapsed: true,
+          cities: cities.map(c => ({ name: c.name, country: c.country, state: c.state || undefined, lat: c.lat, lon: c.lon })),
+          entities: [],
+          cityEntities: [],
+          aiMeta,
+          // City marker label style
+          showCityLabels: false,
+          labelColor: null,
+          labelFontSize: 14,
+          labelFontWeight: 'normal',
+          labelFontStyle: 'normal',
+          labelFontFamily: 'Arial',
+          labelOffsetX: 4,
+          labelOffsetY: 0,
+          labelOutlineWidth: 2,
+          labelOpacity: 1.0,
+          labelShowBackground: false,
+          labelBgColor: '#000000',
+          labelBgOpacity: 0.5,
+          labelBgPadX: 5,
+          labelBgPadY: 3,
+          // Group label style (larger by default)
+          showLabel: false,
+          labelEntity: null,
+          glColor: null,
+          glFontSize: 28,
+          glFontWeight: 'bold',
+          glFontStyle: 'normal',
+          glFontFamily: 'Arial',
+          glOffsetX: 0,
+          glOffsetY: 0,
+          glOutlineWidth: 2,
+          glOpacity: 1.0,
+          glShowBackground: false,
+          glBgColor: '#000000',
+          glBgOpacity: 0.5,
+          glBgPadX: 5,
+          glBgPadY: 3,
+        };
+        cityRouteGroups.push(group);
+        buildRouteEntities(group);
+        renderRouteGroupList();
+        return group;
+      }
+
+      function deleteCityRouteGroup(id) {
+        const idx = cityRouteGroups.findIndex(g => g.id === id);
+        if (idx === -1) return;
+        const g = cityRouteGroups[idx];
+        g.entities.forEach(e => viewer.entities.remove(e));
+        g.cityEntities.forEach(e => viewer.entities.remove(e));
+        if (g.labelEntity) viewer.entities.remove(g.labelEntity);
+        cityRouteGroups.splice(idx, 1);
+        renderRouteGroupList();
+      }
+
+      function setRouteGroupVisible(group, visible) {
+        group.visible = visible;
+        // polyline entities: showCb reads group.visible — no explicit update needed
+        group.cityEntities.forEach(e => { e.show = visible; });
+        if (group.labelEntity) group.labelEntity.show = visible && group.showLabel;
+      }
+
+      function lookupRouteCity(displayStr) {
+        // Match "Name (Country)" format from datalist
+        const m = displayStr.match(/^(.+)\s+\((.+)\)$/);
+        if (m) {
+          const [, name, country] = m;
+          return cityData.find(c => c.name === name && c.country === country) || null;
+        }
+        // Plain name: first match
+        return cityData.find(c => c.name === displayStr) || null;
+      }
+
+      function makeRouteLabelStyleSection(group, prefix, collapsedKey, title, rebuildFn) {
+        const toggle = document.createElement("div");
+        toggle.className = "route-cities-toggle";
+        toggle.style.marginBottom = "3px";
+        const arrow = document.createElement("span");
+        arrow.textContent = group[collapsedKey] ? "▶" : "▼";
+        const titleSpan = document.createElement("span");
+        titleSpan.textContent = title;
+        toggle.append(arrow, titleSpan);
+
+        const panel = document.createElement("div");
+        panel.style.display = group[collapsedKey] ? "none" : "";
+        toggle.addEventListener("click", () => {
+          group[collapsedKey] = !group[collapsedKey];
+          arrow.textContent = group[collapsedKey] ? "▶" : "▼";
+          panel.style.display = group[collapsedKey] ? "none" : "";
+        });
+
+        const p = prefix;
+        const defSize = p === 'gl' ? 28 : 14;
+        const defBold = p === 'gl' ? 'bold' : 'normal';
+        const defOX   = p === 'label' ? 4 : 0;
+
+        const mkLbl = (text, extra) => { const s = document.createElement("span"); s.textContent = text; s.style.cssText = `font-size:10px;color:#888;${extra??''}`; return s; };
+        const mkNum = (min, max, step, val, title, w, onChange) => {
+          const el = document.createElement("input");
+          el.type = "number"; el.min = min; el.max = max; el.step = step; el.value = val; el.title = title;
+          el.style.cssText = `width:${w}px;font-size:11px;padding:1px 3px;margin:0;text-align:center;`;
+          el.addEventListener("change", e => { onChange(e); rebuildFn(); });
+          return el;
+        };
+        const mkSwatch = (getColor, setColor, title) => {
+          const sw = document.createElement("span");
+          sw.title = title;
+          sw.style.cssText = `display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid #666;background:${getColor()};cursor:pointer;flex-shrink:0;`;
+          const inp = document.createElement("input"); inp.type = "color"; inp.value = getColor();
+          inp.style.cssText = "position:absolute;width:0;height:0;opacity:0;pointer-events:none;";
+          sw.appendChild(inp);
+          sw.addEventListener("click", () => inp.click());
+          inp.addEventListener("input", e => { setColor(e.target.value); sw.style.background = e.target.value; rebuildFn(); });
+          return sw;
+        };
+        const mkToggle = (label, title, isActive, onClick) => {
+          const btn = document.createElement("button");
+          btn.textContent = label; btn.title = title;
+          btn.className = "hl-toggle" + (isActive ? " hl-toggle-active" : "");
+          btn.addEventListener("click", () => onClick(btn));
+          return btn;
+        };
+
+        // Row 1: color + font
+        const fontRow = document.createElement("div");
+        fontRow.className = "city-style-row";
+        fontRow.appendChild(mkSwatch(
+          () => group[`${p}Color`] ?? group.color,
+          v  => { group[`${p}Color`] = v; }, "Label color"
+        ));
+        fontRow.appendChild(mkLbl("Size"));
+        fontRow.appendChild(mkNum(8, 100, 1, group[`${p}FontSize`] ?? defSize, "Font size (px)", 40,
+          e => { group[`${p}FontSize`] = Math.max(8, parseInt(e.target.value) || defSize); e.target.value = group[`${p}FontSize`]; }
+        ));
+        const boldBtn = mkToggle("B", "Bold", (group[`${p}FontWeight`] ?? defBold) === 'bold', btn => {
+          group[`${p}FontWeight`] = group[`${p}FontWeight`] === 'bold' ? 'normal' : 'bold';
+          btn.className = "hl-toggle" + (group[`${p}FontWeight`] === 'bold' ? " hl-toggle-active" : "");
+          rebuildFn();
+        });
+        boldBtn.style.cssText = "font-weight:bold;min-width:24px;";
+        fontRow.appendChild(boldBtn);
+        const italicBtn = mkToggle("I", "Italic", group[`${p}FontStyle`] === 'italic', btn => {
+          group[`${p}FontStyle`] = group[`${p}FontStyle`] === 'italic' ? 'normal' : 'italic';
+          btn.className = "hl-toggle" + (group[`${p}FontStyle`] === 'italic' ? " hl-toggle-active" : "");
+          rebuildFn();
+        });
+        italicBtn.style.cssText = "font-style:italic;min-width:24px;";
+        fontRow.appendChild(italicBtn);
+        const fontSel = document.createElement("select");
+        fontSel.style.cssText = "flex:1;font-size:11px;margin:0;";
+        ['Arial','Helvetica','Verdana','Georgia','Times New Roman','Courier','Impact'].forEach(f => {
+          const opt = document.createElement("option"); opt.value = f; opt.textContent = f;
+          if (f === (group[`${p}FontFamily`] ?? 'Arial')) opt.selected = true;
+          fontSel.appendChild(opt);
+        });
+        fontSel.addEventListener("change", e => { group[`${p}FontFamily`] = e.target.value; rebuildFn(); });
+        fontRow.appendChild(fontSel);
+
+        // Row 2: offset + halo
+        const posRow = document.createElement("div");
+        posRow.className = "city-style-row";
+        posRow.appendChild(mkLbl("X"));
+        posRow.appendChild(mkNum(-200, 200, 1, group[`${p}OffsetX`] ?? defOX, "X offset (px)", 42, e => { group[`${p}OffsetX`] = parseInt(e.target.value) || 0; }));
+        posRow.appendChild(mkLbl("Y", "margin-left:4px;"));
+        posRow.appendChild(mkNum(-200, 200, 1, group[`${p}OffsetY`] ?? 0, "Y offset (px)", 42, e => { group[`${p}OffsetY`] = parseInt(e.target.value) || 0; }));
+        posRow.appendChild(mkLbl("Halo", "margin-left:6px;"));
+        const haloSlider = document.createElement("input");
+        haloSlider.type = "range"; haloSlider.min = "0"; haloSlider.max = "8"; haloSlider.step = "0.5";
+        haloSlider.value = String(group[`${p}OutlineWidth`] ?? 2);
+        haloSlider.style.cssText = "flex:1;min-width:30px;";
+        const haloVal = document.createElement("span");
+        haloVal.textContent = haloSlider.value;
+        haloVal.style.cssText = "font-size:10px;color:#888;width:18px;text-align:right;";
+        haloSlider.addEventListener("input", e => { group[`${p}OutlineWidth`] = parseFloat(e.target.value); haloVal.textContent = e.target.value; rebuildFn(); });
+        posRow.append(haloSlider, haloVal);
+
+        // Row 3: background
+        const bgRow = document.createElement("div");
+        bgRow.className = "city-style-row";
+        const bgSwatch = mkSwatch(
+          () => group[`${p}BgColor`] ?? '#000000',
+          v  => { group[`${p}BgColor`] = v; }, "Background color"
+        );
+        bgSwatch.style.display = group[`${p}ShowBackground`] ? "inline-block" : "none";
+        const bgToggle = mkToggle("Bg", "Background fill", group[`${p}ShowBackground`] ?? false, btn => {
+          group[`${p}ShowBackground`] = !group[`${p}ShowBackground`];
+          btn.className = "hl-toggle" + (group[`${p}ShowBackground`] ? " hl-toggle-active" : "");
+          bgSwatch.style.display = group[`${p}ShowBackground`] ? "inline-block" : "none";
+          rebuildFn();
+        });
+        bgRow.append(bgToggle, bgSwatch);
+        bgRow.appendChild(mkLbl("Pad X", "margin-left:6px;"));
+        bgRow.appendChild(mkNum(0, 40, 1, group[`${p}BgPadX`] ?? 5, "BG pad X", 38, e => { group[`${p}BgPadX`] = Math.max(0, parseInt(e.target.value) || 0); }));
+        bgRow.appendChild(mkLbl("Y", "margin-left:4px;"));
+        bgRow.appendChild(mkNum(0, 40, 1, group[`${p}BgPadY`] ?? 3, "BG pad Y", 38, e => { group[`${p}BgPadY`] = Math.max(0, parseInt(e.target.value) || 0); }));
+
+        // Row 4: opacity
+        const opRow = document.createElement("div");
+        opRow.className = "city-style-row";
+        opRow.appendChild(mkLbl("Opacity"));
+        const opSlider = document.createElement("input");
+        opSlider.type = "range"; opSlider.min = "0"; opSlider.max = "100"; opSlider.step = "5";
+        opSlider.value = String(Math.round((group[`${p}Opacity`] ?? 1.0) * 100));
+        opSlider.style.cssText = "flex:1;min-width:30px;";
+        const opVal = document.createElement("span");
+        opVal.textContent = opSlider.value + "%";
+        opVal.style.cssText = "font-size:10px;color:#888;width:28px;text-align:right;";
+        opSlider.addEventListener("input", e => { group[`${p}Opacity`] = parseInt(e.target.value) / 100; opVal.textContent = e.target.value + "%"; rebuildFn(); });
+        opRow.append(opSlider, opVal);
+
+        panel.append(fontRow, posRow, bgRow, opRow);
+        return { toggle, panel };
+      }
+
+      function renderRouteGroupList() {
+        const container = document.getElementById("routeGroupList");
+        if (!container) return;
+        container.innerHTML = "";
+
+        for (const group of cityRouteGroups) {
+          const card = document.createElement("div");
+          card.className = "route-group-card";
+
+          // ── Header ──
+          const header = document.createElement("div");
+          header.className = "route-group-header";
+
+          const colorInput = document.createElement("input");
+          colorInput.type = "color";
+          colorInput.value = group.color;
+          colorInput.className = "route-group-color";
+          colorInput.title = "Change route color";
+          colorInput.addEventListener("input", e => {
+            group.color = e.target.value;
+            buildRouteEntities(group);
+            buildRouteLabels(group);
+          });
+
+          const nameEl = document.createElement("span");
+          nameEl.className = "route-group-name";
+          nameEl.textContent = group.name;
+          nameEl.title = group.name;
+
+          const countBadge = document.createElement("span");
+          countBadge.className = "route-group-count";
+          countBadge.textContent = group.cities.length;
+
+          const visBtn = document.createElement("button");
+          visBtn.className = "route-group-icon-btn" + (group.visible !== false ? "" : " route-group-icon-btn-off");
+          visBtn.textContent = "👁";
+          visBtn.title = group.visible !== false ? "Hide" : "Show";
+          visBtn.addEventListener("click", () => {
+            const nv = group.visible === false;
+            setRouteGroupVisible(group, nv);
+            visBtn.classList.toggle("route-group-icon-btn-off", !nv);
+            visBtn.title = nv ? "Hide" : "Show";
+          });
+
+          const cityLabelBtn = document.createElement("button");
+          cityLabelBtn.className = "route-group-icon-btn";
+          cityLabelBtn.textContent = "🏙";
+          cityLabelBtn.title = group.showCityLabels ? "Hide city labels" : "Show city labels";
+          cityLabelBtn.style.opacity = group.showCityLabels ? "1" : "0.4";
+          cityLabelBtn.addEventListener("click", () => {
+            group.showCityLabels = !group.showCityLabels;
+            cityLabelBtn.style.opacity = group.showCityLabels ? "1" : "0.4";
+            cityLabelBtn.title = group.showCityLabels ? "Hide city labels" : "Show city labels";
+            buildRouteCityMarkers(group);
+          });
+
+          const labelBtn = document.createElement("button");
+          labelBtn.className = "route-group-icon-btn";
+          labelBtn.textContent = "🏷";
+          labelBtn.title = group.showLabel ? "Hide group label" : "Show group label";
+          labelBtn.style.opacity = group.showLabel ? "1" : "0.4";
+          labelBtn.addEventListener("click", () => {
+            group.showLabel = !group.showLabel;
+            labelBtn.style.opacity = group.showLabel ? "1" : "0.4";
+            labelBtn.title = group.showLabel ? "Hide group label" : "Show group label";
+            buildRouteGroupLabel(group);
+          });
+
+          const delBtn = document.createElement("button");
+          delBtn.className = "route-group-icon-btn";
+          delBtn.textContent = "🗑";
+          delBtn.title = "Delete route";
+          delBtn.addEventListener("click", () => deleteCityRouteGroup(group.id));
+
+          header.append(colorInput, nameEl, countBadge, visBtn, cityLabelBtn, labelBtn, delBtn);
+
+          // ── Style row (line appearance) ──
+          const styleRow = document.createElement("div");
+          styleRow.className = "route-style-row";
+          styleRow.appendChild(Object.assign(document.createElement("label"), { textContent: "Style:" }));
+          for (const s of ['none','line','dashed','dotted']) {
+            const btn = document.createElement("button");
+            btn.className = "route-style-btn" + ((group.lineStyle ?? 'line') === s ? " active" : "");
+            btn.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+            btn.addEventListener("click", () => {
+              group.lineStyle = s;
+              buildRouteEntities(group);
+              styleRow.querySelectorAll(".route-style-btn").forEach(b => b.classList.toggle("active", b === btn));
+            });
+            styleRow.appendChild(btn);
+          }
+
+          // ── Shape row (line geometry) ──
+          const shapeRow = document.createElement("div");
+          shapeRow.className = "route-style-row";
+          shapeRow.appendChild(Object.assign(document.createElement("label"), { textContent: "Shape:" }));
+          for (const s of ['straight','arc','arrow']) {
+            const btn = document.createElement("button");
+            btn.className = "route-style-btn" + ((group.lineShape ?? 'straight') === s ? " active" : "");
+            btn.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+            btn.addEventListener("click", () => {
+              group.lineShape = s;
+              buildRouteEntities(group);
+              shapeRow.querySelectorAll(".route-style-btn").forEach(b => b.classList.toggle("active", b === btn));
+            });
+            shapeRow.appendChild(btn);
+          }
+
+          // ── Width ──
+          const widthRow = document.createElement("div");
+          widthRow.className = "route-width-row";
+          const widthLabel = document.createElement("label");
+          widthLabel.textContent = "Width:";
+          const widthSlider = document.createElement("input");
+          widthSlider.type = "range"; widthSlider.min = 1; widthSlider.max = 12; widthSlider.step = 1;
+          widthSlider.value = group.width ?? 2;
+          const widthVal = document.createElement("span");
+          widthVal.className = "route-width-val";
+          widthVal.textContent = widthSlider.value;
+          widthSlider.addEventListener("input", () => {
+            group.width = parseInt(widthSlider.value);
+            widthVal.textContent = widthSlider.value;
+            buildRouteEntities(group);
+          });
+          widthRow.append(widthLabel, widthSlider, widthVal);
+
+          // ── Route range (start % / end %) ──
+          const makeRangeRow = (labelText, field, defaultVal) => {
+            const row = document.createElement("div");
+            row.className = "route-width-row";
+            row.appendChild(Object.assign(document.createElement("label"), { textContent: labelText, style: "min-width:36px;" }));
+            const slider = document.createElement("input");
+            slider.type = "range"; slider.min = 0; slider.max = 100; slider.step = 1;
+            slider.value = group[field] ?? defaultVal;
+            const valSpan = document.createElement("span");
+            valSpan.className = "route-width-val";
+            valSpan.style.width = "28px";
+            valSpan.textContent = slider.value + "%";
+            slider.addEventListener("input", () => {
+              group[field] = parseInt(slider.value);
+              valSpan.textContent = slider.value + "%";
+              // Clamp: start <= end (CallbackProperty picks up new values automatically)
+              if (field === 'routeStart' && group.routeStart > group.routeEnd) { group.routeEnd = group.routeStart; endSlider.value = group.routeEnd; endVal.textContent = group.routeEnd + "%"; }
+              if (field === 'routeEnd'   && group.routeEnd < group.routeStart) { group.routeStart = group.routeEnd; startSlider.value = group.routeStart; startVal.textContent = group.routeStart + "%"; }
+            });
+            row.append(slider, valSpan);
+            return { row, slider, valSpan };
+          };
+          const { row: startRow, slider: startSlider, valSpan: startVal } = makeRangeRow("Start:", "routeStart", 0);
+          const { row: endRow,   slider: endSlider,   valSpan: endVal   } = makeRangeRow("End:",   "routeEnd",   100);
+
+          // ── Label styling panels ──
+          const { toggle: cityLsToggle, panel: cityLsPanel } = makeRouteLabelStyleSection(
+            group, 'label', 'cityLabelStyleCollapsed', "City label style", () => buildRouteCityMarkers(group)
+          );
+          const { toggle: glToggle, panel: glPanel } = makeRouteLabelStyleSection(
+            group, 'gl', 'glStyleCollapsed', "Group label style", () => buildRouteGroupLabel(group)
+          );
+
+          // ── City search ──
+          const cityAddRow = document.createElement("div");
+          cityAddRow.className = "route-city-add-row";
+          const cityInput = document.createElement("input");
+          cityInput.type = "text";
+          cityInput.setAttribute("list", "cityDatalist");
+          cityInput.placeholder = "Add city…";
+          cityInput.autocomplete = "off";
+          const cityAddBtn = document.createElement("button");
+          cityAddBtn.textContent = "+";
+          cityAddBtn.addEventListener("click", () => {
+            const found = lookupRouteCity(cityInput.value.trim());
+            if (!found) return;
+            group.cities.push({ name: found.name, country: found.country, lat: found.lat, lon: found.lon });
+            cityInput.value = "";
+            buildRouteEntities(group); buildRouteLabels(group);
+            renderRouteGroupList();
+          });
+          cityInput.addEventListener("keydown", e => {
+            if (e.key !== "Enter") return;
+            const found = lookupRouteCity(cityInput.value.trim());
+            if (!found) return;
+            group.cities.push({ name: found.name, country: found.country, lat: found.lat, lon: found.lon });
+            cityInput.value = "";
+            buildRouteEntities(group); buildRouteLabels(group);
+            renderRouteGroupList();
+          });
+          cityAddRow.append(cityInput, cityAddBtn);
+
+          // ── City list toggle ──
+          const citiesToggle = document.createElement("div");
+          citiesToggle.className = "route-cities-toggle";
+          const arrow = document.createElement("span");
+          arrow.textContent = group.citiesCollapsed ? "▶" : "▼";
+          const toggleLabel = document.createElement("span");
+          toggleLabel.textContent = `Cities (${group.cities.length})`;
+          citiesToggle.append(arrow, toggleLabel);
+
+          const cityUl = document.createElement("ul");
+          cityUl.className = "route-city-list";
+          cityUl.style.display = group.citiesCollapsed ? "none" : "";
+
+          citiesToggle.addEventListener("click", () => {
+            group.citiesCollapsed = !group.citiesCollapsed;
+            arrow.textContent = group.citiesCollapsed ? "▶" : "▼";
+            cityUl.style.display = group.citiesCollapsed ? "none" : "";
+          });
+
+          group.cities.forEach((city, idx) => {
+            const li = document.createElement("li");
+            li.className = "route-city-item";
+
+            const numSpan = document.createElement("span");
+            numSpan.style.cssText = "flex:0;color:#aaa;font-size:10px;min-width:14px;";
+            numSpan.textContent = idx + 1;
+
+            const nameSpan = document.createElement("span");
+            nameSpan.textContent = routeCityDisplayName(city);
+
+            const upBtn = document.createElement("button");
+            upBtn.className = "route-city-reorder"; upBtn.textContent = "↑"; upBtn.title = "Move up";
+            upBtn.disabled = idx === 0;
+            upBtn.addEventListener("click", () => {
+              if (idx === 0) return;
+              [group.cities[idx - 1], group.cities[idx]] = [group.cities[idx], group.cities[idx - 1]];
+              buildRouteEntities(group); buildRouteLabels(group);
+              renderRouteGroupList();
+            });
+
+            const downBtn = document.createElement("button");
+            downBtn.className = "route-city-reorder"; downBtn.textContent = "↓"; downBtn.title = "Move down";
+            downBtn.disabled = idx === group.cities.length - 1;
+            downBtn.addEventListener("click", () => {
+              if (idx >= group.cities.length - 1) return;
+              [group.cities[idx], group.cities[idx + 1]] = [group.cities[idx + 1], group.cities[idx]];
+              buildRouteEntities(group); buildRouteLabels(group);
+              renderRouteGroupList();
+            });
+
+            const removeBtn = document.createElement("button");
+            removeBtn.className = "route-city-remove"; removeBtn.textContent = "×"; removeBtn.title = "Remove";
+            removeBtn.addEventListener("click", () => {
+              group.cities.splice(idx, 1);
+              buildRouteEntities(group); buildRouteLabels(group);
+              renderRouteGroupList();
+            });
+
+            li.append(numSpan, nameSpan, upBtn, downBtn, removeBtn);
+            cityUl.appendChild(li);
+          });
+
+          card.append(header, styleRow, shapeRow, widthRow, startRow, endRow, cityLsToggle, cityLsPanel, glToggle, glPanel, cityAddRow, citiesToggle, cityUl);
+          container.appendChild(card);
+        }
+      }
+
+      // ── City Route AI Query ──────────────────────────────────────────────────
+
+      document.getElementById("addRouteGroupBtn").addEventListener("click", () => {
+        const name = document.getElementById("routeGroupNameInput").value.trim();
+        if (!name) return;
+        createCityRouteGroup(name);
+        document.getElementById("routeGroupNameInput").value = "";
+      });
+
+      document.getElementById("routeGroupNameInput").addEventListener("keydown", e => {
+        if (e.key !== "Enter") return;
+        const name = e.target.value.trim();
+        if (!name) return;
+        createCityRouteGroup(name);
+        e.target.value = "";
+      });
+
+      document.getElementById("cityRouteQueryBtn").addEventListener("click", async () => {
+        const query = document.getElementById("cityRouteQuery").value.trim();
+        if (!query) return;
+        const statusEl = document.getElementById("cityRouteQueryStatus");
+        statusEl.style.display = "block";
+        statusEl.textContent = "Asking AI…";
+        document.getElementById("cityRouteQueryBtn").disabled = true;
+        try {
+          const res = await fetch("/api/city-query", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query }),
+          });
+          const data = await res.json();
+          if (!res.ok) { statusEl.textContent = data.error || "Query failed"; return; }
+          if (!data.cities?.length) { statusEl.textContent = "No cities found"; return; }
+
+          // Merge AI coordinates with local cities.json where available
+          const cities = data.cities.map(c => {
+            const local = cityData.find(d =>
+              d.name.toLowerCase() === c.name.toLowerCase() &&
+              d.country.toLowerCase() === c.country.toLowerCase()
+            ) || cityData.find(d => d.name.toLowerCase() === c.name.toLowerCase());
+            return local ? { name: local.name, country: local.country, state: c.state || undefined, lat: local.lat, lon: local.lon }
+                         : { name: c.name, country: c.country, state: c.state || undefined, lat: c.lat, lon: c.lon };
+          });
+
+          const groupName = data.label || query.slice(0, 40);
+          createCityRouteGroup(groupName, cities, { query, count: cities.length });
+          statusEl.textContent = `Created "${groupName}" with ${cities.length} cities.`;
+          document.getElementById("cityRouteQuery").value = "";
+        } catch (e) {
+          statusEl.textContent = "Request failed";
+          console.error("[city-query]", e);
+        } finally {
+          document.getElementById("cityRouteQueryBtn").disabled = false;
+        }
+      });
+
       // ── KML Overlays ─────────────────────────────────────────────────────────
 
       // Returns true if a Cesium entity has renderable geometry.
@@ -5045,16 +6731,24 @@
       });
 
       document.getElementById("addKeyframeBtn").addEventListener("click", addKeyframe);
+      document.getElementById("tlAddKfBtn").addEventListener("click", addKeyframe);
 
       document.getElementById("totalDuration").addEventListener("change", () => {
         updateProgressUI(playbackT);
       });
 
       document.getElementById("playBtn").addEventListener("click", () => {
-        if (isPlaying) pausePlayback(); else startPlayback();
+        if (isPlaying && playbackDirection > 0) pausePlayback(); else startPlayback();
       });
-
       document.getElementById("stopBtn").addEventListener("click", stopPlayback);
+
+      document.getElementById("tlRevBtn").addEventListener("click", () => {
+        if (isPlaying && playbackDirection < 0) pausePlayback(); else startReverse();
+      });
+      document.getElementById("tlPlayBtn").addEventListener("click", () => {
+        if (isPlaying && playbackDirection > 0) pausePlayback(); else startPlayback();
+      });
+      document.getElementById("tlStopBtn").addEventListener("click", stopPlayback);
 
       document.getElementById("progressBar").addEventListener("click", (e) => {
         const rect = e.currentTarget.getBoundingClientRect();
@@ -5069,6 +6763,7 @@
       });
 
       document.getElementById("exportBtn").addEventListener("click", exportFrames);
+      document.getElementById("exportAeNullsBtn").addEventListener("click", exportAENulls);
 
       // WYSIWYG preview: resize the viewport immediately when resolution changes
       document.getElementById("resolutionSelect").addEventListener("change", (e) => {
@@ -5119,6 +6814,7 @@
         for (const g of regionGroups) addEntity(tracks['group_'+g.id]);
         for (const m of cityMarkers)  addEntity(tracks['city_'+m.id]);
         for (const k of kmlOverlays)  addEntity(tracks['kml_'+k.id]);
+        for (const a of annotations)  addEntity(tracks['ann_'+a.id]);
         return rows;
       }
       function tlTotalH() { return TL_RULER_H + tlGetRows().reduce((s, r) => s + r.h, 0); }
@@ -5371,6 +7067,10 @@
           ctx.beginPath(); ctx.rect(-size / 2, -size / 2, size, size);
           ctx.fill(); ctx.stroke();
           ctx.restore();
+          if (kf.ease && kf.ease !== 'linear') {
+            ctx.fillStyle = '#ffdd44';
+            ctx.beginPath(); ctx.arc(x, cy + size / 2 + 3, 2, 0, Math.PI * 2); ctx.fill();
+          }
         }
       }
 
@@ -5427,6 +7127,10 @@
           ctx.beginPath(); ctx.rect(-size/2, -size/2, size, size);
           ctx.fill(); ctx.stroke();
           ctx.restore();
+          if (kf.ease && kf.ease !== 'linear') {
+            ctx.fillStyle = '#ffdd44';
+            ctx.beginPath(); ctx.arc(x, cy + size / 2 + 3, 2, 0, Math.PI * 2); ctx.fill();
+          }
         }
       }
 
@@ -5473,7 +7177,10 @@
                   tlDrag = { type: 'kf', trackId: row.id, kfId: hit.id, startX: mx, startT: hit.time };
                   tlSeekTo(hit.time);
                   if (row.id === 'camera') { selectedKfId = hit.id; renderKeyframeList(); }
+                  updateEaseBar();
                 } else {
+                  tlSelectedKf = null;
+                  updateEaseBar();
                   tlSeekTo(Math.max(0, tlXToTime(mx)));
                   tlDrag = { type: 'playhead' };
                 }
@@ -5603,6 +7310,22 @@
         }
       });
 
+      // JKL transport shortcuts
+      document.addEventListener('keydown', (e) => {
+        const tag = document.activeElement?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (e.key === 'j' || e.key === 'J') {
+          if (isPlaying && playbackDirection < 0) pausePlayback(); else startReverse();
+          e.preventDefault();
+        } else if (e.key === 'k' || e.key === 'K') {
+          if (isPlaying) pausePlayback();
+          e.preventDefault();
+        } else if (e.key === 'l' || e.key === 'L') {
+          if (isPlaying && playbackDirection > 0) pausePlayback(); else startPlayback();
+          e.preventDefault();
+        }
+      });
+
       document.getElementById('tlSelectAll').addEventListener('click', () => {
         for (const row of tlGetRows()) if (!row.isSub) selectedTrackIds.add(row.id);
         tlBuildLabels();
@@ -5704,6 +7427,17 @@
           })),
           nextKmlId,
           selectedTrackIds: Array.from(selectedTrackIds),
+          annotations: annotations.map(a => ({
+            id:a.id, text:a.text, type:a.type, anchor:a.anchor,
+            offsetX:a.offsetX, offsetY:a.offsetY, lat:a.lat, lon:a.lon,
+            leaderLine:a.leaderLine, fontSize:a.fontSize, fontWeight:a.fontWeight,
+            fontFamily:a.fontFamily, color:a.color, bgColor:a.bgColor,
+            bgOpacity:a.bgOpacity, padding:a.padding, borderRadius:a.borderRadius,
+            opacity:a.opacity,
+            floatDir:a.floatDir, floatKm:a.floatKm, lineEnd:a.lineEnd, arrowDir:a.arrowDir,
+            lineStyle:a.lineStyle, lineWidth:a.lineWidth, showDot:a.showDot, dotSize:a.dotSize,
+          })),
+          nextAnnotationId,
         };
 
         const defaultName = 'map-animator-project';
@@ -5736,6 +7470,12 @@
         kmlOverlays.forEach(k => viewer.dataSources.remove(k.dataSource, true));
         kmlOverlays = [];
         nextKmlId = 1;
+        annotations.forEach(a => {
+          if (a.el) a.el.remove();
+          if (a.entity) (Array.isArray(a.entity)?a.entity:[a.entity]).forEach(e=>viewer.entities.remove(e));
+        });
+        annotations = [];
+        nextAnnotationId = 1;
         // Clear all tracks and reset builtins
         Object.keys(tracks).forEach(id => { if (id !== 'camera' && id !== 'tod' && id !== 'borders') delete tracks[id]; });
         tracks['camera'].keyframes  = [];
@@ -5881,6 +7621,13 @@
         }
         renderKmlList();
 
+        // 7c. Annotations
+        nextAnnotationId = project.nextAnnotationId ?? 1;
+        for (const saved of (project.annotations ?? [])) {
+          createAnnotation({ ...saved, el: null, entity: null });
+        }
+        renderAnnotationList();
+
         // 8. Restore track keyframes (overwrite after entities are rebuilt)
         for (const [id, saved] of Object.entries(project.tracks ?? {})) {
           if (tracks[id]) tracks[id].keyframes = saved.keyframes ?? [];
@@ -5970,6 +7717,70 @@
         function closeSidebar() { sidebar.classList.remove("mobile-open"); overlay.classList.remove("mobile-open"); toggleBtn.textContent = "☰"; }
         toggleBtn.addEventListener("click", () => sidebar.classList.contains("mobile-open") ? closeSidebar() : openSidebar());
         overlay.addEventListener("click", closeSidebar);
+      })();
+
+      // ── Story tab — annotation presets & add button ───────────────────────
+      document.querySelectorAll('.ann-preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const preset = ANN_PRESETS[btn.dataset.preset];
+          if (preset) createAnnotation({ ...preset });
+        });
+      });
+      document.getElementById('addAnnotationBtn').addEventListener('click', () => {
+        const input = document.getElementById('annNameInput');
+        const text  = input.value.trim() || 'Annotation';
+        createAnnotation({ text });
+        input.value = '';
+      });
+      document.getElementById('annNameInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('addAnnotationBtn').click();
+      });
+      renderAnnotationList();
+
+      // ── Easing bar ───────────────────────────────────────────────────────
+      function updateEaseBar() {
+        const kfSel = tlSelectedKf;
+        const show = !!kfSel;
+        const ids = ['tlEaseSep','tlEaseLabel','tlEaseLin','tlEaseIn','tlEaseOut','tlEaseInOut'];
+        ids.forEach(id => document.getElementById(id).style.display = show ? (id === 'tlEaseLabel' ? 'inline' : 'inline-block') : 'none');
+        if (!show) return;
+        const track = tracks[kfSel.trackId];
+        const kf = track?.keyframes.find(k => k.id === kfSel.kfId);
+        const cur = kf?.ease || 'linear';
+        document.querySelectorAll('.tl-ease-btn').forEach(btn => {
+          btn.classList.toggle('tl-transport-active', btn.dataset.ease === cur);
+        });
+      }
+
+      document.querySelectorAll('.tl-ease-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (!tlSelectedKf) return;
+          const track = tracks[tlSelectedKf.trackId];
+          const kf = track?.keyframes.find(k => k.id === tlSelectedKf.kfId);
+          if (kf) { kf.ease = btn.dataset.ease; updateEaseBar(); }
+        });
+      });
+
+      // ── Tab switching ─────────────────────────────────────────────────────
+      (() => {
+        const tabBtns  = document.querySelectorAll('.tab-btn');
+        const tabPanels = document.querySelectorAll('.tab-panel');
+        tabBtns.forEach(btn => {
+          btn.addEventListener('click', () => {
+            const target = btn.dataset.tab;
+            tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === target));
+            tabPanels.forEach(p => p.classList.toggle('active', p.id === 'tab-' + target));
+          });
+        });
+      })();
+
+      // ── Collapsible sections ──────────────────────────────────────────────
+      (() => {
+        document.querySelectorAll('.section-title').forEach(title => {
+          title.addEventListener('click', () => {
+            title.closest('.section').classList.toggle('collapsed');
+          });
+        });
       })();
     </script>
 
