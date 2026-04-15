@@ -50,14 +50,9 @@
         'carto-positron':         { source: 'CARTO / OpenStreetMap',                  resolution: 'Vector (unlimited zoom)', rights: 'Free with attribution; no key required', labelToggle: true, baseColor: '#d4dadc' },
         'carto-dark':             { source: 'CARTO / OpenStreetMap',                  resolution: 'Vector (unlimited zoom)', rights: 'Free with attribution; no key required', labelToggle: true, baseColor: '#0e0e0e' },
         'usgs-topo':              { source: 'USGS National Map',                      resolution: '~1m/px (US only)', rights: 'Public domain — US government data', defaultMaxLevel: 16, baseColor: '#d4dce8' },
-        'esri-topo':              { source: 'ESRI / HERE / USGS',                    resolution: 'Vector (unlimited zoom)', rights: 'Free — ESRI open basemap', baseColor: '#d4dce8' },
-        'esri-relief':            { source: 'ESRI / USGS / NPS',                     resolution: '~30m/px', rights: 'Free — ESRI open basemap', defaultMaxLevel: 13, baseColor: '#c8bfa0' },
-        'esri-hillshade':         { source: 'ESRI / USGS / NPS',                     resolution: '~30m/px', rights: 'Free — ESRI open basemap', defaultMaxLevel: 16, baseColor: '#888888' },
-        'esri-ocean':             { source: 'ESRI / GEBCO / NOAA / National Geographic', resolution: '~30m/px', rights: 'Free — ESRI open basemap', defaultMaxLevel: 16, baseColor: '#0a1a2e' },
-        'esri-natgeo':            { source: 'National Geographic / ESRI',             resolution: 'Vector (up to zoom 16)', rights: 'Free — ESRI open basemap', defaultMaxLevel: 16, baseColor: '#c8d4b8' },
-        'esri-physical':          { source: 'ESRI / US National Park Service',        resolution: '~500m/px', rights: 'Free — ESRI open basemap', defaultMaxLevel: 8, baseColor: '#c8d4b8' },
-        'esri-streets':           { source: 'ESRI / HERE / OpenStreetMap',            resolution: 'Vector (unlimited zoom)', rights: 'Free — ESRI open basemap', baseColor: '#d4d4d4' },
+        'usgs-relief':            { source: 'USGS National Map',                      resolution: '~30m/px (US only)', rights: 'Public domain — US government data', defaultMaxLevel: 13, baseColor: '#c8bfa0' },
         'opentopomap':            { source: 'OpenTopoMap / OpenStreetMap / SRTM',     resolution: '~30m/px', rights: 'Free — CC-BY-SA; attribution required', defaultMaxLevel: 17, baseColor: '#d4dce8' },
+        'carto-voyager':          { source: 'CARTO / OpenStreetMap',                  resolution: 'Vector (unlimited zoom)', rights: 'Free with attribution; no key required', labelToggle: true, baseColor: '#d4d4d4' },
         'usgs-imagery':           { source: 'USGS National Map aerial imagery',       resolution: '~1m/px (US only)', rights: 'Public domain — US government data', defaultMaxLevel: 16, baseColor: '#000811' },
         'eox-s2':                 { source: 'ESA Sentinel-2 / EOX IT Services',       resolution: '~10m/px', note: '2024 annual cloud-free composite', rights: 'Free with attribution (Copernicus open data)', defaultMaxLevel: 17, baseColor: '#000a15' },
         'gebco':                  { source: 'GEBCO (General Bathymetric Chart)',       resolution: '~500m/px', note: 'ocean bathymetry; land shown flat', rights: 'Free — CC BY 4.0 (attribution required)', baseColor: '#1a3a5c' },
@@ -256,47 +251,19 @@
             credit: "GEBCO — General Bathymetric Chart of the Oceans",
           });
         }
-        const esriBase = "https://services.arcgisonline.com/ArcGIS/rest/services";
-        if (basemap === "esri-topo") {
+        if (basemap === "usgs-relief") {
           return new Cesium.UrlTemplateImageryProvider({
-            url: `${esriBase}/World_Topo_Map/MapServer/tile/{z}/{y}/{x}`,
-            credit: "ESRI World Topo Map — Sources: ESRI, DeLorme, HERE, USGS", maximumLevel: maxLevel,
+            url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer/tile/{z}/{y}/{x}",
+            credit: "USGS National Map — Shaded Relief",
+            maximumLevel: maxLevel,
           });
         }
-        if (basemap === "esri-relief") {
+        if (basemap === "carto-voyager") {
+          const variant = basemapShowLabels ? "rastertiles/voyager" : "rastertiles/voyager_nolabels";
           return new Cesium.UrlTemplateImageryProvider({
-            url: `${esriBase}/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}`,
-            credit: "ESRI World Shaded Relief — Sources: ESRI, USGS, NPS", maximumLevel: maxLevel,
-          });
-        }
-        if (basemap === "esri-hillshade") {
-          return new Cesium.UrlTemplateImageryProvider({
-            url: `${esriBase}/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}`,
-            credit: "ESRI World Hillshade — Sources: ESRI, USGS, NPS", maximumLevel: maxLevel,
-          });
-        }
-        if (basemap === "esri-ocean") {
-          return new Cesium.UrlTemplateImageryProvider({
-            url: `${esriBase}/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}`,
-            credit: "ESRI Ocean Basemap — Sources: ESRI, GEBCO, NOAA, National Geographic", maximumLevel: maxLevel,
-          });
-        }
-        if (basemap === "esri-natgeo") {
-          return new Cesium.UrlTemplateImageryProvider({
-            url: `${esriBase}/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}`,
-            credit: "National Geographic, ESRI, DeLorme, HERE, UNEP-WCMC, USGS", maximumLevel: 16,
-          });
-        }
-        if (basemap === "esri-physical") {
-          return new Cesium.UrlTemplateImageryProvider({
-            url: `${esriBase}/World_Physical_Map/MapServer/tile/{z}/{y}/{x}`,
-            credit: "ESRI World Physical Map — Sources: US National Park Service", maximumLevel: 8,
-          });
-        }
-        if (basemap === "esri-streets") {
-          return new Cesium.UrlTemplateImageryProvider({
-            url: `${esriBase}/World_Street_Map/MapServer/tile/{z}/{y}/{x}`,
-            credit: "ESRI World Street Map — Sources: ESRI, HERE, DeLorme, USGS", maximumLevel: maxLevel,
+            url: `https://a.basemaps.cartocdn.com/${variant}/{z}/{x}/{y}.png`,
+            credit: "© CARTO © OpenStreetMap contributors",
+            ...(maxLevel !== undefined && { maximumLevel: maxLevel }),
           });
         }
         if (basemap === "opentopomap") {
