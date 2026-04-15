@@ -174,10 +174,12 @@
           <div style="display:flex; justify-content:space-between; font-size:11px; color:#aaa; margin-top:2px;">
             <span>Midnight</span><span>Noon</span><span>Midnight</span>
           </div>
-          <div class="tod-row" style="margin-top:8px;">
-            <label style="font-size:11px;color:#777;white-space:nowrap;min-width:90px;">Night darkness</label>
-            <input type="range" id="nightAmountSlider" min="0" max="100" value="100" step="1" style="flex:1;" />
-            <span id="nightAmountDisplay" style="font-size:11px;color:#555;min-width:32px;text-align:right;">100%</span>
+          <div style="margin-top:8px;">
+            <div style="font-size:11px;color:#666;margin-bottom:4px;">Night darkness</div>
+            <div style="display:flex;gap:0;">
+              <button id="nightDarknessOn" style="flex:1;border-radius:4px 0 0 4px;padding:4px 0;font-size:12px;background:#4a9eff;color:#fff;font-weight:bold;">On</button>
+              <button id="nightDarknessOff" style="flex:1;border-radius:0 4px 4px 0;padding:4px 0;font-size:12px;border-left:none;">Off</button>
+            </div>
           </div>
           </div><!-- /section-body Time of Day -->
         </div>

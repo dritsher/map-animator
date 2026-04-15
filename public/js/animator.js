@@ -1669,18 +1669,19 @@
         viewer.clock.shouldAnimate = false;
       }
 
-      function setNightAmount(pct) {
+      let nightDarknessEnabled = true;
+
+      function setNightDarkness(on) {
+        nightDarknessEnabled = on;
         if (!viewer) return;
-        if (pct === 0) {
-          viewer.scene.globe.enableLighting = false;
-          return;
-        }
-        viewer.scene.globe.enableLighting = true;
-        // Use a power curve (exponent 0.3) so low percentages still produce
-        // meaningful sun intensity — linear mapping makes 5% nearly pitch black.
-        if (viewer.scene.light) {
-          viewer.scene.light.intensity = 3.0 * Math.pow(pct / 100, 0.3);
-        }
+        viewer.scene.globe.enableLighting = on;
+        if (on && viewer.scene.light) viewer.scene.light.intensity = 3.0;
+        document.getElementById('nightDarknessOn').style.background  = on  ? '#4a9eff' : '';
+        document.getElementById('nightDarknessOn').style.color        = on  ? '#fff'    : '';
+        document.getElementById('nightDarknessOn').style.fontWeight   = on  ? 'bold'    : '';
+        document.getElementById('nightDarknessOff').style.background  = !on ? '#4a9eff' : '';
+        document.getElementById('nightDarknessOff').style.color       = !on ? '#fff'    : '';
+        document.getElementById('nightDarknessOff').style.fontWeight  = !on ? 'bold'    : '';
       }
 
       function todMinutesToDisplay(totalMinutes) {
@@ -5548,11 +5549,8 @@
         setTimeOfDay(minutes);
       });
 
-      document.getElementById("nightAmountSlider").addEventListener("input", (e) => {
-        const pct = parseInt(e.target.value);
-        document.getElementById("nightAmountDisplay").textContent = pct + "%";
-        setNightAmount(pct);
-      });
+      document.getElementById("nightDarknessOn").addEventListener("click",  () => setNightDarkness(true));
+      document.getElementById("nightDarknessOff").addEventListener("click", () => setNightDarkness(false));
 
       document.getElementById("addKeyframeBtn").addEventListener("click", addKeyframe);
       document.getElementById("tlAddKfBtn").addEventListener("click", addKeyframe);
@@ -6202,7 +6200,7 @@
           basemapShowLabels,
           basemapMaxLevelOverride,
           bmAdjust: { ...bmAdjust },
-          nightAmount: parseInt(document.getElementById('nightAmountSlider').value),
+          nightDarkness: nightDarknessEnabled,
           borders: {
             countryOpacity: parseInt(document.getElementById('countryBorderOpacity').value) / 100,
             stateOpacity:   parseInt(document.getElementById('stateBorderOpacity').value) / 100,
@@ -6348,10 +6346,7 @@
         await applyLook(look);
 
         // Night darkness
-        const nightAmt = project.nightAmount ?? 100;
-        document.getElementById('nightAmountSlider').value = nightAmt;
-        document.getElementById('nightAmountDisplay').textContent = nightAmt + '%';
-        setNightAmount(nightAmt);
+        setNightDarkness(project.nightDarkness ?? true);
 
         // 4. County border
         const countyPct = Math.round((project.borders?.countyOpacity ?? 0) * 100);
