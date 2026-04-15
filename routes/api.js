@@ -476,9 +476,9 @@ const US_STATES = new Set([
 ]);
 
 // Normalize a member name from Claude into the displayStr format used by regionLookup.
-// US states become "StateName (United States)"; everything else is returned as-is.
+// US states become "StateName (United States of America)"; everything else is returned as-is.
 function normalizeRegionMember(name) {
-  if (US_STATES.has(name)) return `${name} (United States)`;
+  if (US_STATES.has(name)) return `${name} (United States of America)`;
   return name;
 }
 
