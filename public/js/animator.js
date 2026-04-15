@@ -1673,9 +1673,13 @@
         if (!viewer) return;
         if (pct === 0) {
           viewer.scene.globe.enableLighting = false;
-        } else {
-          viewer.scene.globe.enableLighting = true;
-          if (viewer.scene.light) viewer.scene.light.intensity = (pct / 100) * 3.0;
+          return;
+        }
+        viewer.scene.globe.enableLighting = true;
+        // Use a power curve (exponent 0.3) so low percentages still produce
+        // meaningful sun intensity — linear mapping makes 5% nearly pitch black.
+        if (viewer.scene.light) {
+          viewer.scene.light.intensity = 3.0 * Math.pow(pct / 100, 0.3);
         }
       }
 
