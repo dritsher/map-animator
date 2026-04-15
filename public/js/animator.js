@@ -82,6 +82,7 @@
         if (meta.labelToggle) {
           labelsRow.style.display = '';
           document.getElementById('basemapLabelsCheck').checked = basemapShowLabels;
+          updateLabelsButtons(basemapShowLabels);
         } else {
           labelsRow.style.display = 'none';
         }
@@ -2525,8 +2526,31 @@
       // ── Event Listeners ─────────────────────────────────────────────────────
       document.getElementById("basemapSelect").addEventListener("change", e => applyBasemap(e.target.value));
       document.getElementById("basemapDateInput").addEventListener("change", () => applyBasemap(currentBasemap));
+      function updateLabelsButtons(on) {
+        const onBtn  = document.getElementById('basemapLabelsOn');
+        const offBtn = document.getElementById('basemapLabelsOff');
+        onBtn.style.background  = on  ? '#4a9eff' : '';
+        onBtn.style.color       = on  ? '#fff'    : '';
+        onBtn.style.fontWeight  = on  ? 'bold'    : '';
+        offBtn.style.background = !on ? '#4a9eff' : '';
+        offBtn.style.color      = !on ? '#fff'    : '';
+        offBtn.style.fontWeight = !on ? 'bold'    : '';
+      }
+      document.getElementById("basemapLabelsOn").addEventListener("click", () => {
+        basemapShowLabels = true;
+        document.getElementById('basemapLabelsCheck').checked = true;
+        updateLabelsButtons(true);
+        applyBasemap(currentBasemap);
+      });
+      document.getElementById("basemapLabelsOff").addEventListener("click", () => {
+        basemapShowLabels = false;
+        document.getElementById('basemapLabelsCheck').checked = false;
+        updateLabelsButtons(false);
+        applyBasemap(currentBasemap);
+      });
       document.getElementById("basemapLabelsCheck").addEventListener("change", e => {
         basemapShowLabels = e.target.checked;
+        updateLabelsButtons(basemapShowLabels);
         applyBasemap(currentBasemap);
       });
 

@@ -53,29 +53,31 @@
           <div class="section-body">
           <select id="basemapSelect">
             <optgroup label="Vector (MapTiler key required)">
-              <option value="maptiler-streets">Streets</option>
-              <option value="maptiler-basic">Basic</option>
-              <option value="maptiler-backdrop">Basic (no labels)</option>
+              <option value="maptiler-streets">Streets — labels</option>
+              <option value="maptiler-basic">Basic — labels</option>
+              <option value="maptiler-backdrop">Basic — no labels</option>
             </optgroup>
-            <optgroup label="Aerial / Satellite">
+            <optgroup label="Aerial / Satellite — no labels">
               <option value="maptiler-satellite">Satellite (MapTiler, key required)</option>
               <option value="usgs-imagery">Aerial (USGS, US only)</option>
               <option value="eox-s2" selected>Sentinel-2 Cloudless (EOX)</option>
             </optgroup>
-            <optgroup label="Terrain">
+            <optgroup label="Terrain — no labels">
               <option value="usgs-topo">Topo (USGS, US only)</option>
               <option value="usgs-relief">Shaded Relief (USGS, US only)</option>
-              <option value="opentopomap">OpenTopoMap</option>
               <option value="nasa-terrain-color">Terrain Color (ASTER)</option>
               <option value="nasa-terrain-grey">Terrain Greyscale (ASTER)</option>
               <option value="gebco">Ocean Bathymetry (GEBCO)</option>
             </optgroup>
-            <optgroup label="Reference / Stylized">
+            <optgroup label="Terrain — labels (baked in)">
+              <option value="opentopomap">OpenTopoMap</option>
+            </optgroup>
+            <optgroup label="Reference / Stylized — labels toggleable">
               <option value="carto-positron">Positron / Light (CARTO)</option>
               <option value="carto-dark">Dark Matter (CARTO)</option>
               <option value="carto-voyager">Voyager / Streets (CARTO)</option>
             </optgroup>
-            <optgroup label="NASA Earth Science">
+            <optgroup label="NASA Earth Science — no labels">
               <option value="nasa-blue-marble">Blue Marble</option>
               <option value="nasa-blue-marble-ocean">Blue Marble + Ocean Depth</option>
               <option value="nasa-night">Earth at Night</option>
@@ -84,11 +86,13 @@
             </optgroup>
           </select>
           <div id="basemapInfo"></div>
-          <div id="basemapLabelsRow" style="display:none;margin-top:4px;">
-            <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:#555;cursor:pointer;">
-              <input type="checkbox" id="basemapLabelsCheck" checked style="margin:0;" />
-              Show place labels
-            </label>
+          <div id="basemapLabelsRow" style="display:none;margin-top:6px;">
+            <div style="font-size:11px;color:#666;margin-bottom:4px;">Place labels</div>
+            <div style="display:flex;gap:0;">
+              <button id="basemapLabelsOn" style="flex:1;border-radius:4px 0 0 4px;padding:4px 0;font-size:12px;">On</button>
+              <button id="basemapLabelsOff" style="flex:1;border-radius:0 4px 4px 0;padding:4px 0;font-size:12px;border-left:none;">Off</button>
+            </div>
+            <input type="checkbox" id="basemapLabelsCheck" style="display:none;" />
           </div>
           <div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:11px;color:#555;">
             <span>Level: <strong id="basemapCurrentLevel">—</strong></span>
