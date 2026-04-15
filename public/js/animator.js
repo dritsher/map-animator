@@ -6417,11 +6417,7 @@
           grp.invert      = saved.invert ?? false;
           if (tracks['group_' + saved.id]) tracks['group_' + saved.id].color = grp.color;
           for (const m of (saved.members ?? [])) addMemberToGroup(saved.id, m.name);
-          if (grp.fillOpacity > 0) {
-            grp.fillEntities.forEach(removeFillItem);
-            const polygons = getGroupPolygons(grp);
-            grp.fillEntities = makeFillEntities(polygons, grp.color, grp.fillOpacity, grp.invert);
-          }
+          refreshGroupEntities(grp);
         }
         nextGroupId = project.nextGroupId ?? nextGroupId;
 
