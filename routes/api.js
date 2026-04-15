@@ -463,6 +463,25 @@ router.post("/api/export/render", async (req, res) => {
 
 // ── /api/generate-map ────────────────────────────────────────────────────────
 
+const US_STATES = new Set([
+  "Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut",
+  "Delaware","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa",
+  "Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan",
+  "Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada",
+  "New Hampshire","New Jersey","New Mexico","New York","North Carolina",
+  "North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island",
+  "South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont",
+  "Virginia","Washington","West Virginia","Wisconsin","Wyoming",
+  "District of Columbia",
+]);
+
+// Normalize a member name from Claude into the displayStr format used by regionLookup.
+// US states become "StateName (United States)"; everything else is returned as-is.
+function normalizeRegionMember(name) {
+  if (US_STATES.has(name)) return `${name} (United States)`;
+  return name;
+}
+
 router.post("/api/generate-map", async (req, res) => {
   const { prompt } = req.body || {};
   if (!prompt?.trim()) return res.status(400).json({ error: "Missing prompt" });
@@ -567,7 +586,10 @@ Choose colors that look great on the selected basemap. For dark basemaps use bri
     color: g.color || "#4a9eff",
     fillOpacity: g.fillOpacity ?? 0.4,
     invert: false,
-    members: (g.members || []).map(name => ({ key: name, name })),
+    members: (g.members || []).map(name => {
+      const displayStr = normalizeRegionMember(name);
+      return { key: displayStr, name: displayStr };
+    }),
   }));
 
   const cities = (spec.cities || []).map(c => ({
