@@ -1669,8 +1669,13 @@
       }
 
       function setNightAmount(pct) {
-        if (!viewer || !viewer.scene.light) return;
-        viewer.scene.light.intensity = (pct / 100) * 3.0;
+        if (!viewer) return;
+        if (pct === 0) {
+          viewer.scene.globe.enableLighting = false;
+        } else {
+          viewer.scene.globe.enableLighting = true;
+          if (viewer.scene.light) viewer.scene.light.intensity = (pct / 100) * 3.0;
+        }
       }
 
       function todMinutesToDisplay(totalMinutes) {
