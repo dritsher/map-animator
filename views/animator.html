@@ -40,6 +40,15 @@
         <div id="tab-map" class="tab-panel active">
 
         <div class="section">
+          <div class="section-title">Generate <span class="section-title-arrow">▾</span></div>
+          <div class="section-body">
+            <textarea id="generatePrompt" rows="2" placeholder="Describe a map…" style="width:100%;box-sizing:border-box;resize:vertical;font-size:12px;padding:5px 6px;border:1px solid #ccc;border-radius:4px;font-family:inherit;"></textarea>
+            <button id="generateMapBtn" style="width:100%;margin-top:5px;">Generate Map</button>
+            <div id="generateStatus" style="font-size:11px;color:#888;margin-top:4px;min-height:14px;"></div>
+          </div>
+        </div>
+
+        <div class="section">
           <div class="section-title">Basemap <span class="section-title-arrow">▾</span></div>
           <div class="section-body">
           <select id="basemapSelect">

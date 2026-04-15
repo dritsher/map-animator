@@ -6502,6 +6502,52 @@
         e.target.value = '';
       });
 
+      // ── Generate map ─────────────────────────────────────────────────────────
+      const GENERATE_SUGGESTIONS = [
+        "NATO member countries on a dark globe",
+        "Countries of the European Union",
+        "G7 nations highlighted",
+        "BRICS nations",
+        "OPEC member countries",
+        "The Silk Road trade route with city markers",
+        "Mediterranean Sea countries",
+        "Countries of the African Union",
+        "US states that border the Mississippi River",
+        "Island nations of the Pacific Ocean",
+        "Major cities along the Amazon River",
+        "Countries in South America",
+        "Landlocked countries of the world",
+        "The route of the Trans-Siberian Railway",
+        "Commonwealth realm nations",
+        "Countries bordering the Arctic Ocean",
+      ];
+      const generatePromptEl = document.getElementById('generatePrompt');
+      const generateStatusEl = document.getElementById('generateStatus');
+      generatePromptEl.value = GENERATE_SUGGESTIONS[Math.floor(Math.random() * GENERATE_SUGGESTIONS.length)];
+      document.getElementById('generateMapBtn').addEventListener('click', async () => {
+        const prompt = generatePromptEl.value.trim();
+        if (!prompt) return;
+        generateStatusEl.textContent = 'Generating…';
+        document.getElementById('generateMapBtn').disabled = true;
+        try {
+          const res = await fetch('/api/generate-map', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Generation failed');
+          await loadProject(data.project);
+          generateStatusEl.textContent = 'Map generated!';
+          setTimeout(() => { generateStatusEl.textContent = ''; }, 3000);
+        } catch (err) {
+          generateStatusEl.textContent = err.message;
+          console.error('[generate-map]', err);
+        } finally {
+          document.getElementById('generateMapBtn').disabled = false;
+        }
+      });
+
       // ── Boot ─────────────────────────────────────────────────────────────────
       initBuiltinTracks();
       renderLooksSelect();

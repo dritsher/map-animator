@@ -461,6 +461,176 @@ router.post("/api/export/render", async (req, res) => {
   }
 });
 
+// ── /api/generate-map ────────────────────────────────────────────────────────
+
+router.post("/api/generate-map", async (req, res) => {
+  const { prompt } = req.body || {};
+  if (!prompt?.trim()) return res.status(400).json({ error: "Missing prompt" });
+
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" });
+
+  const anthropic = new Anthropic({ apiKey: key });
+  let spec;
+  try {
+    const msg = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      system: `You generate map configurations for a 3D globe animator. Given a topic or request, choose the best visual representation.
+
+Available basemaps: eox-s2 (satellite, default), carto-dark (dark style), carto-positron (light/clean), carto-voyager (streets), nasa-night (city lights at night), nasa-blue-marble (classic globe), opentopomap (topographic), usgs-relief (shaded relief, US only).
+
+For regionGroups, use country names exactly as they appear in standard geographic databases (e.g. "United States", "United Kingdom", "South Korea"). For US states use full names ("California", "Texas").
+
+Camera height guidance: 1000000m = single country close-up, 3000000m = small region, 8000000m = continent, 15000000m = hemisphere, 20000000m = full globe.
+
+Choose colors that look great on the selected basemap. For dark basemaps use bright/vivid colors. For light basemaps use deeper saturated colors.`,
+      tools: [{
+        name: "map_config",
+        description: "Generate a complete map configuration for the given topic.",
+        input_schema: {
+          type: "object",
+          properties: {
+            basemap: {
+              type: "string",
+              enum: ["eox-s2", "carto-dark", "carto-positron", "carto-voyager", "nasa-night", "nasa-blue-marble", "opentopomap", "usgs-relief"],
+              description: "Best basemap for this topic",
+            },
+            camera: {
+              type: "object",
+              properties: {
+                lat:    { type: "number", description: "Camera center latitude" },
+                lon:    { type: "number", description: "Camera center longitude" },
+                height: { type: "number", description: "Camera altitude in meters" },
+              },
+              required: ["lat", "lon", "height"],
+            },
+            regionGroups: {
+              type: "array",
+              description: "Groups of countries or states to highlight. Use multiple groups for multi-color maps.",
+              items: {
+                type: "object",
+                properties: {
+                  name:        { type: "string", description: "Group label" },
+                  color:       { type: "string", description: "Hex fill color, e.g. #4a9eff" },
+                  fillOpacity: { type: "number", description: "Fill opacity 0–1, typically 0.3–0.6" },
+                  members:     { type: "array", items: { type: "string" }, description: "Country or state names" },
+                },
+                required: ["name", "color", "fillOpacity", "members"],
+              },
+            },
+            cities: {
+              type: "array",
+              description: "Key cities or locations to mark. Include for routes or point-of-interest maps.",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  lat:  { type: "number" },
+                  lon:  { type: "number" },
+                },
+                required: ["name", "lat", "lon"],
+              },
+            },
+          },
+          required: ["basemap", "camera", "regionGroups"],
+        },
+      }],
+      tool_choice: { type: "tool", name: "map_config" },
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const toolUse = msg.content.find(b => b.type === "tool_use");
+    if (!toolUse) throw new Error("No tool_use block in response");
+    spec = toolUse.input;
+  } catch (e) {
+    console.error("[generate-map]", e.message);
+    const msg = e.message || "";
+    if (msg.includes("credit balance") || msg.includes("billing"))
+      return res.status(402).json({ error: "Anthropic API credits needed" });
+    if (msg.includes("401") || msg.includes("authentication"))
+      return res.status(401).json({ error: "Invalid Anthropic API key" });
+    return res.status(422).json({ error: "Could not generate map", detail: msg });
+  }
+
+  // Build a minimal but complete project JSON from the spec
+  const isDark = ["carto-dark", "nasa-night", "eox-s2"].includes(spec.basemap);
+  const textColor = isDark ? "#ffffff" : "#1a1a1a";
+
+  let nextGroupId = 1;
+  let nextCityId = 1;
+  let nextKfId = 2;
+
+  const groups = (spec.regionGroups || []).map(g => ({
+    id: nextGroupId++,
+    name: g.name,
+    color: g.color || "#4a9eff",
+    fillOpacity: g.fillOpacity ?? 0.4,
+    invert: false,
+    members: (g.members || []).map(name => ({ key: name, name })),
+  }));
+
+  const cities = (spec.cities || []).map(c => ({
+    id: nextCityId++,
+    name: c.name, country: "",
+    lat: c.lat, lon: c.lon,
+    color: textColor, dotSize: 6, showLabel: true,
+    labelColor: textColor, fontSize: 12,
+    fontWeight: "normal", fontStyle: "normal", fontFamily: "Arial",
+    offsetX: 8, offsetY: 0, outlineWidth: 1,
+    showBackground: false, backgroundColor: "#000000", backgroundOpacity: 0.5,
+    bgPadX: 4, bgPadY: 2, dotOpacity: 1, labelOpacity: 1,
+  }));
+
+  const cam = spec.camera || { lat: 20, lon: 0, height: 15000000 };
+  const tracks = {
+    camera:  { keyframes: [{ id: 1, time: 0, lon: cam.lon, lat: cam.lat, height: cam.height, heading: 0, pitch: -90, roll: 0, sceneMode: "globe" }] },
+    tod:     { keyframes: [] },
+    borders: { keyframes: [] },
+  };
+  for (const g of groups) {
+    tracks[`group_${g.id}`] = { id: `group_${g.id}`, label: g.name, category: "group", color: g.color, h: 22, keyframes: [], collapsed: true };
+  }
+  for (const c of cities) {
+    tracks[`city_${c.id}`] = { id: `city_${c.id}`, label: c.name, category: "city", color: c.color, h: 22, keyframes: [], collapsed: true };
+  }
+
+  const project = {
+    version: 1,
+    totalDuration: 10,
+    playbackT: 0,
+    currentBasemap: spec.basemap || "eox-s2",
+    basemapShowLabels: true,
+    basemapMaxLevelOverride: null,
+    bmAdjust: { brightness: 1, contrast: 1, hue: 0, saturation: 1, gamma: 1 },
+    borders: {
+      countryOpacity: 0.6,
+      stateOpacity: 0,
+      countyOpacity: 0,
+      countyFilter: "none",
+      borderColor: isDark ? "#ffffff" : "#333333",
+      landOnly: true,
+    },
+    defaults: { regionColor: "#4a9eff", cityColor: textColor, cityDotSize: 6 },
+    highlights: [],
+    groups,
+    cities,
+    tracks,
+    nextKfId,
+    nextGroupId,
+    nextCityId,
+    kmlOverlays: [],
+    nextKmlId: 1,
+    imageOverlays: [],
+    nextImageOverlayId: 1,
+    selectedTrackIds: ["camera"],
+    annotations: [],
+    nextAnnotationId: 1,
+  };
+
+  res.json({ project });
+});
+
 // Download the finished MP4
 router.get("/api/export/download/:sessionId", (req, res) => {
   const session = sessions.get(req.params.sessionId);
