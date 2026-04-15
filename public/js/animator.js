@@ -1668,6 +1668,11 @@
         viewer.clock.shouldAnimate = false;
       }
 
+      function setNightAmount(pct) {
+        if (!viewer || !viewer.scene.light) return;
+        viewer.scene.light.intensity = (pct / 100) * 3.0;
+      }
+
       function todMinutesToDisplay(totalMinutes) {
         const h = Math.floor(totalMinutes / 60) % 24;
         const m = totalMinutes % 60;
@@ -5510,6 +5515,12 @@
         setTimeOfDay(minutes);
       });
 
+      document.getElementById("nightAmountSlider").addEventListener("input", (e) => {
+        const pct = parseInt(e.target.value);
+        document.getElementById("nightAmountDisplay").textContent = pct + "%";
+        setNightAmount(pct);
+      });
+
       document.getElementById("addKeyframeBtn").addEventListener("click", addKeyframe);
       document.getElementById("tlAddKfBtn").addEventListener("click", addKeyframe);
 
@@ -6158,6 +6169,7 @@
           basemapShowLabels,
           basemapMaxLevelOverride,
           bmAdjust: { ...bmAdjust },
+          nightAmount: parseInt(document.getElementById('nightAmountSlider').value),
           borders: {
             countryOpacity: parseInt(document.getElementById('countryBorderOpacity').value) / 100,
             stateOpacity:   parseInt(document.getElementById('stateBorderOpacity').value) / 100,
@@ -6301,6 +6313,12 @@
           cityDotSize: project.defaults?.cityDotSize ?? 8,
         };
         await applyLook(look);
+
+        // Night darkness
+        const nightAmt = project.nightAmount ?? 100;
+        document.getElementById('nightAmountSlider').value = nightAmt;
+        document.getElementById('nightAmountDisplay').textContent = nightAmt + '%';
+        setNightAmount(nightAmt);
 
         // 4. County border
         const countyPct = Math.round((project.borders?.countyOpacity ?? 0) * 100);
