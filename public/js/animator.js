@@ -616,6 +616,8 @@
           sceneModePicker: false,
           navigationHelpButton: false,
           fullscreenButton: false,
+          infoBox: false,
+          selectionIndicator: false,
           creditContainer: document.getElementById("cesiumCreditSink"),
           // ArcGIS elevation causes geometric holes at the poles in Cesium's renderer.
           // Use the smooth mathematical ellipsoid until a Cesium-native terrain
