@@ -491,12 +491,17 @@
           <span id="tlCurrentTime">0.0s</span>
         </div>
         <div id="tlBody">
-          <div id="tlLabels">
-            <div class="tl-ruler-spacer"></div>
-            <!-- labels injected by tlBuildLabels() -->
+          <div id="tlRulerRow">
+            <div id="tlRulerSpacer"></div>
+            <canvas id="tlRulerCanvas"></canvas>
           </div>
-          <div id="tlCanvasWrap">
-            <canvas id="tlCanvas"></canvas>
+          <div id="tlTrackArea">
+            <div id="tlLabels">
+              <!-- labels injected by tlBuildLabels() -->
+            </div>
+            <div id="tlCanvasWrap">
+              <canvas id="tlCanvas"></canvas>
+            </div>
           </div>
         </div>
       </div>

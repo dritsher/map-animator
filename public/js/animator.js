@@ -5641,7 +5641,7 @@
         for (const a of annotations)  addEntity(tracks['ann_'+a.id]);
         return rows;
       }
-      function tlTotalH() { return TL_RULER_H + tlGetRows().reduce((s, r) => s + r.h, 0); }
+      function tlTotalH() { return tlGetRows().reduce((s, r) => s + r.h, 0); }
 
       const SCENE_SEG_COLORS = { '3d': '#1a3a5c', 'columbus': '#3a1a5c', '2d': '#1a5c3a' };
 
@@ -5664,6 +5664,54 @@
         if (s < 60)  return s % 1 === 0 ? s + 's' : s.toFixed(1) + 's';
         const m = Math.floor(s / 60), sec = Math.round(s % 60);
         return `${m}:${String(sec).padStart(2, '0')}`;
+      }
+
+      function tlDrawRuler() {
+        const canvas = document.getElementById('tlRulerCanvas');
+        if (!canvas) return;
+        const wrap = document.getElementById('tlCanvasWrap');
+        const W = wrap ? wrap.clientWidth : 200;
+        if (canvas.width !== W || canvas.height !== TL_RULER_H) {
+          canvas.width  = W;
+          canvas.height = TL_RULER_H;
+        }
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#252527';
+        ctx.fillRect(0, 0, W, TL_RULER_H);
+
+        const visSecs  = W / tlZoom;
+        const interval = tlTickInterval(visSecs);
+        const startT   = Math.floor(tlXToTime(0) / interval) * interval;
+        ctx.font = '10px Arial';
+        for (let t = startT; t < startT + visSecs + interval * 2; t += interval) {
+          const x = Math.round(tlTimeToX(t));
+          if (x < -60 || x > W + 4) continue;
+          ctx.strokeStyle = '#4a4a4e';
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(x + 0.5, TL_RULER_H - 5); ctx.lineTo(x + 0.5, TL_RULER_H); ctx.stroke();
+          if (x > 0) {
+            ctx.fillStyle = '#999';
+            ctx.textAlign = 'left';
+            ctx.fillText(tlFormatTime(Math.max(0, t)), x + 3, TL_RULER_H - 6);
+          }
+          const half = interval / 2;
+          const hx = Math.round(tlTimeToX(t + half));
+          if (hx > 0 && hx < W) {
+            ctx.strokeStyle = '#333';
+            ctx.beginPath(); ctx.moveTo(hx + 0.5, TL_RULER_H - 3); ctx.lineTo(hx + 0.5, TL_RULER_H); ctx.stroke();
+          }
+        }
+        // Playhead triangle
+        const px = Math.round(tlTimeToX(playbackT));
+        if (px >= -1 && px <= W + 1) {
+          ctx.fillStyle = '#ff3b30';
+          ctx.beginPath();
+          ctx.moveTo(px - 5, 0);
+          ctx.lineTo(px + 5, 0);
+          ctx.lineTo(px,     9);
+          ctx.closePath();
+          ctx.fill();
+        }
       }
 
       function tlBuildLabels() {
@@ -5726,38 +5774,6 @@
         ctx.fillStyle = '#1c1c1e';
         ctx.fillRect(0, 0, W, H);
 
-        // ── Ruler ──────────────────────────────────────────────────────────
-        ctx.fillStyle = '#252527';
-        ctx.fillRect(0, 0, W, TL_RULER_H);
-
-        const visSecs  = W / tlZoom;
-        const interval = tlTickInterval(visSecs);
-        const startT   = Math.floor(tlXToTime(0) / interval) * interval;
-
-        ctx.font = '10px Arial';
-        for (let t = startT; t < startT + visSecs + interval * 2; t += interval) {
-          const x = Math.round(tlTimeToX(t));
-          if (x < -60 || x > W + 4) continue;
-
-          ctx.strokeStyle = '#4a4a4e';
-          ctx.lineWidth = 1;
-          ctx.beginPath(); ctx.moveTo(x + 0.5, TL_RULER_H - 5); ctx.lineTo(x + 0.5, TL_RULER_H); ctx.stroke();
-
-          if (x > 0) {
-            ctx.fillStyle = '#999';
-            ctx.textAlign = 'left';
-            ctx.fillText(tlFormatTime(Math.max(0, t)), x + 3, TL_RULER_H - 6);
-          }
-
-          // Minor ticks (halves)
-          const half = interval / 2;
-          const hx = Math.round(tlTimeToX(t + half));
-          if (hx > 0 && hx < W) {
-            ctx.strokeStyle = '#333';
-            ctx.beginPath(); ctx.moveTo(hx + 0.5, TL_RULER_H - 3); ctx.lineTo(hx + 0.5, TL_RULER_H); ctx.stroke();
-          }
-        }
-
         // Duration end-marker
         const dur = totalDuration();
         if (dur > 0) {
@@ -5772,7 +5788,7 @@
         }
 
         // ── Tracks ─────────────────────────────────────────────────────────
-        let y = TL_RULER_H;
+        let y = 0;
         for (const row of tlGetRows()) {
           ctx.fillStyle = '#252527';
           ctx.fillRect(0, y, W, row.h);
@@ -5789,21 +5805,15 @@
           y += row.h;
         }
 
-        // ── Playhead ───────────────────────────────────────────────────────
+        // ── Playhead line ──────────────────────────────────────────────────
         const px = Math.round(tlTimeToX(playbackT));
         if (px >= -1 && px <= W + 1) {
           ctx.strokeStyle = 'rgba(255,59,48,0.9)';
           ctx.lineWidth = 1.5;
           ctx.beginPath(); ctx.moveTo(px + 0.5, 0); ctx.lineTo(px + 0.5, H); ctx.stroke();
-          // Handle triangle in ruler
-          ctx.fillStyle = '#ff3b30';
-          ctx.beginPath();
-          ctx.moveTo(px - 5, 0);
-          ctx.lineTo(px + 5, 0);
-          ctx.lineTo(px,     9);
-          ctx.closePath();
-          ctx.fill();
         }
+
+        tlDrawRuler();
 
         // Update time display
         const tlTime = document.getElementById('tlCurrentTime');
@@ -5961,28 +5971,40 @@
       // ── Timeline mouse / wheel ──────────────────────────────────────────
       function tlInitEvents() {
         const canvas = document.getElementById('tlCanvas');
+        const rulerCanvas = document.getElementById('tlRulerCanvas');
+
+        // Ruler: click to seek, drag playhead
+        rulerCanvas.addEventListener('mousedown', (e) => {
+          const rect = rulerCanvas.getBoundingClientRect();
+          const mx = e.clientX - rect.left;
+          const px = tlTimeToX(playbackT);
+          tlSeekTo(Math.max(0, tlXToTime(mx)));
+          tlDrag = { type: 'playhead' };
+        });
+        rulerCanvas.addEventListener('mousemove', (e) => {
+          if (!tlDrag || tlDrag.type !== 'playhead') return;
+          const rect = rulerCanvas.getBoundingClientRect();
+          tlSeekTo(Math.max(0, Math.min(totalDuration(), tlXToTime(e.clientX - rect.left))));
+        });
+        rulerCanvas.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          const rect = rulerCanvas.getBoundingClientRect();
+          const mx = e.clientX - rect.left;
+          const tAtCursor = tlXToTime(mx);
+          const factor = e.deltaY < 0 ? 1.18 : 1 / 1.18;
+          tlZoom   = Math.max(8, Math.min(600, tlZoom * factor));
+          tlScroll = Math.max(0, tAtCursor * tlZoom - mx);
+          document.getElementById('tlZoomLabel').textContent = (tlZoom / 80).toFixed(1) + '×';
+        }, { passive: false });
 
         canvas.addEventListener('mousedown', (e) => {
           const rect = canvas.getBoundingClientRect();
           const mx = e.clientX - rect.left;
           const my = e.clientY - rect.top;
 
-          // Ruler click or playhead drag
-          if (my < TL_RULER_H) {
-            const px = tlTimeToX(playbackT);
-            if (Math.abs(mx - px) < 8) {
-              tlDrag = { type: 'playhead' };
-            } else {
-              const t = Math.max(0, tlXToTime(mx));
-              tlSeekTo(t);
-              tlDrag = { type: 'playhead' };
-            }
-            return;
-          }
-
           // Track hit-test — any track can have keyframes selected/dragged
           const rows = tlGetRows();
-          let ty = TL_RULER_H;
+          let ty = 0;
           for (const row of rows) {
             if (my >= ty && my < ty + row.h) {
               if (row.isSub) {

@@ -64,22 +64,38 @@
         min-height: 0;
       }
       #tlResizeHandle {
-        height: 5px;
+        height: 6px;
         flex-shrink: 0;
         cursor: ns-resize;
-        background: transparent;
+        background: #2a2a2c;
+        border-top: 1px solid #3a3a3c;
         transition: background 0.15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
-      #tlResizeHandle:hover, #tlResizeHandle.dragging { background: #4a9eff55; }
+      #tlResizeHandle::after {
+        content: '';
+        width: 32px;
+        height: 2px;
+        border-radius: 1px;
+        background: #555;
+      }
+      #tlResizeHandle:hover, #tlResizeHandle.dragging { background: #333; }
+      #tlResizeHandle:hover::after, #tlResizeHandle.dragging::after { background: #4a9eff; }
       #tlBar {
         display: flex;
         align-items: center;
         gap: 6px;
         padding: 0 8px;
-        height: 28px;
+        height: 32px;
         flex-shrink: 0;
         border-bottom: 1px solid #333;
+        overflow-x: auto;
+        overflow-y: hidden;
       }
+      #tlBar::-webkit-scrollbar { height: 3px; }
+      #tlBar::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
       #tlToggleBtn {
         font-size: 11px;
         color: #aaa;
@@ -124,10 +140,40 @@
 
       #tlBody {
         display: flex;
+        flex-direction: column;
         flex: 1;
         overflow: hidden;
         min-height: 0;
       }
+      #tlRulerRow {
+        display: flex;
+        flex-shrink: 0;
+        height: 24px;
+        border-bottom: 1px solid #333;
+        background: #252527;
+      }
+      #tlRulerSpacer {
+        width: 110px;
+        flex-shrink: 0;
+        border-right: 1px solid #333;
+      }
+      #tlRulerCanvas {
+        flex: 1;
+        display: block;
+        min-width: 0;
+      }
+      #tlTrackArea {
+        display: flex;
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        min-height: 0;
+        align-items: flex-start;
+      }
+      #tlTrackArea::-webkit-scrollbar { width: 6px; }
+      #tlTrackArea::-webkit-scrollbar-track { background: #1c1c1e; }
+      #tlTrackArea::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+      #tlTrackArea::-webkit-scrollbar-thumb:hover { background: #666; }
       #tlLabels {
         width: 110px;
         flex-shrink: 0;
@@ -135,11 +181,6 @@
         flex-direction: column;
         border-right: 1px solid #333;
         background: #252527;
-      }
-      .tl-ruler-spacer {
-        height: 24px; /* matches TL_RULER_H */
-        flex-shrink: 0;
-        border-bottom: 1px solid #333;
       }
       .tl-lbl { cursor: pointer; user-select: none; display: flex; align-items: center; padding: 0 6px; box-sizing: border-box; font-size: 11px; color: #aaa; border-bottom: 1px solid #2a2a2c; flex-shrink: 0; }
       .tl-lbl:hover { background: #2a2a2c; }
@@ -150,6 +191,7 @@
       .tl-collapse-btn { font-size: 8px; margin-right: 3px; flex-shrink: 0; color: #666; line-height: 1; }
       #tlCanvasWrap {
         flex: 1;
+        min-width: 0;
         overflow: hidden;
         position: relative;
         cursor: default;
