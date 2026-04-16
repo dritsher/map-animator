@@ -931,8 +931,14 @@
             g.outlineOpacity = newOutlineOpacity;
           }
 
-          // Fill: fast-path via CallbackProperty ref
-          if (g.fillRef && g.fillEntities.length > 0 && !g.invert && !colorChanged && !invertChanged) {
+          // Fill: fast-path via per-member CallbackProperty refs (normal mode) or group ref (invert mode)
+          if (!g.invert && !invertChanged && !colorChanged &&
+              g.members.length > 0 && g.members.every(m => (m.fillEntities?.length ?? 0) > 0)) {
+            g.fillOpacity = gs.fillOpacity;
+            g.members.forEach(m => {
+              if (m.fillRef) { m.fillRef.color = g.color; m.fillRef.opacity = gs.fillOpacity; }
+            });
+          } else if (g.invert && g.fillRef && g.fillEntities.length > 0 && !invertChanged && !colorChanged) {
             g.fillRef.color   = g.color;
             g.fillRef.opacity = gs.fillOpacity;
             g.fillOpacity     = gs.fillOpacity;
@@ -3006,23 +3012,54 @@
       }
 
       function refreshGroupEntities(group) {
+        const show = group.visible !== false;
+
+        // Remove outline entities (shared, group-level)
         group.entities.forEach(e => viewer.entities.remove(e));
+        group.entities = [];
+
+        // Remove all fill entities — per-member in normal mode, group-level in invert mode
+        group.members.forEach(m => { (m.fillEntities || []).forEach(removeFillItem); m.fillEntities = []; });
         group.fillEntities.forEach(removeFillItem);
-        const polygons = getGroupPolygons(group);
+        group.fillEntities = [];
+
+        const allPolygons = getGroupPolygons(group);
+
+        // Outlines: shared group-level ref (all members combined)
         if (!group.outlineRef) group.outlineRef = { color: group.color, opacity: group.outlineOpacity ?? 1 };
-        if (!group.fillRef)    group.fillRef    = { color: group.color, opacity: group.fillOpacity };
         group.outlineRef.color   = group.color;
         group.outlineRef.opacity = group.outlineOpacity ?? 1;
-        group.fillRef.color      = group.color;
-        group.fillRef.opacity    = group.fillOpacity;
-        group.entities    = (group.outlineOpacity ?? 1) > 0
-          ? makePolylineEntities(polygons, group.color, group.outlineWidth ?? 2, group.outlineOpacity ?? 1, group.outlineRef)
+        group.entities = (group.outlineOpacity ?? 1) > 0
+          ? makePolylineEntities(allPolygons, group.color, group.outlineWidth ?? 2, group.outlineOpacity ?? 1, group.outlineRef)
           : [];
-        group.fillEntities = group.fillOpacity > 0
-          ? makeFillEntities(polygons, group.color, group.fillOpacity, group.invert, group.invert ? null : group.fillRef)
-          : [];
-        group.entities.forEach(e => { e.show = group.visible !== false; });
-        group.fillEntities.forEach(item => { item.show = group.visible !== false; });
+        group.entities.forEach(e => { e.show = show; });
+
+        if (group.invert) {
+          // Invert (mask) mode: group-level fill over all polygons combined
+          if (!group.fillRef) group.fillRef = { color: group.color, opacity: group.fillOpacity };
+          group.fillRef.color   = group.color;
+          group.fillRef.opacity = group.fillOpacity;
+          group.fillEntities = group.fillOpacity > 0
+            ? makeFillEntities(allPolygons, group.color, group.fillOpacity, true, null)
+            : [];
+          group.fillEntities.forEach(item => { item.show = show; });
+        } else {
+          // Normal mode: per-member fill with independent refs for independent animation
+          group.fillRef = null;
+          for (const member of group.members) {
+            const entry = regionLookup.get(member.name);
+            const polygons = entry?.polygons || [];
+            const opacity = member.fillOpacity ?? group.fillOpacity;
+            if (!member.fillRef) member.fillRef = { color: group.color, opacity };
+            member.fillRef.color   = group.color;
+            member.fillRef.opacity = opacity;
+            member.fillEntities = polygons.length > 0 && opacity > 0
+              ? makeFillEntities(polygons, group.color, opacity, false, member.fillRef)
+              : [];
+            member.fillEntities.forEach(item => { item.show = show; });
+          }
+        }
+
         updateGroupLabel(group);
       }
 
@@ -3062,6 +3099,7 @@
         const gid = g.id;
         g.entities.forEach(e => viewer.entities.remove(e));
         g.fillEntities.forEach(removeFillItem);
+        g.members.forEach(m => (m.fillEntities || []).forEach(removeFillItem));
         if (g.labelEntity) viewer.entities.remove(g.labelEntity);
         regionGroups.splice(idx, 1);
         delete tracks['group_' + gid];
@@ -3074,6 +3112,7 @@
         group.visible = visible;
         group.entities.forEach(e => { e.show = visible; });
         group.fillEntities.forEach(item => { item.show = visible; });
+        group.members.forEach(m => (m.fillEntities || []).forEach(item => { item.show = visible; }));
         if (group.labelEntity) group.labelEntity.show = visible && group.showLabel;
       }
 
@@ -3112,7 +3151,7 @@
         const entry = regionLookup.get(displayStr);
         if (!entry) return;
         if (group.members.some(m => m.key === entry.key)) return;
-        group.members.push({ key: entry.key, name: entry.name });
+        group.members.push({ key: entry.key, name: entry.name, fillRef: null, fillEntities: [] });
         refreshGroupEntities(group);
         renderGroupList();
       }
@@ -3120,6 +3159,8 @@
       function removeMemberFromGroup(groupId, memberKey) {
         const group = regionGroups.find(g => g.id === groupId);
         if (!group) return;
+        const removing = group.members.find(m => m.key === memberKey);
+        if (removing) { (removing.fillEntities || []).forEach(removeFillItem); }
         group.members = group.members.filter(m => m.key !== memberKey);
         refreshGroupEntities(group);
         renderGroupList();
@@ -3223,8 +3264,15 @@
           fillPct.textContent = Math.round(group.fillOpacity * 100) + "%";
           fillSlider.addEventListener("input", e => {
             fillPct.textContent = e.target.value + "%";
+            const prev = group.fillOpacity;
             group.fillOpacity = parseInt(e.target.value) / 100;
-            if (group.fillRef && group.fillEntities.length > 0 && !group.invert) {
+            if (!group.invert && prev > 0 && group.fillOpacity > 0 &&
+                group.members.every(m => (m.fillEntities?.length ?? 0) > 0)) {
+              // Fast path: all members have live entities — just update their refs
+              group.members.forEach(m => {
+                if (m.fillRef) { m.fillRef.color = group.color; m.fillRef.opacity = group.fillOpacity; }
+              });
+            } else if (group.invert && group.fillRef && group.fillEntities.length > 0 && prev > 0 && group.fillOpacity > 0) {
               group.fillRef.color   = group.color;
               group.fillRef.opacity = group.fillOpacity;
             } else {
