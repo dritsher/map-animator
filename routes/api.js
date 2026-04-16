@@ -475,11 +475,35 @@ const US_STATES = new Set([
   "District of Columbia",
 ]);
 
+// Country name aliases: AI sometimes returns these variants but GeoJSON uses the canonical form.
+const COUNTRY_ALIASES = {
+  "United States":          "United States of America",
+  "USA":                    "United States of America",
+  "US":                     "United States of America",
+  "South Korea":            "Republic of Korea",
+  "North Korea":            "Dem. Rep. Korea",
+  "Czech Republic":         "Czechia",
+  "Congo":                  "Congo",
+  "DR Congo":               "Dem. Rep. Congo",
+  "Democratic Republic of the Congo": "Dem. Rep. Congo",
+  "Republic of the Congo":  "Congo",
+  "Ivory Coast":            "Côte d'Ivoire",
+  "Burma":                  "Myanmar",
+  "Taiwan":                 "Taiwan",
+  "Laos":                   "Lao PDR",
+  "Syria":                  "Syrian Arab Republic",
+  "Bolivia":                "Bolivia",
+  "Venezuela":              "Venezuela",
+  "Tanzania":               "Tanzania",
+  "Macedonia":              "North Macedonia",
+  "Swaziland":              "Eswatini",
+};
+
 // Normalize a member name from Claude into the displayStr format used by regionLookup.
-// US states become "StateName (United States of America)"; everything else is returned as-is.
+// US states become "StateName (United States of America)"; known aliases are mapped to canonical names.
 function normalizeRegionMember(name) {
   if (US_STATES.has(name)) return `${name} (United States of America)`;
-  return name;
+  return COUNTRY_ALIASES[name] ?? name;
 }
 
 const GENERATE_ROUTE_COLORS = [
@@ -522,7 +546,7 @@ const STATIC_SYSTEM = `You generate map configurations for a 3D globe animator. 
 
 Available basemaps: eox-s2 (satellite, default), carto-dark (dark style), carto-positron (light/clean), carto-voyager (streets), nasa-night (city lights at night), nasa-blue-marble (classic globe), opentopomap (topographic), usgs-relief (shaded relief, US only).
 
-For regionGroups, use country names exactly as they appear in standard geographic databases (e.g. "United States", "United Kingdom", "South Korea"). For US states use full names ("California", "Texas").
+For regionGroups, use country names exactly as they appear in standard geographic databases (e.g. "United States of America", "United Kingdom", "Republic of Korea"). For US states use full names ("California", "Texas").
 
 Camera height guidance: 1000000m = single country close-up, 3000000m = small region, 8000000m = continent, 15000000m = hemisphere, 20000000m = full globe.
 
@@ -532,7 +556,7 @@ const ANIMATED_SYSTEM = `You generate animated map configurations for a 3D globe
 
 Available basemaps: eox-s2 (satellite, default), carto-dark (dark style), carto-positron (light/clean), carto-voyager (streets), nasa-night (city lights at night), nasa-blue-marble (classic globe), opentopomap (topographic), usgs-relief (shaded relief, US only).
 
-For regionGroups, use country names exactly as they appear in standard geographic databases (e.g. "United States", "United Kingdom", "South Korea"). For US states use full names ("California", "Texas").
+For regionGroups, use country names exactly as they appear in standard geographic databases (e.g. "United States of America", "United Kingdom", "Republic of Korea"). For US states use full names ("California", "Texas").
 
 Camera height guidance: 1000000m = single city close-up, 3000000m = small region, 8000000m = continent, 15000000m = hemisphere, 20000000m = full globe.
 
