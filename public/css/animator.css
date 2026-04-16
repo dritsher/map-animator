@@ -190,6 +190,7 @@
       .tl-lbl-sub:hover { background: #222224; }
       .tl-lbl-member { cursor: pointer; padding-left: 24px; }
       .tl-lbl-member:hover { background: #262630 !important; }
+      .tl-lbl-member.tl-lbl-sel { color: #ddf; }
       .tl-collapse-btn { font-size: 8px; margin-right: 3px; flex-shrink: 0; color: #666; line-height: 1; }
       #tlCanvasWrap {
         flex: 1;
