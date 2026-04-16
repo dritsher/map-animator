@@ -47,7 +47,16 @@ async function main() {
   await download(ZIP_URL, TMP_ZIP);
   console.log('Downloaded. Extracting…');
 
-  execFileSync('unzip', ['-o', '-j', TMP_ZIP, 'cities1000.txt', '-d', OUT_DIR]);
+  // Try unzip first, fall back to Python's zipfile module
+  try {
+    execFileSync('unzip', ['-o', '-j', TMP_ZIP, 'cities1000.txt', '-d', OUT_DIR]);
+  } catch (e) {
+    if (e.code === 'ENOENT') {
+      execFileSync('python3', ['-c',
+        `import zipfile, os; zipfile.ZipFile('${TMP_ZIP}').extract('cities1000.txt', '${OUT_DIR}')`
+      ]);
+    } else throw e;
+  }
   fs.unlinkSync(TMP_ZIP);
 
   const lines = fs.readFileSync(OUT_FILE, 'utf8').trim().split('\n').length;
