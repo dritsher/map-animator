@@ -35,22 +35,15 @@ Query types:
     population                 — total population (integer)
     median_age                 — median age in years (float)
     median_household_income    — median household income in USD (integer)
-    poverty_pct                — % of population below poverty line (float)
-    unemployment_pct           — unemployment rate % (float)
-    bachelors_pct              — % of adults with bachelor's degree or higher (float)
     election_2016_winner       — "Republican" or "Democrat"
     election_2016_rep          — Republican vote count (integer)
     election_2016_dem          — Democrat vote count (integer)
     election_2020_winner       — "Republican" or "Democrat"
     election_2020_rep          — Republican vote count (integer)
     election_2020_dem          — Democrat vote count (integer)
-    election_2024_winner       — "Republican" or "Democrat"
-    election_2024_rep          — Republican vote count (integer)
-    election_2024_dem          — Democrat vote count (integer)
-    obesity_pct                — % of adults who are obese (float)
-    smoking_pct                — % of adults who currently smoke (float)
-    diabetes_pct               — % of adults with diagnosed diabetes (float)
-    no_insurance_pct           — % of adults aged 18–64 without health insurance (float)
+    election_2024_winner       — "Republican" or "Democrat" (if available)
+    election_2024_rep          — Republican vote count (integer, if available)
+    election_2024_dem          — Democrat vote count (integer, if available)
 
 2. level "state" — filter US states by data fields, OR return by name/geography:
 
@@ -59,19 +52,12 @@ Query types:
     population                 — total population (integer)
     median_age                 — median age in years (float)
     median_household_income    — median household income in USD (integer)
-    poverty_pct                — % of population below poverty line (float)
-    unemployment_pct           — unemployment rate % (float)
-    bachelors_pct              — % of adults with bachelor's degree or higher (float)
     election_2016_winner       — "Republican" or "Democrat"
     election_2016_rep_pct      — Republican vote % (float, 0–100)
     election_2020_winner       — "Republican" or "Democrat"
     election_2020_rep_pct      — Republican vote % (float, 0–100)
-    election_2024_winner       — "Republican" or "Democrat"
-    election_2024_rep_pct      — Republican vote % (float, 0–100)
-    obesity_pct                — % of adults who are obese (population-weighted from counties, float)
-    smoking_pct                — % of adults who currently smoke (float)
-    diabetes_pct               — % of adults with diagnosed diabetes (float)
-    no_insurance_pct           — % of adults aged 18–64 without health insurance (float)
+    election_2024_winner       — "Republican" or "Democrat" (if available)
+    election_2024_rep_pct      — Republican vote % (float, 0–100, if available)
 
   IMPORTANT: "state" is a county-only field. State records use "name" for the state name.
   For name/geography-based state queries (e.g. "states starting with N", "landlocked states",
