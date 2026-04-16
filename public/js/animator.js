@@ -789,6 +789,10 @@
           const ann = annotations.find(a => a.id === parseInt(trackId.slice(4)));
           return ann ? { opacity: ann.opacity } : null;
         }
+        if (trackId.startsWith('route_')) {
+          const g = cityRouteGroups.find(g => g.id === parseInt(trackId.slice(6)));
+          return g ? { routeStart: g.routeStart ?? 0, routeEnd: g.routeEnd ?? 100 } : null;
+        }
         if (trackId.startsWith('gmember_')) {
           // gmember_<groupId>_<memberKey> — capture this member's current fill opacity
           const underIdx = trackId.indexOf('_', 'gmember_'.length);
@@ -955,6 +959,14 @@
             g.fillOpacity = gs.fillOpacity;
             refreshGroupEntities(g);
           }
+        });
+
+        // Route states — update routeStart/routeEnd; CallbackProperty reads group directly
+        (state.routeStates || []).forEach(rs => {
+          const g = cityRouteGroups.find(g => g.id === rs.id);
+          if (!g) return;
+          g.routeStart = rs.routeStart ?? g.routeStart;
+          g.routeEnd   = rs.routeEnd   ?? g.routeEnd;
         });
 
         // Member states — override individual member opacity (sequential appearance)
@@ -1285,6 +1297,12 @@
         if (trackId.startsWith('gmember_')) {
           return { opacity: (a.opacity??0) + ((b.opacity??0) - (a.opacity??0)) * alpha };
         }
+        if (trackId.startsWith('route_')) {
+          return {
+            routeStart: (a.routeStart??0)   + ((b.routeStart??0)   - (a.routeStart??0))   * alpha,
+            routeEnd:   (a.routeEnd??100)   + ((b.routeEnd??100)   - (a.routeEnd??100))   * alpha,
+          };
+        }
         return null;
       }
 
@@ -1334,6 +1352,14 @@
           state.annStates = annAnimated.map(a => {
             const as = interpolateTrack('ann_' + a.id, t);
             return { id: a.id, ...as };
+          });
+        }
+        // Route states — routeStart/routeEnd for draw-on animation
+        const routeAnimated = cityRouteGroups.filter(g => (tracks['route_'+g.id]?.keyframes.length ?? 0) > 0);
+        if (routeAnimated.length > 0) {
+          state.routeStates = routeAnimated.map(g => {
+            const rs = interpolateTrack('route_' + g.id, t);
+            return { id: g.id, ...rs };
           });
         }
         // Member states — per-member opacity for sequential region appearance
@@ -4920,7 +4946,11 @@
           glBgPadY: 3,
         };
         cityRouteGroups.push(group);
+        tracks['route_' + group.id] = { id: 'route_' + group.id, label: 'Route: ' + name, category: 'route',
+          color: group.color, h: 22, keyframes: [], collapsed: true };
+        selectedTrackIds.add('route_' + group.id);
         buildRouteEntities(group);
+        tlBuildLabels();
         renderRouteGroupList();
         return group;
       }
@@ -4933,6 +4963,9 @@
         g.cityEntities.forEach(e => viewer.entities.remove(e));
         if (g.labelEntity) viewer.entities.remove(g.labelEntity);
         cityRouteGroups.splice(idx, 1);
+        delete tracks['route_' + id];
+        selectedTrackIds.delete('route_' + id);
+        tlBuildLabels();
         renderRouteGroupList();
       }
 
@@ -5828,6 +5861,10 @@
           }
           return subs;
         }
+        if (track.category === 'route') return [
+          { id:track.id+'/draw', parentId:track.id, label:'Draw%', prop:'routeEnd', h:14, isSub:true, color:track.color,
+            getValue: t => (interpolateTrack(track.id, t)?.routeEnd ?? 100) / 100 },
+        ];
         if (track.category === 'city') return [
           { id:track.id+'/dot',          parentId:track.id, label:'Dot Size',    prop:'dotSize',      h:14, isSub:true, color:track.color,
             getValue: t => { const s = interpolateTrack(track.id, t); return s ? Math.min(1, s.dotSize / 16) : 0; } },
@@ -5851,11 +5888,12 @@
           rows.push(track);
           if (!track.collapsed) for (const sub of tlGetSubRows(track)) rows.push(sub);
         };
-        for (const h of highlights)   addEntity(tracks['hl_'+h.key]);
-        for (const g of regionGroups) addEntity(tracks['group_'+g.id]);
-        for (const m of cityMarkers)  addEntity(tracks['city_'+m.id]);
-        for (const k of kmlOverlays)  addEntity(tracks['kml_'+k.id]);
-        for (const a of annotations)  addEntity(tracks['ann_'+a.id]);
+        for (const h of highlights)      addEntity(tracks['hl_'+h.key]);
+        for (const g of regionGroups)   addEntity(tracks['group_'+g.id]);
+        for (const m of cityMarkers)    addEntity(tracks['city_'+m.id]);
+        for (const g of cityRouteGroups) addEntity(tracks['route_'+g.id]);
+        for (const k of kmlOverlays)    addEntity(tracks['kml_'+k.id]);
+        for (const a of annotations)    addEntity(tracks['ann_'+a.id]);
         return rows;
       }
       function tlTotalH() { return tlGetRows().reduce((s, r) => s + r.h, 0); }
@@ -6497,6 +6535,22 @@
             backgroundOpacity: c.backgroundOpacity, bgPadX: c.bgPadX, bgPadY: c.bgPadY,
             dotOpacity: c.dotOpacity, labelOpacity: c.labelOpacity,
           })),
+          routes: cityRouteGroups.map(g => ({
+            id: g.id, name: g.name, color: g.color,
+            lineStyle: g.lineStyle, lineShape: g.lineShape,
+            routeStart: g.routeStart, routeEnd: g.routeEnd, width: g.width, visible: g.visible,
+            cities: g.cities.map(c => ({ name: c.name, country: c.country, state: c.state, lat: c.lat, lon: c.lon })),
+            showCityLabels: g.showCityLabels, labelColor: g.labelColor, labelFontSize: g.labelFontSize,
+            labelFontWeight: g.labelFontWeight, labelFontStyle: g.labelFontStyle, labelFontFamily: g.labelFontFamily,
+            labelOffsetX: g.labelOffsetX, labelOffsetY: g.labelOffsetY, labelOutlineWidth: g.labelOutlineWidth,
+            labelOpacity: g.labelOpacity, labelShowBackground: g.labelShowBackground, labelBgColor: g.labelBgColor,
+            labelBgOpacity: g.labelBgOpacity, labelBgPadX: g.labelBgPadX, labelBgPadY: g.labelBgPadY,
+            showLabel: g.showLabel, glColor: g.glColor, glFontSize: g.glFontSize, glFontWeight: g.glFontWeight,
+            glFontStyle: g.glFontStyle, glFontFamily: g.glFontFamily, glOffsetX: g.glOffsetX, glOffsetY: g.glOffsetY,
+            glOutlineWidth: g.glOutlineWidth, glOpacity: g.glOpacity, glShowBackground: g.glShowBackground,
+            glBgColor: g.glBgColor, glBgOpacity: g.glBgOpacity, glBgPadX: g.glBgPadX, glBgPadY: g.glBgPadY,
+          })),
+          nextRouteGroupId,
           tracks: Object.fromEntries(
             Object.entries(tracks).map(([id, t]) => [id, { keyframes: t.keyframes.map(k => ({ ...k })) }])
           ),
@@ -6564,6 +6618,10 @@
         });
         annotations = [];
         nextAnnotationId = 1;
+        // Clear routes
+        [...cityRouteGroups].forEach(g => deleteCityRouteGroup(g.id));
+        nextRouteGroupId  = 1;
+        nextRouteColorIdx = 0;
         // Clear all tracks and reset builtins
         Object.keys(tracks).forEach(id => { if (id !== 'camera' && id !== 'tod' && id !== 'borders') delete tracks[id]; });
         tracks['camera'].keyframes  = [];
@@ -6742,6 +6800,56 @@
           createAnnotation({ ...saved, el: null, entity: null });
         }
         renderAnnotationList();
+
+        // 7c2. Routes
+        nextRouteGroupId = project.nextRouteGroupId ?? 1;
+        for (const saved of (project.routes ?? [])) {
+          nextRouteGroupId = saved.id;
+          const g = createCityRouteGroup(saved.name, saved.cities ?? []);
+          if (!g) continue;
+          g.color       = saved.color       ?? g.color;
+          g.lineStyle   = saved.lineStyle   ?? 'line';
+          g.lineShape   = saved.lineShape   ?? 'straight';
+          g.routeStart  = saved.routeStart  ?? 0;
+          g.routeEnd    = saved.routeEnd    ?? 100;
+          g.width       = saved.width       ?? 2;
+          g.visible     = saved.visible     ?? true;
+          g.showCityLabels        = saved.showCityLabels        ?? false;
+          g.labelColor            = saved.labelColor            ?? null;
+          g.labelFontSize         = saved.labelFontSize         ?? 14;
+          g.labelFontWeight       = saved.labelFontWeight       ?? 'normal';
+          g.labelFontStyle        = saved.labelFontStyle        ?? 'normal';
+          g.labelFontFamily       = saved.labelFontFamily       ?? 'Arial';
+          g.labelOffsetX          = saved.labelOffsetX          ?? 4;
+          g.labelOffsetY          = saved.labelOffsetY          ?? 0;
+          g.labelOutlineWidth     = saved.labelOutlineWidth     ?? 2;
+          g.labelOpacity          = saved.labelOpacity          ?? 1.0;
+          g.labelShowBackground   = saved.labelShowBackground   ?? false;
+          g.labelBgColor          = saved.labelBgColor          ?? '#000000';
+          g.labelBgOpacity        = saved.labelBgOpacity        ?? 0.5;
+          g.labelBgPadX           = saved.labelBgPadX           ?? 5;
+          g.labelBgPadY           = saved.labelBgPadY           ?? 3;
+          g.showLabel             = saved.showLabel             ?? false;
+          g.glColor               = saved.glColor               ?? null;
+          g.glFontSize            = saved.glFontSize            ?? 28;
+          g.glFontWeight          = saved.glFontWeight          ?? 'bold';
+          g.glFontStyle           = saved.glFontStyle           ?? 'normal';
+          g.glFontFamily          = saved.glFontFamily          ?? 'Arial';
+          g.glOffsetX             = saved.glOffsetX             ?? 0;
+          g.glOffsetY             = saved.glOffsetY             ?? 0;
+          g.glOutlineWidth        = saved.glOutlineWidth        ?? 2;
+          g.glOpacity             = saved.glOpacity             ?? 1.0;
+          g.glShowBackground      = saved.glShowBackground      ?? false;
+          g.glBgColor             = saved.glBgColor             ?? '#000000';
+          g.glBgOpacity           = saved.glBgOpacity           ?? 0.5;
+          g.glBgPadX              = saved.glBgPadX              ?? 5;
+          g.glBgPadY              = saved.glBgPadY              ?? 3;
+          if (tracks['route_' + g.id]) tracks['route_' + g.id].color = g.color;
+          buildRouteEntities(g);
+          buildRouteCityMarkers(g);
+        }
+        nextRouteGroupId = project.nextRouteGroupId ?? nextRouteGroupId;
+        renderRouteGroupList();
 
         // 8. Restore track keyframes (overwrite after entities are rebuilt)
         for (const [id, saved] of Object.entries(project.tracks ?? {})) {
