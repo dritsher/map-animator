@@ -3436,16 +3436,102 @@
             membersToggle.querySelector(".group-members-arrow").textContent = group.membersCollapsed ? "▶" : "▼";
           });
           for (const m of group.members) {
+            const memberTrackId = `gmember_${group.id}_${m.key}`;
+            const isSelected = selectedTrackIds.has(memberTrackId);
+            const shortName = m.name.replace(/\s*\(.*\)$/, '');
+            const curOpacity = m.fillOpacity ?? group.fillOpacity;
+
             const li = document.createElement("li");
+            li.className = 'group-member-item' + (isSelected ? ' group-member-selected' : '');
+
+            // ── Header row ──────────────────────────────────────────────────
+            const row = document.createElement("div");
+            row.className = "group-member-row";
+
             const label = document.createElement("span");
             label.className = "group-member-name";
-            label.textContent = m.name;
+            label.textContent = shortName;
             label.title = m.name;
+
+            const badge = document.createElement("span");
+            badge.className = "group-member-badge";
+            badge.textContent = Math.round(curOpacity * 100) + '%';
+
             const rmBtn = document.createElement("button");
             rmBtn.className = "hl-remove";
             rmBtn.textContent = "×";
-            rmBtn.addEventListener("click", () => removeMemberFromGroup(group.id, m.key));
-            li.append(label, rmBtn);
+            rmBtn.addEventListener("click", (e) => { e.stopPropagation(); removeMemberFromGroup(group.id, m.key); });
+
+            row.append(label, badge, rmBtn);
+
+            // Toggle selection on click
+            row.addEventListener("click", () => {
+              if (selectedTrackIds.has(memberTrackId)) selectedTrackIds.delete(memberTrackId);
+              else selectedTrackIds.add(memberTrackId);
+              tlBuildLabels();
+              renderGroupList();
+            });
+
+            li.appendChild(row);
+
+            // ── Expanded controls (shown when selected) ──────────────────
+            if (isSelected) {
+              const ctrl = document.createElement("div");
+              ctrl.className = "group-member-ctrl";
+
+              const opacityLabel = document.createElement("span");
+              opacityLabel.className = "hl-ctrl-label";
+              opacityLabel.textContent = "Fill";
+
+              const slider = document.createElement("input");
+              slider.type = "range"; slider.min = "0"; slider.max = "100"; slider.step = "5";
+              slider.value = String(Math.round(curOpacity * 100));
+              slider.className = "hl-ctrl-slider";
+
+              const pct = document.createElement("span");
+              pct.className = "hl-ctrl-pct";
+              pct.textContent = Math.round(curOpacity * 100) + "%";
+
+              slider.addEventListener("input", (e) => {
+                const opacity = parseInt(e.target.value) / 100;
+                pct.textContent = e.target.value + "%";
+                badge.textContent = e.target.value + "%";
+                m.fillOpacity = opacity;
+                if (!group.invert && m.fillRef && (m.fillEntities?.length ?? 0) > 0) {
+                  m.fillRef.color   = group.color;
+                  m.fillRef.opacity = opacity;
+                } else {
+                  // Entities don't exist yet (was 0) — create just this member's
+                  (m.fillEntities || []).forEach(removeFillItem);
+                  m.fillEntities = [];
+                  if (!group.invert && opacity > 0) {
+                    const entry = regionLookup.get(m.name);
+                    const polygons = entry?.polygons || [];
+                    if (!m.fillRef) m.fillRef = { color: group.color, opacity };
+                    m.fillRef.color   = group.color;
+                    m.fillRef.opacity = opacity;
+                    if (polygons.length > 0) {
+                      m.fillEntities = makeFillEntities(polygons, group.color, opacity, false, m.fillRef);
+                      m.fillEntities.forEach(item => { item.show = group.visible !== false; });
+                    }
+                  }
+                }
+              });
+
+              const inheritBtn = document.createElement("button");
+              inheritBtn.className = "hl-toggle" + (m.fillOpacity == null ? " hl-toggle-active" : "");
+              inheritBtn.textContent = "inherit";
+              inheritBtn.title = "Reset to group fill opacity";
+              inheritBtn.addEventListener("click", () => {
+                m.fillOpacity = null;
+                if (m.fillRef) { m.fillRef.color = group.color; m.fillRef.opacity = group.fillOpacity; }
+                renderGroupList();
+              });
+
+              ctrl.append(opacityLabel, slider, pct, inheritBtn);
+              li.appendChild(ctrl);
+            }
+
             ul.appendChild(li);
           }
           body.appendChild(ul);
@@ -5861,6 +5947,7 @@
               if (selectedTrackIds.has(row.id)) selectedTrackIds.delete(row.id);
               else selectedTrackIds.add(row.id);
               tlBuildLabels();
+              renderGroupList();
             });
           } else if (row.isSub) {
             d.className = 'tl-lbl tl-lbl-sub';
@@ -6150,8 +6237,8 @@
           let ty = 0;
           for (const row of rows) {
             if (my >= ty && my < ty + row.h) {
-              if (row.isSub) {
-                // Sub-rows: seek only, no keyframe interaction
+              if (row.isSub && !row.isRealTrack) {
+                // Virtual sub-rows (waveform previews): seek only
                 tlSeekTo(Math.max(0, tlXToTime(mx)));
                 tlDrag = { type: 'playhead' };
               } else {

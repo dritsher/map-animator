@@ -188,6 +188,8 @@
       .tl-sel-dot { width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; flex-shrink: 0; display: inline-block; }
       .tl-lbl-sub { padding-left: 18px; font-size: 10px; color: #666; background: #1e1e20; cursor: default; }
       .tl-lbl-sub:hover { background: #222224; }
+      .tl-lbl-member { cursor: pointer; padding-left: 24px; }
+      .tl-lbl-member:hover { background: #262630 !important; }
       .tl-collapse-btn { font-size: 8px; margin-right: 3px; flex-shrink: 0; color: #666; line-height: 1; }
       #tlCanvasWrap {
         flex: 1;
@@ -396,8 +398,15 @@
       input.group-region-search { flex: 1; margin: 0; padding: 4px 6px; font-size: 12px; }
       button.group-add-btn { width: auto; margin: 0; padding: 4px 8px; flex-shrink: 0; font-size: 12px; }
       .group-members { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-      .group-members li { display: flex; align-items: center; gap: 4px; padding: 2px 4px; font-size: 11px; color: #555; }
+      .group-member-item { border-radius: 4px; overflow: hidden; }
+      .group-member-item.group-member-selected { background: #f0f5ff; }
+      .group-member-row { display: flex; align-items: center; gap: 4px; padding: 2px 4px; font-size: 11px; color: #555; cursor: pointer; border-radius: 4px; }
+      .group-member-row:hover { background: #e8eeff; }
+      .group-member-selected .group-member-row { background: #dde8ff; }
       .group-member-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .group-member-badge { font-size: 10px; color: #888; background: #eee; border-radius: 8px; padding: 1px 5px; flex-shrink: 0; }
+      .group-member-selected .group-member-badge { background: #c8d8ff; color: #3355bb; }
+      .group-member-ctrl { display: flex; align-items: center; gap: 5px; padding: 3px 6px 4px; background: #f5f8ff; border-top: 1px solid #dde3f5; }
       .group-count-badge {
         font-size: 10px; font-weight: 600; color: #fff;
         background: #888; border-radius: 8px;
