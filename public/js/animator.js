@@ -789,6 +789,15 @@
           const ann = annotations.find(a => a.id === parseInt(trackId.slice(4)));
           return ann ? { opacity: ann.opacity } : null;
         }
+        if (trackId.startsWith('gmember_')) {
+          // gmember_<groupId>_<memberKey> — capture this member's current fill opacity
+          const underIdx = trackId.indexOf('_', 'gmember_'.length);
+          const groupId = parseInt(trackId.slice('gmember_'.length, underIdx));
+          const memberKey = trackId.slice(underIdx + 1);
+          const g = regionGroups.find(g => g.id === groupId);
+          const member = g?.members.find(m => m.key === memberKey);
+          return member ? { opacity: member.fillOpacity ?? g.fillOpacity } : null;
+        }
         return null;
       }
 
@@ -945,6 +954,34 @@
           } else if (gs.fillOpacity !== g.fillOpacity || colorChanged || invertChanged || widthChanged) {
             g.fillOpacity = gs.fillOpacity;
             refreshGroupEntities(g);
+          }
+        });
+
+        // Member states — override individual member opacity (sequential appearance)
+        // Applied after groupStates so individual overrides win over group-level animation.
+        (state.memberStates || []).forEach(ms => {
+          const g = regionGroups.find(g => g.id === ms.groupId);
+          if (!g || g.invert) return;
+          const member = g.members.find(m => m.key === ms.memberKey);
+          if (!member) return;
+          const opacity = ms.opacity ?? g.fillOpacity;
+          member.fillOpacity = opacity;
+          if (member.fillRef && (member.fillEntities?.length ?? 0) > 0) {
+            member.fillRef.color   = g.color;
+            member.fillRef.opacity = opacity;
+          } else if (opacity > 0) {
+            // Entities don't exist yet — create them now (member was at opacity 0)
+            const entry = regionLookup.get(member.name);
+            const polygons = entry?.polygons || [];
+            if (!member.fillRef) member.fillRef = { color: g.color, opacity };
+            member.fillRef.color   = g.color;
+            member.fillRef.opacity = opacity;
+            if (polygons.length > 0) {
+              member.fillEntities = makeFillEntities(polygons, g.color, opacity, false, member.fillRef);
+              member.fillEntities.forEach(item => { item.show = g.visible !== false; });
+            }
+          } else if (member.fillRef) {
+            member.fillRef.opacity = 0;
           }
         });
 
@@ -1243,6 +1280,9 @@
         if (trackId.startsWith('ann_')) {
           return { opacity: (a.opacity??1) + ((b.opacity??1) - (a.opacity??1)) * alpha };
         }
+        if (trackId.startsWith('gmember_')) {
+          return { opacity: (a.opacity??0) + ((b.opacity??0) - (a.opacity??0)) * alpha };
+        }
         return null;
       }
 
@@ -1293,6 +1333,19 @@
             const as = interpolateTrack('ann_' + a.id, t);
             return { id: a.id, ...as };
           });
+        }
+        // Member states — per-member opacity for sequential region appearance
+        const memberAnimated = [];
+        for (const g of regionGroups) {
+          for (const m of g.members) {
+            const tid = `gmember_${g.id}_${m.key}`;
+            if ((tracks[tid]?.keyframes.length ?? 0) > 0) memberAnimated.push({ groupId: g.id, memberKey: m.key, tid });
+          }
+        }
+        if (memberAnimated.length > 0) {
+          state.memberStates = memberAnimated.map(({ groupId, memberKey, tid }) => ({
+            groupId, memberKey, ...interpolateTrack(tid, t),
+          }));
         }
         return state;
       }
@@ -3099,7 +3152,12 @@
         const gid = g.id;
         g.entities.forEach(e => viewer.entities.remove(e));
         g.fillEntities.forEach(removeFillItem);
-        g.members.forEach(m => (m.fillEntities || []).forEach(removeFillItem));
+        g.members.forEach(m => {
+          (m.fillEntities || []).forEach(removeFillItem);
+          const tid = `gmember_${gid}_${m.key}`;
+          delete tracks[tid];
+          selectedTrackIds.delete(tid);
+        });
         if (g.labelEntity) viewer.entities.remove(g.labelEntity);
         regionGroups.splice(idx, 1);
         delete tracks['group_' + gid];
@@ -3152,6 +3210,12 @@
         if (!entry) return;
         if (group.members.some(m => m.key === entry.key)) return;
         group.members.push({ key: entry.key, name: entry.name, fillRef: null, fillEntities: [] });
+        // Create a per-member animation track (hidden under group's expand triangle)
+        const memberTrackId = `gmember_${group.id}_${entry.key}`;
+        const shortLabel = entry.name.replace(/\s*\(.*\)$/, '');
+        tracks[memberTrackId] = { id: memberTrackId, label: shortLabel, category: 'group_member',
+          parentId: 'group_' + group.id, color: group.color, h: 18, keyframes: [],
+          isSub: true, isRealTrack: true };
         refreshGroupEntities(group);
         renderGroupList();
       }
@@ -3160,7 +3224,12 @@
         const group = regionGroups.find(g => g.id === groupId);
         if (!group) return;
         const removing = group.members.find(m => m.key === memberKey);
-        if (removing) { (removing.fillEntities || []).forEach(removeFillItem); }
+        if (removing) {
+          (removing.fillEntities || []).forEach(removeFillItem);
+          const tid = `gmember_${group.id}_${memberKey}`;
+          delete tracks[tid];
+          selectedTrackIds.delete(tid);
+        }
         group.members = group.members.filter(m => m.key !== memberKey);
         refreshGroupEntities(group);
         renderGroupList();
@@ -5655,10 +5724,20 @@
           { id:track.id+'/outline', parentId:track.id, label:'Outline', prop:'outlineOpacity', h:14, isSub:true, color:track.color,
             getValue: t => interpolateTrack(track.id, t)?.outlineOpacity ?? 0 },
         ];
-        if (track.category === 'group') return [
-          { id:track.id+'/fill', parentId:track.id, label:'Fill', prop:'fillOpacity', h:14, isSub:true, color:track.color,
-            getValue: t => interpolateTrack(track.id, t)?.fillOpacity ?? 0 },
-        ];
+        if (track.category === 'group') {
+          const subs = [
+            { id:track.id+'/fill', parentId:track.id, label:'Fill', prop:'fillOpacity', h:14, isSub:true, color:track.color,
+              getValue: t => interpolateTrack(track.id, t)?.fillOpacity ?? 0 },
+          ];
+          const g = regionGroups.find(g => 'group_'+g.id === track.id);
+          if (g) {
+            for (const member of g.members) {
+              const tid = `gmember_${g.id}_${member.key}`;
+              if (tracks[tid]) subs.push(tracks[tid]);
+            }
+          }
+          return subs;
+        }
         if (track.category === 'city') return [
           { id:track.id+'/dot',          parentId:track.id, label:'Dot Size',    prop:'dotSize',      h:14, isSub:true, color:track.color,
             getValue: t => { const s = interpolateTrack(track.id, t); return s ? Math.min(1, s.dotSize / 16) : 0; } },
@@ -5768,7 +5847,22 @@
         for (const row of tlGetRows()) {
           const d = document.createElement('div');
           d.style.height = row.h + 'px';
-          if (row.isSub) {
+          if (row.isSub && row.isRealTrack) {
+            d.className = 'tl-lbl tl-lbl-sub tl-lbl-member' + (selectedTrackIds.has(row.id) ? ' tl-lbl-sel' : '');
+            d.dataset.trackId = row.id;
+            const dot = document.createElement('span');
+            dot.className = 'tl-sel-dot';
+            dot.style.background = row.color;
+            const lbl = document.createElement('span');
+            lbl.textContent = row.label;
+            d.append(dot, lbl);
+            d.title = 'Click to toggle keyframe capture for this member';
+            d.addEventListener('click', () => {
+              if (selectedTrackIds.has(row.id)) selectedTrackIds.delete(row.id);
+              else selectedTrackIds.add(row.id);
+              tlBuildLabels();
+            });
+          } else if (row.isSub) {
             d.className = 'tl-lbl tl-lbl-sub';
             const lbl = document.createElement('span');
             lbl.textContent = row.label;
@@ -5846,7 +5940,8 @@
             ctx.fillStyle = 'rgba(74,158,255,0.07)';
             ctx.fillRect(0, y, W, row.h - 1);
           }
-          if (row.isSub)            tlDrawSubRow(ctx, row, y, row.h, W);
+          if (row.isSub && !row.isRealTrack) tlDrawSubRow(ctx, row, y, row.h, W);
+          else if (row.isSub && row.isRealTrack) tlDrawGenericTrack(ctx, row, y, row.h, W);
           else if (row.id === 'camera')  tlDrawCameraTrack(ctx, y, row.h, W);
           else if (row.id === 'tod') tlDrawTodTrack(ctx, y, row.h, W);
           else                       tlDrawGenericTrack(ctx, row, y, row.h, W);
@@ -6221,7 +6316,7 @@
       });
 
       document.getElementById('tlSelectAll').addEventListener('click', () => {
-        for (const row of tlGetRows()) if (!row.isSub) selectedTrackIds.add(row.id);
+        for (const row of tlGetRows()) if (!row.isSub || row.isRealTrack) selectedTrackIds.add(row.id);
         tlBuildLabels();
       });
       document.getElementById('tlSelectNone').addEventListener('click', () => {
