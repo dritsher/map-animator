@@ -3424,6 +3424,98 @@
             body.appendChild(aiRow);
           }
 
+          // ── Sequential appearance ────────────────────────────────────────
+          const seqSection = document.createElement("div");
+          seqSection.className = "group-seq-section";
+
+          const seqHeader = document.createElement("div");
+          seqHeader.className = "group-seq-header";
+          const hasSeqKfs = group.members.some(m => {
+            const t = tracks[`gmember_${group.id}_${m.key}`];
+            return t && t.keyframes.length > 0;
+          });
+          seqHeader.innerHTML = `<span class="group-seq-arrow">${group.seqCollapsed !== false ? '▶' : '▼'}</span> Sequential appearance${hasSeqKfs ? ' <span class="group-seq-active">●</span>' : ''}`;
+
+          const seqBody = document.createElement("div");
+          seqBody.className = "group-seq-body";
+          seqBody.style.display = group.seqCollapsed !== false ? 'none' : '';
+
+          seqHeader.addEventListener('click', () => {
+            group.seqCollapsed = group.seqCollapsed === false;
+            seqBody.style.display = group.seqCollapsed !== false ? 'none' : '';
+            seqHeader.querySelector('.group-seq-arrow').textContent = group.seqCollapsed !== false ? '▶' : '▼';
+          });
+
+          // Start / Interval inputs
+          const seqInputRow = document.createElement("div");
+          seqInputRow.className = "group-seq-inputs";
+
+          const mkSeqField = (label, defaultVal, min, step) => {
+            const wrap = document.createElement("label");
+            wrap.className = "group-seq-field";
+            const lbl = document.createElement("span");
+            lbl.textContent = label;
+            const inp = document.createElement("input");
+            inp.type = "number"; inp.min = min; inp.step = step;
+            inp.value = defaultVal;
+            inp.style.cssText = "width:46px;font-size:11px;padding:2px 4px;";
+            wrap.append(lbl, inp);
+            return { wrap, inp };
+          };
+
+          const { wrap: startWrap, inp: startInp } = mkSeqField("Start (s)", group._seqStart ?? 2, 0, 0.5);
+          const { wrap: intervalWrap, inp: intervalInp } = mkSeqField("Interval (s)", group._seqInterval ?? 0.5, 0.1, 0.1);
+          seqInputRow.append(startWrap, intervalWrap);
+          seqBody.appendChild(seqInputRow);
+
+          // Apply / Clear buttons
+          const seqBtnRow = document.createElement("div");
+          seqBtnRow.className = "group-seq-btns";
+
+          const applyBtn = document.createElement("button");
+          applyBtn.textContent = "Apply";
+          applyBtn.style.cssText = "flex:1;font-size:11px;padding:3px 6px;";
+          applyBtn.addEventListener("click", () => {
+            const startTime = parseFloat(startInp.value) || 0;
+            const interval = Math.max(0.05, parseFloat(intervalInp.value) || 0.5);
+            group._seqStart = startTime;
+            group._seqInterval = interval;
+            // Expand group track in timeline
+            if (tracks['group_' + group.id]) tracks['group_' + group.id].collapsed = false;
+            // Generate keyframes for each member
+            group.members.forEach((member, idx) => {
+              const tid = `gmember_${group.id}_${member.key}`;
+              const track = tracks[tid];
+              if (!track) return;
+              const appearTime = startTime + idx * interval;
+              track.keyframes = [
+                { id: nextKfId++, time: 0, opacity: 0 },
+                { id: nextKfId++, time: appearTime, opacity: 1 },
+              ];
+            });
+            tlBuildLabels();
+            tlDraw();
+            renderGroupList();
+          });
+
+          const clearBtn = document.createElement("button");
+          clearBtn.textContent = "Clear";
+          clearBtn.style.cssText = "flex:1;font-size:11px;padding:3px 6px;color:#888;background:#f5f5f5;border-color:#ddd;";
+          clearBtn.addEventListener("click", () => {
+            group.members.forEach(member => {
+              const t = tracks[`gmember_${group.id}_${member.key}`];
+              if (t) t.keyframes = [];
+            });
+            tlBuildLabels();
+            tlDraw();
+            renderGroupList();
+          });
+
+          seqBtnRow.append(applyBtn, clearBtn);
+          seqBody.appendChild(seqBtnRow);
+          seqSection.append(seqHeader, seqBody);
+          body.appendChild(seqSection);
+
           // Member add row (reuses the shared regionDatalist)
           const addRow = document.createElement("div");
           addRow.className = "group-add-row";
@@ -6520,6 +6612,7 @@
             id: g.id, name: g.name, color: g.color,
             fillOpacity: g.fillOpacity, invert: g.invert,
             members: g.members.map(m => ({ key: m.key, name: m.name })),
+            _seqStart: g._seqStart, _seqInterval: g._seqInterval,
           })),
           cities: cityMarkers.map(c => ({
             id: c.id, name: c.name, country: c.country, lat: c.lat, lon: c.lon,
@@ -6703,9 +6796,11 @@
           createGroup(saved.name);
           const grp = regionGroups.find(g => g.id === saved.id);
           if (!grp) continue;
-          grp.color       = saved.color ?? grp.color;
-          grp.fillOpacity = saved.fillOpacity ?? 0;
-          grp.invert      = saved.invert ?? false;
+          grp.color         = saved.color ?? grp.color;
+          grp.fillOpacity   = saved.fillOpacity ?? 0;
+          grp.invert        = saved.invert ?? false;
+          grp._seqStart     = saved._seqStart;
+          grp._seqInterval  = saved._seqInterval;
           if (tracks['group_' + saved.id]) tracks['group_' + saved.id].color = grp.color;
           for (const m of (saved.members ?? [])) addMemberToGroup(saved.id, m.name);
           refreshGroupEntities(grp);
@@ -6909,6 +7004,25 @@
       document.getElementById('saveProjectBtn').addEventListener('click', saveProject);
       document.getElementById('loadProjectBtn').addEventListener('click', () => {
         document.getElementById('loadProjectInput').click();
+      });
+      document.getElementById('resetProjectBtn').addEventListener('click', () => {
+        if (!confirm('Reset to a blank map? All unsaved changes will be lost.')) return;
+        loadProject({
+          version: 1, totalDuration: 10, playbackT: 0,
+          currentBasemap: 'eox-s2', basemapShowLabels: true, basemapMaxLevelOverride: null,
+          bmAdjust: { brightness: 1, contrast: 1, hue: 0, saturation: 1, gamma: 1 },
+          borders: { countryOpacity: 0.6, stateOpacity: 0, countyOpacity: 0, countyFilter: 'none', borderColor: '#ffffff', landOnly: true },
+          defaults: { regionColor: '#ff9900', cityColor: '#ffffff', cityDotSize: 6 },
+          highlights: [], groups: [], cities: [], routes: [],
+          tracks: {
+            camera:  { keyframes: [{ id: 1, time: 0, lat: 20, lon: 0, height: 15000000, heading: 0, pitch: -90, roll: 0, sceneMode: 'globe' }] },
+            tod:     { keyframes: [] },
+            borders: { keyframes: [] },
+          },
+          nextKfId: 2, nextGroupId: 1, nextCityId: 1, nextRouteGroupId: 1,
+          kmlOverlays: [], nextKmlId: 1, imageOverlays: [], nextImageOverlayId: 1,
+          annotations: [], nextAnnotationId: 1, selectedTrackIds: ['camera'],
+        });
       });
       document.getElementById('loadProjectInput').addEventListener('change', (e) => {
         const file = e.target.files[0];
