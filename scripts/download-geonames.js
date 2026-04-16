@@ -2,8 +2,8 @@
 /**
  * download-geonames.js
  *
- * Downloads GeoNames cities1000.txt (populated places with population >= 1000)
- * and saves it to server/data/cities1000.txt.
+ * Downloads GeoNames cities500.txt (populated places with population >= 1000)
+ * and saves it to server/data/cities500.txt.
  *
  * Usage:
  *   node scripts/download-geonames.js
@@ -19,9 +19,9 @@ const path   = require('path');
 const { execFileSync } = require('child_process');
 
 const OUT_DIR  = path.join(__dirname, '../server/data');
-const OUT_FILE = path.join(OUT_DIR, 'cities1000.txt');
-const ZIP_URL  = 'https://download.geonames.org/export/dump/cities1000.zip';
-const TMP_ZIP  = path.join(OUT_DIR, '_cities1000.zip');
+const OUT_FILE = path.join(OUT_DIR, 'cities500.txt');
+const ZIP_URL  = 'https://download.geonames.org/export/dump/cities500.zip';
+const TMP_ZIP  = path.join(OUT_DIR, '_cities500.zip');
 
 function download(url, dest) {
   return new Promise((resolve, reject) => {
@@ -43,17 +43,17 @@ function download(url, dest) {
 async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
-  console.log('Downloading cities1000.zip from GeoNames…');
+  console.log('Downloading cities500.zip from GeoNames…');
   await download(ZIP_URL, TMP_ZIP);
   console.log('Downloaded. Extracting…');
 
   // Try unzip first, fall back to Python's zipfile module
   try {
-    execFileSync('unzip', ['-o', '-j', TMP_ZIP, 'cities1000.txt', '-d', OUT_DIR]);
+    execFileSync('unzip', ['-o', '-j', TMP_ZIP, 'cities500.txt', '-d', OUT_DIR]);
   } catch (e) {
     if (e.code === 'ENOENT') {
       execFileSync('python3', ['-c',
-        `import zipfile, os; zipfile.ZipFile('${TMP_ZIP}').extract('cities1000.txt', '${OUT_DIR}')`
+        `import zipfile, os; zipfile.ZipFile('${TMP_ZIP}').extract('cities500.txt', '${OUT_DIR}')`
       ]);
     } else throw e;
   }

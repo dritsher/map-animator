@@ -23,11 +23,11 @@ function getRegionData() {
 }
 
 // ── GeoNames reverse-geocode data ────────────────────────────────────────────
-// cities1000.txt: tab-separated, 167k populated places worldwide (pop >= 1000)
+// cities500.txt: tab-separated, 167k populated places worldwide (pop >= 1000)
 // Fields: id, name, ascii, alt, lat, lon, feat_class, feat_code, country, ...15 more
 // Download with: node scripts/download-geonames.js
 
-const GEONAMES_PATH = path.join(__dirname, "../server/data/cities1000.txt");
+const GEONAMES_PATH = path.join(__dirname, "../server/data/cities500.txt");
 let geoPlaces = null; // flat array sorted by lat, each: [lat, lon, name, country, featureCode, population]
 
 function loadGeoNames() {
