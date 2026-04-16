@@ -966,6 +966,8 @@
           if (!member) return;
           const opacity = ms.opacity ?? g.fillOpacity;
           member.fillOpacity = opacity;
+          const memberBadge = document.querySelector(`.group-member-item[data-group-id="${ms.groupId}"][data-member-key="${CSS.escape(ms.memberKey)}"] .group-member-badge`);
+          if (memberBadge) memberBadge.textContent = Math.round(opacity * 100) + '%';
           if (member.fillRef && (member.fillEntities?.length ?? 0) > 0) {
             member.fillRef.color   = g.color;
             member.fillRef.opacity = opacity;
@@ -3443,6 +3445,8 @@
 
             const li = document.createElement("li");
             li.className = 'group-member-item' + (isSelected ? ' group-member-selected' : '');
+            li.dataset.groupId = group.id;
+            li.dataset.memberKey = m.key;
 
             // ── Header row ──────────────────────────────────────────────────
             const row = document.createElement("div");
