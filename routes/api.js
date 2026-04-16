@@ -542,6 +542,21 @@ General animation guidance:
 - sequentialAppearance: stagger members for drama. Use interval 0.2–0.5s for many members; 0.8–1.5s for few.
 - Coordinate timing: camera should reach its position 1–2 seconds before regions start appearing.
 
+CAMERA MOVEMENT STYLE — avoid sudden direction reversals:
+Always use the settle-and-dwell pattern at each waypoint:
+  1. ARRIVE: keyframe at t=T with ease="ease-in-out" (decelerates smoothly into position)
+  2. DWELL: second keyframe at t=T+1.5 with the SAME lat/lon/height and ease="ease-in-out" (camera rests here)
+  3. DEPART: the next waypoint keyframe pulls the camera away smoothly
+
+This prevents jarring direction changes — the camera glides in, pauses to let the viewer register the scene, then glides out.
+
+Example of correct 3-waypoint path:
+  { time:0,   lat:20, lon:0,    height:15000000, ease:"ease-in-out" }   ← establishing shot
+  { time:3,   lat:38, lon:-96,  height:4000000,  ease:"ease-in-out" }   ← arrive at US
+  { time:4.5, lat:38, lon:-96,  height:4000000,  ease:"ease-in-out" }   ← dwell on US
+  { time:8,   lat:51, lon:10,   height:3000000,  ease:"ease-in-out" }   ← depart to Europe
+  { time:9.5, lat:51, lon:10,   height:3000000,  ease:"ease-in-out" }   ← dwell on Europe
+
 CAMERA-ROUTE TRACKING (critical — follow this algorithm exactly when routes have drawAnimation):
 
 First, check whether routes draw at the same time or sequentially:
@@ -549,7 +564,10 @@ First, check whether routes draw at the same time or sequentially:
 CASE A — Routes draw at non-overlapping times (sequential):
 Track each route independently. For each route, for each city i of N:
   t_city_i = drawAnimation.startTime + (i / (N - 1)) * (drawAnimation.endTime - drawAnimation.startTime)
-Add a cameraPath keyframe at t_city_i centered on that city.
+
+At each city, use the settle-and-dwell pattern (arrive → dwell → depart):
+  - Arrive KF at t_city_i, ease="ease-in-out"
+  - Dwell KF at t_city_i + 1.0 (same position), ease="ease-in-out" — only if time budget allows
 Height per segment: ~2.5× great-circle distance to next city:
     ~500km  → 1500000m  |  ~1000km → 2500000m  |  ~2000km → 4000000m  |  ~4000km+ → 6000000–8000000m
 Add a pre-position keyframe 1–2s before each route's startTime.
@@ -637,7 +655,7 @@ router.post("/api/generate-map", async (req, res) => {
         totalDuration: { type: "number", description: "Total animation length in seconds (15–30 recommended)" },
         cameraPath: {
           type: "array",
-          description: "Camera keyframes. Must include time=0. Use 3–5 keyframes.",
+          description: "Camera keyframes. Must include time=0. See system prompt for easing and dwell pattern.",
           items: {
             type: "object",
             properties: {
@@ -647,6 +665,7 @@ router.post("/api/generate-map", async (req, res) => {
               height:  { type: "number", description: "Altitude in meters" },
               heading: { type: "number", description: "Degrees, 0=north. Defaults to 0." },
               pitch:   { type: "number", description: "Degrees, -90=straight down. Defaults to -90." },
+              ease:    { type: "string", enum: ["linear", "ease-in", "ease-out", "ease-in-out"], description: "Easing for the segment LEAVING this keyframe. Use ease-in-out for smooth arrivals/departures." },
             },
             required: ["time", "lat", "lon", "height"],
           },
