@@ -1077,6 +1077,24 @@
       .section.collapsed .section-body { display: none; }
       .section-body { padding-top: 8px; display: flex; flex-direction: column; gap: 0; }
 
+      /* ── Cursor info footer ──────────────────────────────────────────────────── */
+      #cursorInfo {
+        flex-shrink: 0;
+        border-top: 1px solid #d8dce3;
+        background: #e8eaee;
+        padding: 7px 12px;
+        font-size: 11px;
+        font-family: 'Courier New', monospace;
+        line-height: 1.65;
+        margin: 0 -12px;
+      }
+      #cursorCoords { color: #888; letter-spacing: 0.02em; }
+      #cursorPlace  { color: #222; font-weight: 600; }
+      #cursorDetail { color: #555; }
+      #cursorInfo.dim #cursorCoords,
+      #cursorInfo.dim #cursorPlace,
+      #cursorInfo.dim #cursorDetail { color: #bbb; }
+
       @media (max-width: 1366px) {
         #app {
           grid-template-columns: 1fr;

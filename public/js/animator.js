@@ -691,6 +691,9 @@
 
         setTimeout(() => { updateBasemapInfo(currentBasemap); applyBasemap(currentBasemap); }, 0);
 
+        // ── Cursor info panel ────────────────────────────────────────────────
+        initCursorInfo();
+
         setStatus("Ready. Add keyframes to build an animation.");
         } catch (e) {
           console.error("Cesium init failed:", e);
@@ -702,6 +705,169 @@
               <p style="font-size:11px;color:#aaa;margin-top:16px;">${e.message || e}</p></div>
             </div>`;
         }
+      }
+
+      // ── Cursor Info Panel ───────────────────────────────────────────────────
+      function initCursorInfo() {
+        const elCoords = document.getElementById('cursorCoords');
+        const elPlace  = document.getElementById('cursorPlace');
+        const elDetail = document.getElementById('cursorDetail');
+        const elPanel  = document.getElementById('cursorInfo');
+
+        // Point-in-polygon: ray-casting algorithm
+        function pip(ring, lon, lat) {
+          let inside = false;
+          for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+            const xi = ring[i][0], yi = ring[i][1];
+            const xj = ring[j][0], yj = ring[j][1];
+            if (((yi > lat) !== (yj > lat)) && lon < ((xj - xi) * (lat - yi) / (yj - yi) + xi))
+              inside = !inside;
+          }
+          return inside;
+        }
+
+        function pointInFeature(feature, lon, lat) {
+          const geo = feature.geometry;
+          const polys = geo.type === 'Polygon' ? [geo.coordinates] : geo.coordinates;
+          for (const poly of polys) {
+            if (!pip(poly[0], lon, lat)) continue;
+            let inHole = false;
+            for (let h = 1; h < poly.length; h++) {
+              if (pip(poly[h], lon, lat)) { inHole = true; break; }
+            }
+            if (!inHole) return true;
+          }
+          return false;
+        }
+
+        function makeBboxes(features) {
+          return features.map(f => {
+            const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+            let minLon = 180, minLat = 90, maxLon = -180, maxLat = -90;
+            for (const poly of polys) {
+              for (const [ln, lt] of poly[0]) {
+                if (ln < minLon) minLon = ln; if (ln > maxLon) maxLon = ln;
+                if (lt < minLat) minLat = lt; if (lt > maxLat) maxLat = lt;
+              }
+            }
+            return [minLon, minLat, maxLon, maxLat];
+          });
+        }
+
+        function findFeature(lon, lat, features, bboxes) {
+          for (let i = 0; i < features.length; i++) {
+            const b = bboxes[i];
+            if (lon < b[0] || lon > b[2] || lat < b[1] || lat > b[3]) continue;
+            if (pointInFeature(features[i], lon, lat)) return features[i].properties;
+          }
+          return null;
+        }
+
+        function nearestCity(lon, lat, cities) {
+          let best = null, bestDist = Infinity;
+          for (const c of cities) {
+            const dLon = (c.lon - lon) * Math.cos(lat * Math.PI / 180);
+            const dLat = c.lat - lat;
+            const d = dLon * dLon + dLat * dLat;
+            if (d < bestDist) { bestDist = d; best = c; }
+          }
+          // ~111 km per degree; only show within ~300km
+          return best && Math.sqrt(bestDist) * 111 < 300 ? best : null;
+        }
+
+        // Geo data state
+        let countryFeatures = null, countryBboxes = null;
+        let stateFeatures   = null, stateBboxes   = null;
+        let countyFeatures  = null, countyBboxes  = null;
+        let cityList        = null;
+        let countiesLoading = false;
+
+        // Load countries + states + cities in background
+        Promise.all([
+          fetch('/data/countries.geojson').then(r => r.json()),
+          fetch('/data/states.geojson').then(r => r.json()),
+          fetch('/data/cities.json').then(r => r.json()),
+        ]).then(([cty, st, cities]) => {
+          countryFeatures = cty.features;
+          countryBboxes   = makeBboxes(countryFeatures);
+          stateFeatures   = st.features;
+          stateBboxes     = makeBboxes(stateFeatures);
+          cityList        = cities;
+        }).catch(e => console.warn('Cursor info: geo load failed', e));
+
+        function maybeLoadCounties(country) {
+          if (country !== 'United States of America' && country !== 'United States') return;
+          if (countyFeatures || countiesLoading) return;
+          countiesLoading = true;
+          fetch('/data/counties-mobile.geojson').then(r => r.json()).then(data => {
+            countyFeatures  = data.features;
+            countyBboxes    = makeBboxes(countyFeatures);
+          }).catch(() => {});
+        }
+
+        // Throttle PIP to ~10fps
+        let lastPipTime = 0;
+        let lastLon = null, lastLat = null;
+        let cachedCountry = null, cachedState = null, cachedCounty = null, cachedCity = null;
+
+        function formatCoord(deg, posChar, negChar) {
+          const abs = Math.abs(deg).toFixed(4);
+          return `${abs}°${deg >= 0 ? posChar : negChar}`;
+        }
+
+        const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+        handler.setInputAction(movement => {
+          const cart = viewer.camera.pickEllipsoid(movement.endPosition, viewer.scene.globe.ellipsoid);
+          if (!cart) {
+            elPanel.classList.add('dim');
+            return;
+          }
+          elPanel.classList.remove('dim');
+
+          const carto = Cesium.Cartographic.fromCartesian(cart);
+          const lon = Cesium.Math.toDegrees(carto.longitude);
+          const lat = Cesium.Math.toDegrees(carto.latitude);
+
+          elCoords.textContent = `${formatCoord(lat, 'N', 'S')}  ${formatCoord(lon, 'E', 'W')}`;
+
+          const now = performance.now();
+          if (now - lastPipTime < 100) return; // throttle PIP to 10fps
+          lastPipTime = now;
+          lastLon = lon; lastLat = lat;
+
+          if (!countryFeatures) return; // still loading
+
+          const countryProps = findFeature(lon, lat, countryFeatures, countryBboxes);
+          const countryName  = countryProps ? (countryProps.NAME || countryProps.admin || '') : '';
+
+          const stateProps = findFeature(lon, lat, stateFeatures, stateBboxes);
+          const stateName  = stateProps ? (stateProps.name || '') : '';
+
+          maybeLoadCounties(countryName);
+          const countyProps = countyFeatures ? findFeature(lon, lat, countyFeatures, countyBboxes) : null;
+          const countyName  = countyProps ? `${countyProps.NAME} ${countyProps.LSAD}` : '';
+
+          const city = cityList ? nearestCity(lon, lat, cityList) : null;
+          const cityName = city ? city.name : '';
+
+          cachedCountry = countryName;
+          cachedState   = stateName;
+          cachedCounty  = countyName;
+          cachedCity    = cityName;
+
+          // Line 2: country · state/province
+          const parts2 = [countryName, stateName].filter(Boolean);
+          elPlace.textContent = parts2.join(' · ') || '—';
+
+          // Line 3: county (US only) · nearest city
+          const parts3 = [countyName, cityName].filter(Boolean);
+          elDetail.textContent = parts3.join(' · ') || '—';
+
+        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+        viewer.scene.canvas.addEventListener('mouseleave', () => {
+          elPanel.classList.add('dim');
+        });
       }
 
       // ── Camera Helpers ──────────────────────────────────────────────────────
