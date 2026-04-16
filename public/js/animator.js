@@ -5862,7 +5862,9 @@
           return subs;
         }
         if (track.category === 'route') return [
-          { id:track.id+'/draw', parentId:track.id, label:'Draw%', prop:'routeEnd', h:14, isSub:true, color:track.color,
+          { id:track.id+'/start', parentId:track.id, label:'Start%', prop:'routeStart', h:14, isSub:true, color:track.color,
+            getValue: t => (interpolateTrack(track.id, t)?.routeStart ?? 0) / 100 },
+          { id:track.id+'/end',   parentId:track.id, label:'End%',   prop:'routeEnd',   h:14, isSub:true, color:track.color,
             getValue: t => (interpolateTrack(track.id, t)?.routeEnd ?? 100) / 100 },
         ];
         if (track.category === 'city') return [
