@@ -506,6 +506,65 @@ function normalizeRegionMember(name) {
   return COUNTRY_ALIASES[name] ?? name;
 }
 
+// ── Demo project storage ─────────────────────────────────────────────────────
+
+const DEMOS_DIR = path.join(__dirname, "../demos");
+if (!fs.existsSync(DEMOS_DIR)) fs.mkdirSync(DEMOS_DIR, { recursive: true });
+
+function demoSlug(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+}
+
+router.get("/api/demos", (req, res) => {
+  try {
+    const demos = fs.readdirSync(DEMOS_DIR)
+      .filter(f => f.endsWith(".json"))
+      .map(f => {
+        try {
+          const raw = JSON.parse(fs.readFileSync(path.join(DEMOS_DIR, f), "utf8"));
+          return { id: f.replace(".json", ""), name: raw._demoName, description: raw._demoDescription || "" };
+        } catch { return null; }
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    res.json(demos);
+  } catch { res.json([]); }
+});
+
+router.get("/api/demos/:id", (req, res) => {
+  const id = req.params.id.replace(/[^a-z0-9-_]/gi, "");
+  const file = path.join(DEMOS_DIR, id + ".json");
+  if (!fs.existsSync(file)) return res.status(404).json({ error: "Demo not found" });
+  try {
+    const { _demoName, _demoDescription, ...project } = JSON.parse(fs.readFileSync(file, "utf8"));
+    res.json({ project });
+  } catch { res.status(500).json({ error: "Failed to read demo" }); }
+});
+
+router.post("/api/demos", express.json({ limit: "10mb" }), (req, res) => {
+  const { name, description, project } = req.body || {};
+  if (!name?.trim() || !project) return res.status(400).json({ error: "Missing name or project" });
+  const slug = demoSlug(name.trim());
+  if (!slug) return res.status(400).json({ error: "Invalid name" });
+  try {
+    fs.writeFileSync(
+      path.join(DEMOS_DIR, slug + ".json"),
+      JSON.stringify({ _demoName: name.trim(), _demoDescription: (description || "").trim(), ...project }, null, 2)
+    );
+    res.json({ id: slug });
+  } catch (e) { res.status(500).json({ error: "Failed to save demo" }); }
+});
+
+router.delete("/api/demos/:id", (req, res) => {
+  const id = req.params.id.replace(/[^a-z0-9-_]/gi, "");
+  const file = path.join(DEMOS_DIR, id + ".json");
+  if (!fs.existsSync(file)) return res.status(404).json({ error: "Demo not found" });
+  try { fs.unlinkSync(file); res.json({ ok: true }); }
+  catch { res.status(500).json({ error: "Failed to delete demo" }); }
+});
+
+// ── AI map generation ────────────────────────────────────────────────────────
+
 const GENERATE_ROUTE_COLORS = [
   '#3b82f6','#ef4444','#22c55e','#f59e0b','#a855f7',
   '#06b6d4','#f97316','#ec4899','#84cc16','#14b8a6',

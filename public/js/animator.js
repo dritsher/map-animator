@@ -6483,8 +6483,8 @@
         });
       }
 
-      async function saveProject() {
-        const project = {
+      function buildProjectJson() {
+        return {
           version: 1,
           totalDuration: totalDuration(),
           playbackT,
@@ -6577,7 +6577,10 @@
           })),
           nextAnnotationId,
         };
+      }
 
+      async function saveProject() {
+        const project = buildProjectJson();
         const defaultName = 'map-animator-project';
         const input = await promptFilename(defaultName);
         if (input === null) return; // cancelled
@@ -7075,6 +7078,87 @@
           document.getElementById('generateAnimateToggle').disabled = false;
         }
       });
+
+      // ── Demo gallery ─────────────────────────────────────────────────────────
+
+      async function loadDemoList() {
+        const list = document.getElementById('demoList');
+        try {
+          const res = await fetch('/api/demos');
+          const demos = await res.json();
+          list.innerHTML = '';
+          if (!demos.length) {
+            list.innerHTML = '<div style="font-size:10px;color:#bbb;padding:2px 0;">No demos saved yet — generate a map and click + Save.</div>';
+            return;
+          }
+          for (const demo of demos) {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:3px;margin-bottom:2px;';
+
+            const btn = document.createElement('button');
+            btn.style.cssText = 'flex:1;text-align:left;font-size:11px;padding:3px 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+            btn.textContent = demo.name;
+            if (demo.description) btn.title = demo.description;
+            btn.addEventListener('click', async () => {
+              btn.disabled = true;
+              btn.textContent = 'Loading…';
+              try {
+                const r = await fetch(`/api/demos/${encodeURIComponent(demo.id)}`);
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Failed');
+                await loadProject(data.project);
+              } catch (e) {
+                setStatus('Demo load failed: ' + e.message);
+              } finally {
+                btn.disabled = false;
+                btn.textContent = demo.name;
+              }
+            });
+
+            const del = document.createElement('button');
+            del.textContent = '×';
+            del.title = 'Delete demo';
+            del.style.cssText = 'width:auto;padding:1px 6px;font-size:12px;color:#999;background:none;border:1px solid #ddd;border-radius:3px;flex-shrink:0;';
+            del.addEventListener('click', async () => {
+              if (!confirm(`Delete demo "${demo.name}"?`)) return;
+              await fetch(`/api/demos/${encodeURIComponent(demo.id)}`, { method: 'DELETE' });
+              loadDemoList();
+            });
+
+            row.appendChild(btn);
+            row.appendChild(del);
+            list.appendChild(row);
+          }
+        } catch (e) {
+          list.innerHTML = '<div style="font-size:10px;color:#bbb;">Could not load demos.</div>';
+        }
+      }
+
+      document.getElementById('saveDemoBtn').addEventListener('click', async () => {
+        const name = prompt('Demo name:');
+        if (!name?.trim()) return;
+        const description = prompt('Short description (optional):') || '';
+        const projectJson = buildProjectJson();
+        const btn = document.getElementById('saveDemoBtn');
+        btn.disabled = true;
+        try {
+          const res = await fetch('/api/demos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name.trim(), description, project: projectJson }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Save failed');
+          loadDemoList();
+          setStatus(`Demo "${name.trim()}" saved.`);
+        } catch (e) {
+          setStatus('Save demo failed: ' + e.message);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      loadDemoList();
 
       // ── Boot ─────────────────────────────────────────────────────────────────
       initBuiltinTracks();
