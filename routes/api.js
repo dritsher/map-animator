@@ -534,14 +534,32 @@ Available basemaps: eox-s2 (satellite, default), carto-dark (dark style), carto-
 
 For regionGroups, use country names exactly as they appear in standard geographic databases (e.g. "United States", "United Kingdom", "South Korea"). For US states use full names ("California", "Texas").
 
-Camera height guidance: 1000000m = single country close-up, 3000000m = small region, 8000000m = continent, 15000000m = hemisphere, 20000000m = full globe.
+Camera height guidance: 1000000m = single city close-up, 3000000m = small region, 8000000m = continent, 15000000m = hemisphere, 20000000m = full globe.
 
-Animation guidance:
+General animation guidance:
 - Choose totalDuration of 15–30 seconds for most topics.
-- cameraPath: 3–5 keyframes. Start wide to establish context, then zoom toward the action. Always include time=0.
+- cameraPath must always include a keyframe at time=0.
 - sequentialAppearance: stagger members for drama. Use interval 0.2–0.5s for many members; 0.8–1.5s for few.
-- drawAnimation: time route drawing to complement camera — route should draw while camera is watching that area.
-- Coordinate timing: camera should reach its position a second or two before regions start appearing.
+- Coordinate timing: camera should reach its position 1–2 seconds before regions start appearing.
+
+CAMERA-ROUTE TRACKING (critical — follow this algorithm exactly when a route has drawAnimation):
+The camera must follow the route tip as it draws across the globe. For each city in the route (0-indexed, i of N total), the route tip reaches that city at:
+  t_city_i = drawAnimation.startTime + (i / (N - 1)) * (drawAnimation.endTime - drawAnimation.startTime)
+
+For each city, add a cameraPath keyframe at t_city_i with:
+- lat/lon: that city's coordinates
+- height: sized to show the current segment. Use approximately 2.5× the great-circle distance to the next city:
+    ~500km between cities  → height ~1500000m
+    ~1000km between cities → height ~2500000m
+    ~2000km between cities → height ~4000000m
+    ~4000km+ between cities → height ~6000000–8000000m
+
+Also add a keyframe 1–2 seconds before drawAnimation.startTime to pre-position the camera at the first city.
+
+Example — Route: New York → Chicago → London, drawAnimation startTime=5 endTime=20, N=3:
+  t_NewYork  = 5 + (0/2)*15 = 5.0  → KF at t=3 (pre-position) and t=5, camera at New York, height~2000000
+  t_Chicago  = 5 + (1/2)*15 = 12.5 → KF at t=12.5, camera at Chicago, height~7000000 (Chicago→London ~6000km)
+  t_London   = 5 + (2/2)*15 = 20.0 → KF at t=20, camera at London, height~3000000
 
 Choose colors that look great on the selected basemap. For dark basemaps use bright/vivid colors.`;
 
