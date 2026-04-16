@@ -482,8 +482,71 @@ function normalizeRegionMember(name) {
   return name;
 }
 
+const GENERATE_ROUTE_COLORS = [
+  '#3b82f6','#ef4444','#22c55e','#f59e0b','#a855f7',
+  '#06b6d4','#f97316','#ec4899','#84cc16','#14b8a6',
+];
+
+const BASEMAP_ENUM = ["eox-s2", "carto-dark", "carto-positron", "carto-voyager", "nasa-night", "nasa-blue-marble", "opentopomap", "usgs-relief"];
+
+const REGION_GROUP_SCHEMA = {
+  type: "array",
+  description: "Groups of countries or states to highlight. Use multiple groups for multi-color maps.",
+  items: {
+    type: "object",
+    properties: {
+      name:        { type: "string", description: "Group label" },
+      color:       { type: "string", description: "Hex fill color, e.g. #4a9eff" },
+      fillOpacity: { type: "number", description: "Fill opacity 0–1, typically 0.3–0.6" },
+      members:     { type: "array", items: { type: "string" }, description: "Country or state names" },
+    },
+    required: ["name", "color", "fillOpacity", "members"],
+  },
+};
+
+const CITIES_SCHEMA = {
+  type: "array",
+  description: "Key cities or locations to mark.",
+  items: {
+    type: "object",
+    properties: {
+      name: { type: "string" },
+      lat:  { type: "number" },
+      lon:  { type: "number" },
+    },
+    required: ["name", "lat", "lon"],
+  },
+};
+
+const STATIC_SYSTEM = `You generate map configurations for a 3D globe animator. Given a topic or request, choose the best visual representation.
+
+Available basemaps: eox-s2 (satellite, default), carto-dark (dark style), carto-positron (light/clean), carto-voyager (streets), nasa-night (city lights at night), nasa-blue-marble (classic globe), opentopomap (topographic), usgs-relief (shaded relief, US only).
+
+For regionGroups, use country names exactly as they appear in standard geographic databases (e.g. "United States", "United Kingdom", "South Korea"). For US states use full names ("California", "Texas").
+
+Camera height guidance: 1000000m = single country close-up, 3000000m = small region, 8000000m = continent, 15000000m = hemisphere, 20000000m = full globe.
+
+Choose colors that look great on the selected basemap. For dark basemaps use bright/vivid colors. For light basemaps use deeper saturated colors.`;
+
+const ANIMATED_SYSTEM = `You generate animated map configurations for a 3D globe animator. Create a compelling visual story with coordinated camera movement, timed region appearances, and animated routes.
+
+Available basemaps: eox-s2 (satellite, default), carto-dark (dark style), carto-positron (light/clean), carto-voyager (streets), nasa-night (city lights at night), nasa-blue-marble (classic globe), opentopomap (topographic), usgs-relief (shaded relief, US only).
+
+For regionGroups, use country names exactly as they appear in standard geographic databases (e.g. "United States", "United Kingdom", "South Korea"). For US states use full names ("California", "Texas").
+
+Camera height guidance: 1000000m = single country close-up, 3000000m = small region, 8000000m = continent, 15000000m = hemisphere, 20000000m = full globe.
+
+Animation guidance:
+- Choose totalDuration of 15–30 seconds for most topics.
+- cameraPath: 3–5 keyframes. Start wide to establish context, then zoom toward the action. Always include time=0.
+- sequentialAppearance: stagger members for drama. Use interval 0.2–0.5s for many members; 0.8–1.5s for few.
+- drawAnimation: time route drawing to complement camera — route should draw while camera is watching that area.
+- Coordinate timing: camera should reach its position a second or two before regions start appearing.
+
+Choose colors that look great on the selected basemap. For dark basemaps use bright/vivid colors.`;
+
 router.post("/api/generate-map", async (req, res) => {
-  const { prompt } = req.body || {};
+  const { prompt, animate } = req.body || {};
   if (!prompt?.trim()) return res.status(400).json({ error: "Missing prompt" });
 
   const key = process.env.ANTHROPIC_API_KEY;
@@ -492,68 +555,118 @@ router.post("/api/generate-map", async (req, res) => {
   const anthropic = new Anthropic({ apiKey: key });
   let spec;
   try {
-    const msg = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
-      system: `You generate map configurations for a 3D globe animator. Given a topic or request, choose the best visual representation.
-
-Available basemaps: eox-s2 (satellite, default), carto-dark (dark style), carto-positron (light/clean), carto-voyager (streets), nasa-night (city lights at night), nasa-blue-marble (classic globe), opentopomap (topographic), usgs-relief (shaded relief, US only).
-
-For regionGroups, use country names exactly as they appear in standard geographic databases (e.g. "United States", "United Kingdom", "South Korea"). For US states use full names ("California", "Texas").
-
-Camera height guidance: 1000000m = single country close-up, 3000000m = small region, 8000000m = continent, 15000000m = hemisphere, 20000000m = full globe.
-
-Choose colors that look great on the selected basemap. For dark basemaps use bright/vivid colors. For light basemaps use deeper saturated colors.`,
-      tools: [{
-        name: "map_config",
-        description: "Generate a complete map configuration for the given topic.",
-        input_schema: {
+    const staticSchema = {
+      type: "object",
+      properties: {
+        basemap: { type: "string", enum: BASEMAP_ENUM, description: "Best basemap for this topic" },
+        camera: {
           type: "object",
           properties: {
-            basemap: {
-              type: "string",
-              enum: ["eox-s2", "carto-dark", "carto-positron", "carto-voyager", "nasa-night", "nasa-blue-marble", "opentopomap", "usgs-relief"],
-              description: "Best basemap for this topic",
-            },
-            camera: {
-              type: "object",
-              properties: {
-                lat:    { type: "number", description: "Camera center latitude" },
-                lon:    { type: "number", description: "Camera center longitude" },
-                height: { type: "number", description: "Camera altitude in meters" },
-              },
-              required: ["lat", "lon", "height"],
-            },
-            regionGroups: {
-              type: "array",
-              description: "Groups of countries or states to highlight. Use multiple groups for multi-color maps.",
-              items: {
-                type: "object",
-                properties: {
-                  name:        { type: "string", description: "Group label" },
-                  color:       { type: "string", description: "Hex fill color, e.g. #4a9eff" },
-                  fillOpacity: { type: "number", description: "Fill opacity 0–1, typically 0.3–0.6" },
-                  members:     { type: "array", items: { type: "string" }, description: "Country or state names" },
-                },
-                required: ["name", "color", "fillOpacity", "members"],
-              },
-            },
-            cities: {
-              type: "array",
-              description: "Key cities or locations to mark. Include for routes or point-of-interest maps.",
-              items: {
-                type: "object",
-                properties: {
-                  name: { type: "string" },
-                  lat:  { type: "number" },
-                  lon:  { type: "number" },
-                },
-                required: ["name", "lat", "lon"],
-              },
-            },
+            lat:    { type: "number", description: "Camera center latitude" },
+            lon:    { type: "number", description: "Camera center longitude" },
+            height: { type: "number", description: "Camera altitude in meters" },
           },
-          required: ["basemap", "camera", "regionGroups"],
+          required: ["lat", "lon", "height"],
         },
+        regionGroups: REGION_GROUP_SCHEMA,
+        cities: CITIES_SCHEMA,
+      },
+      required: ["basemap", "camera", "regionGroups"],
+    };
+
+    const animatedRegionGroupSchema = {
+      type: "array",
+      description: "Groups of countries or states to highlight.",
+      items: {
+        type: "object",
+        properties: {
+          name:        { type: "string" },
+          color:       { type: "string", description: "Hex fill color" },
+          fillOpacity: { type: "number", description: "Fill opacity 0–1" },
+          members:     { type: "array", items: { type: "string" }, description: "Country or state names" },
+          sequentialAppearance: {
+            type: "object",
+            description: "Animate members fading in one at a time. Omit for instant appearance.",
+            properties: {
+              startTime: { type: "number", description: "When the first member appears (seconds)" },
+              interval:  { type: "number", description: "Seconds between each successive member appearing" },
+            },
+            required: ["startTime", "interval"],
+          },
+        },
+        required: ["name", "color", "fillOpacity", "members"],
+      },
+    };
+
+    const animatedSchema = {
+      type: "object",
+      properties: {
+        basemap:       { type: "string", enum: BASEMAP_ENUM, description: "Best basemap for this topic" },
+        totalDuration: { type: "number", description: "Total animation length in seconds (15–30 recommended)" },
+        cameraPath: {
+          type: "array",
+          description: "Camera keyframes. Must include time=0. Use 3–5 keyframes.",
+          items: {
+            type: "object",
+            properties: {
+              time:    { type: "number", description: "Time in seconds" },
+              lat:     { type: "number" },
+              lon:     { type: "number" },
+              height:  { type: "number", description: "Altitude in meters" },
+              heading: { type: "number", description: "Degrees, 0=north. Defaults to 0." },
+              pitch:   { type: "number", description: "Degrees, -90=straight down. Defaults to -90." },
+            },
+            required: ["time", "lat", "lon", "height"],
+          },
+        },
+        regionGroups: animatedRegionGroupSchema,
+        routes: {
+          type: "array",
+          description: "Animated polylines connecting cities or locations. Great for trade routes, migration paths, travel itineraries.",
+          items: {
+            type: "object",
+            properties: {
+              name:      { type: "string" },
+              color:     { type: "string", description: "Hex color" },
+              lineStyle: { type: "string", enum: ["line", "dashed", "dotted"], description: "Visual line style" },
+              lineShape: { type: "string", enum: ["straight", "arc"], description: "Arc curves over the globe — use arc for long distances" },
+              cities: {
+                type: "array",
+                description: "Waypoints along the route in order",
+                items: {
+                  type: "object",
+                  properties: { name: { type: "string" }, lat: { type: "number" }, lon: { type: "number" } },
+                  required: ["name", "lat", "lon"],
+                },
+              },
+              drawAnimation: {
+                type: "object",
+                description: "Animate the route drawing from start to end. Omit for static route.",
+                properties: {
+                  startTime: { type: "number", description: "When the route begins drawing (seconds)" },
+                  endTime:   { type: "number", description: "When the route is fully drawn (seconds)" },
+                },
+                required: ["startTime", "endTime"],
+              },
+            },
+            required: ["name", "cities"],
+          },
+        },
+        cities: CITIES_SCHEMA,
+      },
+      required: ["basemap", "totalDuration", "cameraPath", "regionGroups"],
+    };
+
+    const msg = await anthropic.messages.create({
+      model:      animate ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001",
+      max_tokens: animate ? 4096 : 1024,
+      system:     animate ? ANIMATED_SYSTEM : STATIC_SYSTEM,
+      tools: [{
+        name: "map_config",
+        description: animate
+          ? "Generate a complete animated map configuration with camera path, timed region appearances, and animated routes."
+          : "Generate a complete map configuration for the given topic.",
+        input_schema: animate ? animatedSchema : staticSchema,
       }],
       tool_choice: { type: "tool", name: "map_config" },
       messages: [{ role: "user", content: prompt }],
@@ -572,26 +685,40 @@ Choose colors that look great on the selected basemap. For dark basemaps use bri
     return res.status(422).json({ error: "Could not generate map", detail: msg });
   }
 
-  // Build a minimal but complete project JSON from the spec
+  // ── Build project JSON ──────────────────────────────────────────────────────
   const isDark = ["carto-dark", "nasa-night", "eox-s2"].includes(spec.basemap);
   const textColor = isDark ? "#ffffff" : "#1a1a1a";
+  const totalDuration = animate ? (spec.totalDuration ?? 20) : 10;
 
   let nextGroupId = 1;
-  let nextCityId = 1;
-  let nextKfId = 2;
+  let nextCityId  = 1;
+  let nextKfId    = 1;
+  let nextRouteId = 1;
 
-  const groups = (spec.regionGroups || []).map(g => ({
-    id: nextGroupId++,
-    name: g.name,
-    color: g.color || "#4a9eff",
-    fillOpacity: g.fillOpacity ?? 0.4,
-    invert: false,
-    members: (g.members || []).map(name => {
-      const displayStr = normalizeRegionMember(name);
-      return { key: displayStr, name: displayStr };
-    }),
-  }));
+  // Groups — include sequentialAppearance metadata for animated maps
+  const groups = (spec.regionGroups || []).map(g => {
+    const id = nextGroupId++;
+    const group = {
+      id,
+      name: g.name,
+      color: g.color || "#4a9eff",
+      fillOpacity: g.fillOpacity ?? 0.4,
+      invert: false,
+      members: (g.members || []).map(name => {
+        const displayStr = normalizeRegionMember(name);
+        return { key: displayStr, name: displayStr };
+      }),
+    };
+    if (animate && g.sequentialAppearance) {
+      group.sequentialAppearance = {
+        startTime: g.sequentialAppearance.startTime,
+        interval:  g.sequentialAppearance.interval,
+      };
+    }
+    return group;
+  });
 
+  // Cities
   const cities = (spec.cities || []).map(c => ({
     id: nextCityId++,
     name: c.name, country: "",
@@ -604,50 +731,103 @@ Choose colors that look great on the selected basemap. For dark basemaps use bri
     bgPadX: 4, bgPadY: 2, dotOpacity: 1, labelOpacity: 1,
   }));
 
-  const cam = spec.camera || { lat: 20, lon: 0, height: 15000000 };
+  // Camera keyframes
+  let cameraKeyframes;
+  if (animate && spec.cameraPath?.length > 0) {
+    cameraKeyframes = spec.cameraPath.map(cp => ({
+      id: nextKfId++,
+      time: cp.time, lat: cp.lat, lon: cp.lon, height: cp.height,
+      heading: cp.heading ?? 0, pitch: cp.pitch ?? -90, roll: 0, sceneMode: "globe",
+    }));
+    // Ensure sorted by time
+    cameraKeyframes.sort((a, b) => a.time - b.time);
+  } else {
+    const cam = spec.camera || { lat: 20, lon: 0, height: 15000000 };
+    cameraKeyframes = [{ id: nextKfId++, time: 0, lon: cam.lon, lat: cam.lat, height: cam.height, heading: 0, pitch: -90, roll: 0, sceneMode: "globe" }];
+  }
+
+  // Tracks object
   const tracks = {
-    camera:  { keyframes: [{ id: 1, time: 0, lon: cam.lon, lat: cam.lat, height: cam.height, heading: 0, pitch: -90, roll: 0, sceneMode: "globe" }] },
+    camera:  { keyframes: cameraKeyframes },
     tod:     { keyframes: [] },
     borders: { keyframes: [] },
   };
   for (const g of groups) {
-    tracks[`group_${g.id}`] = { id: `group_${g.id}`, label: g.name, category: "group", color: g.color, h: 22, keyframes: [], collapsed: true };
+    tracks[`group_${g.id}`] = {
+      id: `group_${g.id}`, label: g.name, category: "group", color: g.color, h: 22,
+      keyframes: [],
+      // Expand group in timeline if it has sequential appearance so sub-tracks are visible
+      collapsed: !(animate && g.sequentialAppearance),
+    };
   }
   for (const c of cities) {
     tracks[`city_${c.id}`] = { id: `city_${c.id}`, label: c.name, category: "city", color: c.color, h: 22, keyframes: [], collapsed: true };
   }
 
+  // Routes (animated mode only) — keyframes pre-generated and stored in tracks
+  const routes = [];
+  if (animate) {
+    for (const r of (spec.routes || [])) {
+      const id = nextRouteId++;
+      const color = r.color || GENERATE_ROUTE_COLORS[(id - 1) % GENERATE_ROUTE_COLORS.length];
+      const hasDrawAnim = !!(r.drawAnimation?.startTime !== undefined && r.drawAnimation?.endTime !== undefined);
+      routes.push({
+        id,
+        name: r.name,
+        color,
+        lineStyle: r.lineStyle || "line",
+        lineShape: r.lineShape || "arc",
+        routeStart: 0,
+        routeEnd: hasDrawAnim ? 0 : 100,
+        width: 2,
+        visible: true,
+        cities: (r.cities || []).map(c => ({ name: c.name, lat: c.lat, lon: c.lon })),
+        showCityLabels: false, labelColor: null, labelFontSize: 14,
+        labelFontWeight: "normal", labelFontStyle: "normal", labelFontFamily: "Arial",
+        labelOffsetX: 4, labelOffsetY: 0, labelOutlineWidth: 2, labelOpacity: 1.0,
+        labelShowBackground: false, labelBgColor: "#000000", labelBgOpacity: 0.5, labelBgPadX: 5, labelBgPadY: 3,
+        showLabel: false,
+        glColor: null, glFontSize: 28, glFontWeight: "bold", glFontStyle: "normal", glFontFamily: "Arial",
+        glOffsetX: 0, glOffsetY: 0, glOutlineWidth: 2, glOpacity: 1.0,
+        glShowBackground: false, glBgColor: "#000000", glBgOpacity: 0.5, glBgPadX: 5, glBgPadY: 3,
+      });
+      const routeKeyframes = hasDrawAnim ? [
+        { id: nextKfId++, time: r.drawAnimation.startTime, routeStart: 0, routeEnd: 0  },
+        { id: nextKfId++, time: r.drawAnimation.endTime,   routeStart: 0, routeEnd: 100 },
+      ] : [];
+      tracks[`route_${id}`] = {
+        id: `route_${id}`, label: "Route: " + r.name, category: "route",
+        color, h: 22, keyframes: routeKeyframes, collapsed: true,
+      };
+    }
+  }
+
   const project = {
     version: 1,
-    totalDuration: 10,
+    totalDuration,
     playbackT: 0,
     currentBasemap: spec.basemap || "eox-s2",
     basemapShowLabels: true,
     basemapMaxLevelOverride: null,
     bmAdjust: { brightness: 1, contrast: 1, hue: 0, saturation: 1, gamma: 1 },
     borders: {
-      countryOpacity: 0.6,
-      stateOpacity: 0,
-      countyOpacity: 0,
-      countyFilter: "none",
-      borderColor: isDark ? "#ffffff" : "#333333",
-      landOnly: true,
+      countryOpacity: 0.6, stateOpacity: 0, countyOpacity: 0, countyFilter: "none",
+      borderColor: isDark ? "#ffffff" : "#333333", landOnly: true,
     },
     defaults: { regionColor: "#4a9eff", cityColor: textColor, cityDotSize: 6 },
     highlights: [],
     groups,
     cities,
+    routes,
     tracks,
     nextKfId,
     nextGroupId,
     nextCityId,
-    kmlOverlays: [],
-    nextKmlId: 1,
-    imageOverlays: [],
-    nextImageOverlayId: 1,
+    nextRouteGroupId: nextRouteId,
+    kmlOverlays: [], nextKmlId: 1,
+    imageOverlays: [], nextImageOverlayId: 1,
     selectedTrackIds: ["camera"],
-    annotations: [],
-    nextAnnotationId: 1,
+    annotations: [], nextAnnotationId: 1,
   };
 
   res.json({ project });

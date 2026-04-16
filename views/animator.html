@@ -43,7 +43,10 @@
           <div class="section-title">Generate <span class="section-title-arrow">▾</span></div>
           <div class="section-body">
             <textarea id="generatePrompt" rows="2" placeholder="Describe a map…" style="width:100%;box-sizing:border-box;resize:vertical;font-size:12px;padding:5px 6px;border:1px solid #ccc;border-radius:4px;font-family:inherit;"></textarea>
-            <button id="generateMapBtn" style="width:100%;margin-top:5px;">Generate Map</button>
+            <div style="display:flex;gap:4px;margin-top:5px;">
+              <button id="generateMapBtn" style="flex:1;">Generate Map</button>
+              <button id="generateAnimateToggle" title="Generate with animation — uses Sonnet (slower)" style="width:auto;padding:4px 8px;font-size:11px;background:#eee;color:#555;border:1px solid #ccc;border-radius:4px;">✦ Animate</button>
+            </div>
             <div id="generateStatus" style="font-size:11px;color:#888;margin-top:4px;min-height:14px;"></div>
           </div>
         </div>

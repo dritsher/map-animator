@@ -6862,6 +6862,25 @@
         nextKfId         = project.nextKfId  ?? nextKfId;
         selectedTrackIds = new Set(project.selectedTrackIds ?? ['camera']);
 
+        // 9b. Apply sequential appearance metadata (server-generated animated maps).
+        // Runs after step 8 (so project.tracks keyframes win) and after nextKfId is set.
+        for (const saved of (project.groups ?? [])) {
+          if (!saved.sequentialAppearance) continue;
+          const grp = regionGroups.find(g => g.id === saved.id);
+          if (!grp) continue;
+          const { startTime, interval } = saved.sequentialAppearance;
+          grp.members.forEach((member, idx) => {
+            const tid = `gmember_${grp.id}_${member.key}`;
+            const track = tracks[tid];
+            if (!track || track.keyframes.length > 0) return; // don't overwrite existing keyframes
+            const appearTime = startTime + idx * interval;
+            track.keyframes = [
+              { id: nextKfId++, time: 0, opacity: 0 },
+              { id: nextKfId++, time: appearTime, opacity: 1 },
+            ];
+          });
+        }
+
         // 10. Re-render everything
         renderHighlightList();
         renderGroupList();
@@ -7027,27 +7046,39 @@
       const generatePromptEl = document.getElementById('generatePrompt');
       const generateStatusEl = document.getElementById('generateStatus');
       generatePromptEl.value = GENERATE_SUGGESTIONS[Math.floor(Math.random() * GENERATE_SUGGESTIONS.length)];
+
+      let generateAnimate = false;
+      document.getElementById('generateAnimateToggle').addEventListener('click', () => {
+        generateAnimate = !generateAnimate;
+        const btn = document.getElementById('generateAnimateToggle');
+        btn.style.background = generateAnimate ? '#4a9eff' : '#eee';
+        btn.style.color = generateAnimate ? '#fff' : '#555';
+        btn.style.borderColor = generateAnimate ? '#2a7ae8' : '#ccc';
+      });
+
       document.getElementById('generateMapBtn').addEventListener('click', async () => {
         const prompt = generatePromptEl.value.trim();
         if (!prompt) return;
-        generateStatusEl.textContent = 'Generating…';
+        generateStatusEl.textContent = generateAnimate ? 'Generating animation (may take ~15s)…' : 'Generating…';
         document.getElementById('generateMapBtn').disabled = true;
+        document.getElementById('generateAnimateToggle').disabled = true;
         try {
           const res = await fetch('/api/generate-map', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt }),
+            body: JSON.stringify({ prompt, animate: generateAnimate }),
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Generation failed');
           await loadProject(data.project);
-          generateStatusEl.textContent = 'Map generated!';
+          generateStatusEl.textContent = generateAnimate ? 'Animated map generated!' : 'Map generated!';
           setTimeout(() => { generateStatusEl.textContent = ''; }, 3000);
         } catch (err) {
           generateStatusEl.textContent = err.message;
           console.error('[generate-map]', err);
         } finally {
           document.getElementById('generateMapBtn').disabled = false;
+          document.getElementById('generateAnimateToggle').disabled = false;
         }
       });
 
