@@ -542,24 +542,38 @@ General animation guidance:
 - sequentialAppearance: stagger members for drama. Use interval 0.2–0.5s for many members; 0.8–1.5s for few.
 - Coordinate timing: camera should reach its position 1–2 seconds before regions start appearing.
 
-CAMERA-ROUTE TRACKING (critical — follow this algorithm exactly when a route has drawAnimation):
-The camera must follow the route tip as it draws across the globe. For each city in the route (0-indexed, i of N total), the route tip reaches that city at:
+CAMERA-ROUTE TRACKING (critical — follow this algorithm exactly when routes have drawAnimation):
+
+First, check whether routes draw at the same time or sequentially:
+
+CASE A — Routes draw at non-overlapping times (sequential):
+Track each route independently. For each route, for each city i of N:
   t_city_i = drawAnimation.startTime + (i / (N - 1)) * (drawAnimation.endTime - drawAnimation.startTime)
+Add a cameraPath keyframe at t_city_i centered on that city.
+Height per segment: ~2.5× great-circle distance to next city:
+    ~500km  → 1500000m  |  ~1000km → 2500000m  |  ~2000km → 4000000m  |  ~4000km+ → 6000000–8000000m
+Add a pre-position keyframe 1–2s before each route's startTime.
+Add a transition keyframe between routes that smoothly bridges to the next route's first city.
 
-For each city, add a cameraPath keyframe at t_city_i with:
-- lat/lon: that city's coordinates
-- height: sized to show the current segment. Use approximately 2.5× the great-circle distance to the next city:
-    ~500km between cities  → height ~1500000m
-    ~1000km between cities → height ~2500000m
-    ~2000km between cities → height ~4000000m
-    ~4000km+ between cities → height ~6000000–8000000m
+CASE B — Routes draw simultaneously or with overlapping time windows:
+Do NOT try to track individual route tips — the camera cannot be in two places at once.
+Instead, compute the bounding box of ALL cities across all simultaneously-drawing routes.
+Position the camera at the center of that bounding box at a height that fits all cities in view
+(roughly: max(lat-span, lon-span) * 120000m, minimum 3000000m).
+Use a single camera position for the entire simultaneous drawing period, then zoom in after they finish.
 
-Also add a keyframe 1–2 seconds before drawAnimation.startTime to pre-position the camera at the first city.
+CASE C — Some routes sequential, some overlapping:
+Use CASE A logic for sequential windows, CASE B logic for overlapping windows, with smooth transitions.
 
-Example — Route: New York → Chicago → London, drawAnimation startTime=5 endTime=20, N=3:
-  t_NewYork  = 5 + (0/2)*15 = 5.0  → KF at t=3 (pre-position) and t=5, camera at New York, height~2000000
-  t_Chicago  = 5 + (1/2)*15 = 12.5 → KF at t=12.5, camera at Chicago, height~7000000 (Chicago→London ~6000km)
-  t_London   = 5 + (2/2)*15 = 20.0 → KF at t=20, camera at London, height~3000000
+Also add a keyframe 1–2 seconds before the first route starts drawing to pre-position the camera.
+
+Example — Two sequential routes: NYC→Chicago (t=4–10), Paris→Berlin (t=12–18):
+  t=3:  pre-position at NYC, height 2000000
+  t=4:  NYC, height 2000000
+  t=10: Chicago, height 2000000
+  t=11: transition toward Paris, height 5000000
+  t=12: Paris, height 1000000
+  t=18: Berlin, height 1000000
 
 Choose colors that look great on the selected basemap. For dark basemaps use bright/vivid colors.`;
 
