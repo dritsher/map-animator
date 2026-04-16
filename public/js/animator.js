@@ -2199,7 +2199,6 @@
             outlineColor: Cesium.Color.BLACK.withAlpha(la),
             outlineWidth: 2,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
             horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
             pixelOffset: new Cesium.Cartesian2(h.labelOffsetX ?? 0, h.labelOffsetY ?? 0),
@@ -3225,7 +3224,6 @@
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
             horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
             pixelOffset: new Cesium.Cartesian2(0, -4),
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
             show: group.visible,
           },
         });
@@ -4254,7 +4252,6 @@
             color: col.withAlpha(c.dotOpacity ?? 1.0),
             outlineColor: Cesium.Color.BLACK,
             outlineWidth: 1,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
           }),
           label: new Cesium.LabelGraphics({
             text: c.name,
@@ -4269,7 +4266,6 @@
             pixelOffset: new Cesium.Cartesian2(c.dotSize / 2 + 4 + (c.offsetX ?? 0), c.offsetY ?? 0),
             horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
             verticalOrigin: Cesium.VerticalOrigin.CENTER,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
             show: c.showLabel,
           }),
         });
@@ -4839,7 +4835,6 @@
             .withAlpha((group[`${p}BgOpacity`] ?? 0.5) * lo),
           backgroundPadding: new Cesium.Cartesian2(group[`${p}BgPadX`] ?? 5, group[`${p}BgPadY`] ?? 3),
           pixelOffset: new Cesium.Cartesian2(cx, cy),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
           show: group.visible !== false,
         };
       }
@@ -4858,7 +4853,6 @@
               color: dotCol,
               outlineColor: Cesium.Color.BLACK,
               outlineWidth: 1,
-              disableDepthTestDistance: Number.POSITIVE_INFINITY,
               show,
             }),
             label: new Cesium.LabelGraphics({
