@@ -763,36 +763,21 @@
           return null;
         }
 
-        function nearestCity(lon, lat, cities) {
-          let best = null, bestDist = Infinity;
-          for (const c of cities) {
-            const dLon = (c.lon - lon) * Math.cos(lat * Math.PI / 180);
-            const dLat = c.lat - lat;
-            const d = dLon * dLon + dLat * dLat;
-            if (d < bestDist) { bestDist = d; best = c; }
-          }
-          // ~111 km per degree; only show within ~300km
-          return best && Math.sqrt(bestDist) * 111 < 300 ? best : null;
-        }
-
         // Geo data state
         let countryFeatures = null, countryBboxes = null;
         let stateFeatures   = null, stateBboxes   = null;
         let countyFeatures  = null, countyBboxes  = null;
-        let cityList        = null;
         let countiesLoading = false;
 
-        // Load countries + states + cities in background
+        // Load countries + states in background
         Promise.all([
           fetch('/data/countries.geojson').then(r => r.json()),
           fetch('/data/states.geojson').then(r => r.json()),
-          fetch('/data/cities.json').then(r => r.json()),
-        ]).then(([cty, st, cities]) => {
+        ]).then(([cty, st]) => {
           countryFeatures = cty.features;
           countryBboxes   = makeBboxes(countryFeatures);
           stateFeatures   = st.features;
           stateBboxes     = makeBboxes(stateFeatures);
-          cityList        = cities;
         }).catch(e => console.warn('Cursor info: geo load failed', e));
 
         function maybeLoadCounties(country) {
@@ -805,14 +790,43 @@
           }).catch(() => {});
         }
 
-        // Throttle PIP to ~10fps
+        // Throttle PIP to ~10fps; server lookup fires when cursor stops
         let lastPipTime = 0;
+        let stopTimer   = null;
         let lastLon = null, lastLat = null;
-        let cachedCountry = null, cachedState = null, cachedCounty = null, cachedCity = null;
+        let pendingFetch = null; // AbortController for in-flight reverse-geocode
 
         function formatCoord(deg, posChar, negChar) {
           const abs = Math.abs(deg).toFixed(4);
           return `${abs}°${deg >= 0 ? posChar : negChar}`;
+        }
+
+        function renderPlace(countryName, stateName, countyName) {
+          const parts2 = [countryName, stateName].filter(Boolean);
+          elPlace.textContent = parts2.join(' · ') || '—';
+          elDetail.textContent = countyName || '—';
+        }
+
+        // Fire a server reverse-geocode lookup and update the detail line
+        function fetchPlaceName(lon, lat, countyName) {
+          if (pendingFetch) { pendingFetch.abort(); pendingFetch = null; }
+          const ctrl = new AbortController();
+          pendingFetch = ctrl;
+          fetch(`/api/reverse-geocode?lat=${lat.toFixed(5)}&lon=${lon.toFixed(5)}`, { signal: ctrl.signal })
+            .then(r => r.json())
+            .then(({ places }) => {
+              pendingFetch = null;
+              if (!places || places.length === 0) return;
+              // Pick the nearest place; prefer larger settlements
+              const best = places[0];
+              const nearby = places.filter(p => p.distKm <= 30 && p.population > (best.population / 2));
+              const place = nearby.length > 0
+                ? nearby.sort((a, b) => b.population - a.population)[0]
+                : best;
+              const parts = [countyName, `${place.name} (${place.distKm} km)`].filter(Boolean);
+              elDetail.textContent = parts.join(' · ');
+            })
+            .catch(() => { pendingFetch = null; });
         }
 
         const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
@@ -820,6 +834,8 @@
           const cart = viewer.camera.pickEllipsoid(movement.endPosition, viewer.scene.globe.ellipsoid);
           if (!cart) {
             elPanel.classList.add('dim');
+            clearTimeout(stopTimer);
+            if (pendingFetch) { pendingFetch.abort(); pendingFetch = null; }
             return;
           }
           elPanel.classList.remove('dim');
@@ -830,8 +846,15 @@
 
           elCoords.textContent = `${formatCoord(lat, 'N', 'S')}  ${formatCoord(lon, 'E', 'W')}`;
 
+          // Cancel pending stop-timer whenever cursor moves
+          clearTimeout(stopTimer);
+
           const now = performance.now();
-          if (now - lastPipTime < 100) return; // throttle PIP to 10fps
+          if (now - lastPipTime < 100) {
+            // Still schedule a stop lookup even while throttling PIP
+            stopTimer = setTimeout(() => fetchPlaceName(lon, lat, elDetail.textContent.split(' · ').find(p => p.includes('County') || p.includes('Parish') || p.includes('Borough')) || ''), 600);
+            return;
+          }
           lastPipTime = now;
           lastLon = lon; lastLat = lat;
 
@@ -847,26 +870,17 @@
           const countyProps = countyFeatures ? findFeature(lon, lat, countyFeatures, countyBboxes) : null;
           const countyName  = countyProps ? `${countyProps.NAME} ${countyProps.LSAD}` : '';
 
-          const city = cityList ? nearestCity(lon, lat, cityList) : null;
-          const cityName = city ? city.name : '';
+          renderPlace(countryName, stateName, countyName);
 
-          cachedCountry = countryName;
-          cachedState   = stateName;
-          cachedCounty  = countyName;
-          cachedCity    = cityName;
-
-          // Line 2: country · state/province
-          const parts2 = [countryName, stateName].filter(Boolean);
-          elPlace.textContent = parts2.join(' · ') || '—';
-
-          // Line 3: county (US only) · nearest city
-          const parts3 = [countyName, cityName].filter(Boolean);
-          elDetail.textContent = parts3.join(' · ') || '—';
+          // Fire server lookup 600ms after cursor stops
+          stopTimer = setTimeout(() => fetchPlaceName(lon, lat, countyName), 600);
 
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
         viewer.scene.canvas.addEventListener('mouseleave', () => {
           elPanel.classList.add('dim');
+          clearTimeout(stopTimer);
+          if (pendingFetch) { pendingFetch.abort(); pendingFetch = null; }
         });
       }
 

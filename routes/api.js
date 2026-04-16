@@ -22,6 +22,76 @@ function getRegionData() {
   return regionData;
 }
 
+// ── GeoNames reverse-geocode data ────────────────────────────────────────────
+// cities1000.txt: tab-separated, 167k populated places worldwide (pop >= 1000)
+// Fields: id, name, ascii, alt, lat, lon, feat_class, feat_code, country, ...15 more
+// Download with: node scripts/download-geonames.js
+
+const GEONAMES_PATH = path.join(__dirname, "../server/data/cities1000.txt");
+let geoPlaces = null; // flat array sorted by lat, each: [lat, lon, name, country, featureCode, population]
+
+function loadGeoNames() {
+  if (geoPlaces || !fs.existsSync(GEONAMES_PATH)) return;
+  const raw = fs.readFileSync(GEONAMES_PATH, "utf8");
+  const places = [];
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue;
+    const f = line.split("\t");
+    const lat = parseFloat(f[4]);
+    const lon = parseFloat(f[5]);
+    if (isNaN(lat) || isNaN(lon)) continue;
+    places.push([lat, lon, f[1], f[8], f[7], parseInt(f[14], 10) || 0]);
+    // indices:    0    1    2    3     4     5
+    // fields:   lat  lon name ctry fcode  pop
+  }
+  places.sort((a, b) => a[0] - b[0]); // sort by lat for binary search
+  geoPlaces = places;
+  console.log(`GeoNames: loaded ${geoPlaces.length.toLocaleString()} places`);
+}
+
+// Binary search: first index where places[i][0] >= minLat
+function lowerBound(arr, minLat) {
+  let lo = 0, hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (arr[mid][0] < minLat) lo = mid + 1; else hi = mid;
+  }
+  return lo;
+}
+
+function reverseGeocodeNearest(lat, lon, radiusDeg = 2.0, maxResults = 5) {
+  loadGeoNames();
+  if (!geoPlaces) return [];
+
+  const latCos = Math.cos(lat * Math.PI / 180);
+  const minLat = lat - radiusDeg;
+  const maxLat = lat + radiusDeg;
+  const start = lowerBound(geoPlaces, minLat);
+
+  let candidates = [];
+  for (let i = start; i < geoPlaces.length; i++) {
+    const p = geoPlaces[i];
+    if (p[0] > maxLat) break;
+    const dLon = (p[1] - lon) * latCos;
+    const dLat = p[0] - lat;
+    candidates.push({ dist: dLon * dLon + dLat * dLat, p });
+  }
+
+  candidates.sort((a, b) => a.dist - b.dist);
+
+  const KM_PER_DEG = 111;
+  return candidates.slice(0, maxResults).map(({ dist, p }) => ({
+    name:        p[2],
+    country:     p[3],
+    featureCode: p[4],
+    population:  p[5],
+    distKm:      Math.round(Math.sqrt(dist) * KM_PER_DEG),
+  }));
+}
+
+// Kick off loading in the background so it's ready by the time anyone queries
+setImmediate(loadGeoNames);
+
 // ── /api/region-query ────────────────────────────────────────────────────────
 
 const FIELD_DOCS = `
@@ -968,6 +1038,19 @@ router.get("/api/export/download/:sessionId", (req, res) => {
       sessions.delete(req.params.sessionId);
     }
   });
+});
+
+// ── /api/reverse-geocode ─────────────────────────────────────────────────────
+// Returns nearby populated places for a lat/lon, used by the cursor info panel.
+// Triggered only when the cursor stops moving, not on every mousemove.
+
+router.get("/api/reverse-geocode", (req, res) => {
+  const lat = parseFloat(req.query.lat);
+  const lon = parseFloat(req.query.lon);
+  if (isNaN(lat) || isNaN(lon)) return res.status(400).json({ error: "Invalid lat/lon" });
+
+  const results = reverseGeocodeNearest(lat, lon);
+  res.json({ places: results });
 });
 
 module.exports = router;
