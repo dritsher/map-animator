@@ -5052,17 +5052,19 @@
       function parseKML(text) {
         const doc = new DOMParser().parseFromString(text, 'application/xml');
         const pts = [];
-        // LineString / MultiGeometry tracks
-        doc.querySelectorAll('LineString coordinates, Track coord, MultiTrack Track coord').forEach(el => {
+        // LineString coordinates: "lon,lat,alt lon,lat,alt ..."
+        doc.querySelectorAll('LineString coordinates').forEach(el => {
           el.textContent.trim().split(/\s+/).forEach(coord => {
-            const [lon, lat] = coord.split(',').map(Number);
-            if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, name: '' });
+            const parts = coord.split(',').map(Number);
+            const [lon, lat, alt] = parts;
+            if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, name: '', ele: (!isNaN(alt) && alt !== 0) ? alt : undefined });
           });
         });
-        // gx:coord (Google Earth extended data)
+        // gx:coord (Google Earth extended / gx:Track): "lon lat alt" per element
         if (!pts.length) doc.querySelectorAll('coord').forEach(el => {
-          const [lon, lat] = el.textContent.trim().split(/\s+/).map(Number);
-          if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, name: '' });
+          const parts = el.textContent.trim().split(/\s+/).map(Number);
+          const [lon, lat, alt] = parts;
+          if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, name: '', ele: (!isNaN(alt) && alt !== 0) ? alt : undefined });
         });
         // Named Placemarks (Points)
         doc.querySelectorAll('Placemark').forEach(pm => {
