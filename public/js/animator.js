@@ -5238,17 +5238,109 @@
         const n       = cities.length - 1;
         const isArrow = (group.lineShape ?? 'straight') === 'arrow';
         const isArc   = (group.lineShape ?? 'straight') === 'arc';
+        const isDashed = group.lineStyle === 'dashed';
+        const isDotted = group.lineStyle === 'dotted';
 
-        let lineMat;
-        if (group.lineStyle === 'dashed') lineMat = new Cesium.PolylineDashMaterialProperty({ color, dashLength: 20, gapColor: Cesium.Color.TRANSPARENT });
-        else if (group.lineStyle === 'dotted') lineMat = new Cesium.PolylineDashMaterialProperty({ color, dashLength: 6, gapColor: Cesium.Color.TRANSPARENT });
-        else lineMat = color;
+        // ── Static world-space dashes/dots ───────────────────────────────────
+        // Pre-compute dash segments as fixed geodesic positions so they don't
+        // crawl when the camera moves (PolylineDashMaterialProperty is screen-space).
+        if ((isDashed || isDotted) && !isArrow) {
+          // Build a flat sampled path across all segments.
+          // For short segments (dense GPS), just use the raw point.
+          // For long segments, add intermediate geodesic samples.
+          const INTERP_THRESH_M = 50000; // interpolate if segment > 50 km
+          const MAX_INTERP      = 24;
+          const flatPts = []; // { pos: Cartesian3, cumDist: number }
+          let totalDist = 0;
 
+          for (let i = 0; i < n; i++) {
+            const a = cities[i], b = cities[i + 1];
+            let segPts;
+
+            if (isArc) {
+              segPts = arcPositions(a, b, 48);
+            } else {
+              const posA = Cesium.Cartesian3.fromDegrees(a.lon, a.lat);
+              const posB = Cesium.Cartesian3.fromDegrees(b.lon, b.lat);
+              const segM = Cesium.Cartesian3.distance(posA, posB);
+              if (segM > INTERP_THRESH_M) {
+                const gd = new Cesium.EllipsoidGeodesic(
+                  Cesium.Cartographic.fromDegrees(a.lon, a.lat),
+                  Cesium.Cartographic.fromDegrees(b.lon, b.lat)
+                );
+                const ns = Math.min(Math.ceil(segM / INTERP_THRESH_M), MAX_INTERP);
+                segPts = [];
+                for (let j = 0; j <= ns; j++) {
+                  const c = gd.interpolateUsingSurfaceDistance((j / ns) * gd.surfaceDistance);
+                  segPts.push(Cesium.Cartesian3.fromRadians(c.longitude, c.latitude));
+                }
+              } else {
+                segPts = [posA, posB];
+              }
+            }
+
+            for (let j = (i === 0 ? 0 : 1); j < segPts.length; j++) {
+              if (flatPts.length > 0) {
+                totalDist += Cesium.Cartesian3.distance(flatPts[flatPts.length - 1].pos, segPts[j]);
+              }
+              flatPts.push({ pos: segPts[j], cumDist: totalDist });
+            }
+          }
+
+          if (totalDist === 0 || flatPts.length < 2) return;
+
+          // Dash/gap as fractions of total route length
+          const dashFrac = isDotted ? 0.008 : 0.025;
+          const gapFrac  = isDotted ? 0.012 : 0.015;
+          const dashM    = dashFrac * totalDist;
+          const periodM  = (dashFrac + gapFrac) * totalDist;
+
+          function loBound(target) {
+            let lo = 0, hi = flatPts.length - 1;
+            while (lo < hi) {
+              const mid = (lo + hi) >> 1;
+              if (flatPts[mid].cumDist < target) lo = mid + 1; else hi = mid;
+            }
+            return lo;
+          }
+
+          let d = 0;
+          while (d < totalDist) {
+            const dashStart = d;
+            const dashEnd   = Math.min(d + dashM, totalDist);
+            d += periodM;
+            const dashCenterFrac = (dashStart + dashEnd) / 2 / totalDist;
+
+            const si = loBound(dashStart);
+            const ei = Math.min(loBound(dashEnd) + 1, flatPts.length - 1);
+            const dashPts = flatPts.slice(si, ei + 1).map(p => p.pos);
+            if (dashPts.length < 2) continue;
+
+            const showCb = new Cesium.CallbackProperty(() => {
+              if (group.visible === false) return false;
+              const sf = (group.routeStart ?? 0) / 100;
+              const ef = (group.routeEnd   ?? 100) / 100;
+              return dashCenterFrac >= sf && dashCenterFrac <= ef;
+            }, false);
+
+            group.entities.push(viewer.entities.add({
+              polyline: {
+                positions: dashPts,
+                show: showCb,
+                width: isDotted ? Math.max(w * 1.5, 4) : w,
+                material: color,
+                clampToGround: false,
+              }
+            }));
+          }
+          return;
+        }
+
+        // ── Solid / arrow lines (per-segment with CallbackProperty) ──────────
         for (let i = 0; i < n; i++) {
-          const seg = i; // capture
+          const seg = i;
           const a = cities[i], b = cities[i + 1];
 
-          // show: CallbackProperty so visibility updates without entity rebuild
           const showCb = new Cesium.CallbackProperty(() => {
             if (group.visible === false) return false;
             const sf = (group.routeStart ?? 0) / 100;
@@ -5264,7 +5356,7 @@
             material  = new Cesium.PolylineArrowMaterialProperty(color);
             lineWidth = Math.max(w * 4, 12);
           } else if (isArc) {
-            const arcPts = arcPositions(a, b, 48); // precomputed once per segment
+            const arcPts = arcPositions(a, b, 48);
             positions = new Cesium.CallbackProperty(() => {
               const sf = (group.routeStart ?? 0) / 100;
               const ef = (group.routeEnd   ?? 100) / 100;
@@ -5275,7 +5367,7 @@
               const pts = arcPts.slice(si, Math.min(ei + 1, arcPts.length));
               return pts.length >= 2 ? pts : arcPts.slice(0, 2);
             }, false);
-            material  = lineMat;
+            material  = color;
             lineWidth = w;
           } else {
             const posA = Cesium.Cartesian3.fromDegrees(a.lon, a.lat);
@@ -5290,7 +5382,7 @@
                 Cesium.Cartesian3.lerp(posA, posB, t1, new Cesium.Cartesian3()),
               ];
             }, false);
-            material  = lineMat;
+            material  = color;
             lineWidth = w;
           }
 
