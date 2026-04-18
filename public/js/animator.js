@@ -5293,10 +5293,8 @@
 
           if (totalDist === 0 || flatPts.length < 2) return;
 
-          // Dash/gap derived from dashDensity (number of dashes across the route)
           const numDashes = group.dashDensity ?? 20;
           const periodM   = totalDist / numDashes;
-          const dashM     = periodM * (isDotted ? 0.4 : 0.6); // dot=40% filled, dash=60% filled
 
           // Binary search: first index where cumDist >= target
           function loBound(target) {
@@ -5320,38 +5318,55 @@
             return Cesium.Cartesian3.lerp(prev.pos, next.pos, t, new Cesium.Cartesian3());
           }
 
-          let d = 0;
-          while (d < totalDist) {
-            const dashStart = d;
-            const dashEnd   = Math.min(d + dashM, totalDist);
-            d += periodM;
-            const dashCenterFrac = (dashStart + dashEnd) / 2 / totalDist;
+          if (isDotted) {
+            // ── Dotted: place point entities at regular intervals ──────────────
+            // Points render as screen-space circles — visually distinct from dashes
+            const dotSize = Math.max(w * 2.5, 6);
+            let d = 0;
+            while (d <= totalDist) {
+              const pos = sampleAt(d);
+              const dotFrac = d / totalDist;
+              const showCb = new Cesium.CallbackProperty(() => {
+                if (group.visible === false) return false;
+                const sf = (group.routeStart ?? 0) / 100;
+                const ef = (group.routeEnd   ?? 100) / 100;
+                return dotFrac >= sf && dotFrac <= ef;
+              }, false);
+              group.entities.push(viewer.entities.add({
+                position: pos,
+                point: new Cesium.PointGraphics({ pixelSize: dotSize, color, show: showCb }),
+              }));
+              d += periodM;
+            }
+          } else {
+            // ── Dashed: polyline segments at regular intervals ─────────────────
+            const dashM = periodM * 0.6;
+            let d = 0;
+            while (d < totalDist) {
+              const dashStart = d;
+              const dashEnd   = Math.min(d + dashM, totalDist);
+              d += periodM;
+              const dashCenterFrac = (dashStart + dashEnd) / 2 / totalDist;
 
-            // Exact boundary positions via interpolation, interior GPS points in between
-            const startPos = sampleAt(dashStart);
-            const endPos   = sampleAt(dashEnd);
-            const si = loBound(dashStart);
-            const ei = loBound(dashEnd);
-            const interior = flatPts.slice(si, ei).map(p => p.pos);
-            const dashPts = [startPos, ...interior, endPos];
-            if (dashPts.length < 2) continue;
+              const startPos = sampleAt(dashStart);
+              const endPos   = sampleAt(dashEnd);
+              const si = loBound(dashStart);
+              const ei = loBound(dashEnd);
+              const interior = flatPts.slice(si, ei).map(p => p.pos);
+              const dashPts = [startPos, ...interior, endPos];
+              if (dashPts.length < 2) continue;
 
-            const showCb = new Cesium.CallbackProperty(() => {
-              if (group.visible === false) return false;
-              const sf = (group.routeStart ?? 0) / 100;
-              const ef = (group.routeEnd   ?? 100) / 100;
-              return dashCenterFrac >= sf && dashCenterFrac <= ef;
-            }, false);
+              const showCb = new Cesium.CallbackProperty(() => {
+                if (group.visible === false) return false;
+                const sf = (group.routeStart ?? 0) / 100;
+                const ef = (group.routeEnd   ?? 100) / 100;
+                return dashCenterFrac >= sf && dashCenterFrac <= ef;
+              }, false);
 
-            group.entities.push(viewer.entities.add({
-              polyline: {
-                positions: dashPts,
-                show: showCb,
-                width: isDotted ? Math.max(w * 1.5, 4) : w,
-                material: color,
-                clampToGround: false,
-              }
-            }));
+              group.entities.push(viewer.entities.add({
+                polyline: { positions: dashPts, show: showCb, width: w, material: color, clampToGround: false }
+              }));
+            }
           }
           return;
         }
