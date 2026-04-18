@@ -5289,11 +5289,10 @@
 
           if (totalDist === 0 || flatPts.length < 2) return;
 
-          // Dash/gap as fractions of total route length
-          const dashFrac = isDotted ? 0.008 : 0.025;
-          const gapFrac  = isDotted ? 0.012 : 0.015;
-          const dashM    = dashFrac * totalDist;
-          const periodM  = (dashFrac + gapFrac) * totalDist;
+          // Dash/gap derived from dashDensity (number of dashes across the route)
+          const numDashes = group.dashDensity ?? 20;
+          const periodM   = totalDist / numDashes;
+          const dashM     = periodM * (isDotted ? 0.4 : 0.6); // dot=40% filled, dash=60% filled
 
           function loBound(target) {
             let lo = 0, hi = flatPts.length - 1;
@@ -5783,9 +5782,29 @@
               group.lineStyle = s;
               buildRouteEntities(group);
               styleRow.querySelectorAll(".route-style-btn").forEach(b => b.classList.toggle("active", b === btn));
+              densityRow.style.display = (s === 'dashed' || s === 'dotted') ? '' : 'none';
             });
             styleRow.appendChild(btn);
           }
+
+          // ── Dash density (visible only for dashed/dotted) ──
+          const isDashStyle = (group.lineStyle === 'dashed' || group.lineStyle === 'dotted');
+          const densityRow = document.createElement("div");
+          densityRow.className = "route-width-row";
+          densityRow.style.display = isDashStyle ? '' : 'none';
+          densityRow.appendChild(Object.assign(document.createElement("label"), { textContent: "Dashes:" }));
+          const densitySlider = document.createElement("input");
+          densitySlider.type = "range"; densitySlider.min = 3; densitySlider.max = 80; densitySlider.step = 1;
+          densitySlider.value = group.dashDensity ?? 20;
+          const densityVal = document.createElement("span");
+          densityVal.className = "route-width-val";
+          densityVal.textContent = densitySlider.value;
+          densitySlider.addEventListener("input", () => {
+            group.dashDensity = parseInt(densitySlider.value);
+            densityVal.textContent = densitySlider.value;
+            buildRouteEntities(group);
+          });
+          densityRow.append(densitySlider, densityVal);
 
           // ── Shape row (line geometry) ──
           const shapeRow = document.createElement("div");
@@ -6037,7 +6056,7 @@
             cityUl.appendChild(li);
           });
 
-          card.append(header, styleRow, shapeRow, widthRow, startRow, endRow, cityLsToggle, cityLsPanel, glToggle, glPanel, cityAddRow, wpRow, importRow, citiesToggle, cityUl);
+          card.append(header, styleRow, densityRow, shapeRow, widthRow, startRow, endRow, cityLsToggle, cityLsPanel, glToggle, glPanel, cityAddRow, wpRow, importRow, citiesToggle, cityUl);
           container.appendChild(card);
         }
       }
@@ -7208,6 +7227,7 @@
             id: g.id, name: g.name, color: g.color,
             lineStyle: g.lineStyle, lineShape: g.lineShape,
             routeStart: g.routeStart, routeEnd: g.routeEnd, width: g.width, visible: g.visible,
+            dashDensity: g.dashDensity,
             cities: g.cities.map(c => ({ name: c.name, country: c.country, state: c.state, lat: c.lat, lon: c.lon, isWaypoint: c.isWaypoint || undefined })),
             showCityLabels: g.showCityLabels, labelColor: g.labelColor, labelFontSize: g.labelFontSize,
             labelFontWeight: g.labelFontWeight, labelFontStyle: g.labelFontStyle, labelFontFamily: g.labelFontFamily,
