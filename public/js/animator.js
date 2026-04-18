@@ -5294,6 +5294,7 @@
           const periodM   = totalDist / numDashes;
           const dashM     = periodM * (isDotted ? 0.4 : 0.6); // dot=40% filled, dash=60% filled
 
+          // Binary search: first index where cumDist >= target
           function loBound(target) {
             let lo = 0, hi = flatPts.length - 1;
             while (lo < hi) {
@@ -5303,6 +5304,18 @@
             return lo;
           }
 
+          // Interpolate an exact Cartesian3 position at a given cumulative distance
+          function sampleAt(dist) {
+            if (dist <= 0) return flatPts[0].pos;
+            if (dist >= totalDist) return flatPts[flatPts.length - 1].pos;
+            const idx = loBound(dist);
+            if (idx === 0) return flatPts[0].pos;
+            const prev = flatPts[idx - 1], next = flatPts[idx];
+            const span = next.cumDist - prev.cumDist;
+            const t = span < 1e-6 ? 0 : (dist - prev.cumDist) / span;
+            return Cesium.Cartesian3.lerp(prev.pos, next.pos, t, new Cesium.Cartesian3());
+          }
+
           let d = 0;
           while (d < totalDist) {
             const dashStart = d;
@@ -5310,9 +5323,13 @@
             d += periodM;
             const dashCenterFrac = (dashStart + dashEnd) / 2 / totalDist;
 
+            // Exact boundary positions via interpolation, interior GPS points in between
+            const startPos = sampleAt(dashStart);
+            const endPos   = sampleAt(dashEnd);
             const si = loBound(dashStart);
-            const ei = Math.min(loBound(dashEnd) + 1, flatPts.length - 1);
-            const dashPts = flatPts.slice(si, ei + 1).map(p => p.pos);
+            const ei = loBound(dashEnd);
+            const interior = flatPts.slice(si, ei).map(p => p.pos);
+            const dashPts = [startPos, ...interior, endPos];
             if (dashPts.length < 2) continue;
 
             const showCb = new Cesium.CallbackProperty(() => {
