@@ -5163,13 +5163,12 @@
 
       function importPointsToGroup(group, rawPoints) {
         if (!rawPoints.length) return 0;
-        const simplified = simplifyTrack(rawPoints);
-        for (const p of simplified) {
+        for (const p of rawPoints) {
           group.cities.push({ name: p.name || '', lat: p.lat, lon: p.lon, isWaypoint: true });
         }
         buildRouteEntities(group); buildRouteLabels(group);
         renderRouteGroupList();
-        return simplified.length;
+        return rawPoints.length;
       }
 
       async function importRouteFile(group, file) {
