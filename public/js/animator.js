@@ -5032,24 +5032,20 @@
       function parseGPX(text) {
         const doc = new DOMParser().parseFromString(text, 'application/xml');
         const pts = [];
+        const readPt = p => {
+          const lat = parseFloat(p.getAttribute('lat'));
+          const lon = parseFloat(p.getAttribute('lon'));
+          if (isNaN(lat) || isNaN(lon)) return;
+          const eleText = p.querySelector('ele')?.textContent;
+          const ele = eleText !== undefined ? parseFloat(eleText) : undefined;
+          pts.push({ lat, lon, name: p.querySelector('name')?.textContent?.trim() || '', ele: isNaN(ele) ? undefined : ele });
+        };
         // Track points (ordered path)
-        doc.querySelectorAll('trkpt').forEach(p => {
-          const lat = parseFloat(p.getAttribute('lat'));
-          const lon = parseFloat(p.getAttribute('lon'));
-          if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, name: p.querySelector('name')?.textContent?.trim() || '' });
-        });
+        doc.querySelectorAll('trkpt').forEach(readPt);
         // Route points (rte/rtept)
-        if (!pts.length) doc.querySelectorAll('rtept').forEach(p => {
-          const lat = parseFloat(p.getAttribute('lat'));
-          const lon = parseFloat(p.getAttribute('lon'));
-          if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, name: p.querySelector('name')?.textContent?.trim() || '' });
-        });
-        // Standalone waypoints (wpt) - keep names, don't simplify
-        if (!pts.length) doc.querySelectorAll('wpt').forEach(p => {
-          const lat = parseFloat(p.getAttribute('lat'));
-          const lon = parseFloat(p.getAttribute('lon'));
-          if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, name: p.querySelector('name')?.textContent?.trim() || '' });
-        });
+        if (!pts.length) doc.querySelectorAll('rtept').forEach(readPt);
+        // Standalone waypoints (wpt)
+        if (!pts.length) doc.querySelectorAll('wpt').forEach(readPt);
         return pts;
       }
 
@@ -5163,9 +5159,12 @@
 
       function importPointsToGroup(group, rawPoints) {
         if (!rawPoints.length) return 0;
+        const hasEle = rawPoints.some(p => p.ele !== undefined && p.ele !== 0);
         for (const p of rawPoints) {
-          group.cities.push({ name: p.name || '', lat: p.lat, lon: p.lon, isWaypoint: true });
+          group.cities.push({ name: p.name || '', lat: p.lat, lon: p.lon, isWaypoint: true, ele: hasEle ? (p.ele ?? 0) : undefined });
         }
+        // Auto-enable elevation if the track has meaningful altitude data
+        if (hasEle && !group.showElevation) group.showElevation = true;
         buildRouteEntities(group); buildRouteLabels(group);
         renderRouteGroupList();
         return rawPoints.length;
@@ -5240,6 +5239,9 @@
         const isArc   = (group.lineShape ?? 'straight') === 'arc';
         const isDashed = group.lineStyle === 'dashed';
         const isDotted = group.lineStyle === 'dotted';
+        const useEle   = group.showElevation && cities.some(c => c.ele !== undefined);
+        const eleScale = group.elevationScale ?? 5;
+        const cityPos  = c => Cesium.Cartesian3.fromDegrees(c.lon, c.lat, useEle && c.ele !== undefined ? c.ele * eleScale : 0);
 
         // ── Static world-space dashes/dots ───────────────────────────────────
         // Pre-compute dash segments as fixed geodesic positions so they don't
@@ -5260,8 +5262,8 @@
             if (isArc) {
               segPts = arcPositions(a, b, 48);
             } else {
-              const posA = Cesium.Cartesian3.fromDegrees(a.lon, a.lat);
-              const posB = Cesium.Cartesian3.fromDegrees(b.lon, b.lat);
+              const posA = cityPos(a);
+              const posB = cityPos(b);
               const segM = Cesium.Cartesian3.distance(posA, posB);
               if (segM > INTERP_THRESH_M) {
                 const gd = new Cesium.EllipsoidGeodesic(
@@ -5272,7 +5274,9 @@
                 segPts = [];
                 for (let j = 0; j <= ns; j++) {
                   const c = gd.interpolateUsingSurfaceDistance((j / ns) * gd.surfaceDistance);
-                  segPts.push(Cesium.Cartesian3.fromRadians(c.longitude, c.latitude));
+                  const t = j / ns;
+                  const ele = useEle ? ((a.ele ?? 0) * (1 - t) + (b.ele ?? 0) * t) * eleScale : 0;
+                  segPts.push(Cesium.Cartesian3.fromRadians(c.longitude, c.latitude, ele));
                 }
               } else {
                 segPts = [posA, posB];
@@ -5368,7 +5372,7 @@
           let positions, material, lineWidth;
 
           if (isArrow) {
-            positions = Cesium.Cartesian3.fromDegreesArray([a.lon, a.lat, b.lon, b.lat]);
+            positions = [cityPos(a), cityPos(b)];
             material  = new Cesium.PolylineArrowMaterialProperty(color);
             lineWidth = Math.max(w * 4, 12);
           } else if (isArc) {
@@ -5386,8 +5390,8 @@
             material  = color;
             lineWidth = w;
           } else {
-            const posA = Cesium.Cartesian3.fromDegrees(a.lon, a.lat);
-            const posB = Cesium.Cartesian3.fromDegrees(b.lon, b.lat);
+            const posA = cityPos(a);
+            const posB = cityPos(b);
             positions = new Cesium.CallbackProperty(() => {
               const sf = (group.routeStart ?? 0) / 100;
               const ef = (group.routeEnd   ?? 100) / 100;
@@ -5494,6 +5498,8 @@
           routeEnd: 100,
           width: 2,
           visible: true,
+          showElevation: false,
+          elevationScale: 5,
           citiesCollapsed: false,
           cityLabelStyleCollapsed: true,
           glStyleCollapsed: true,
@@ -5857,6 +5863,45 @@
           });
           widthRow.append(widthLabel, widthSlider, widthVal);
 
+          // ── Elevation toggle + scale ──
+          const hasEleData = group.cities.some(c => c.ele !== undefined);
+          const eleRow = document.createElement("div");
+          eleRow.className = "route-width-row";
+          const eleCheck = document.createElement("input");
+          eleCheck.type = "checkbox";
+          eleCheck.checked = group.showElevation ?? false;
+          eleCheck.style.cssText = "margin:0;width:auto;";
+          const eleLabel = document.createElement("label");
+          eleLabel.style.cssText = "display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;flex:1;";
+          eleLabel.append(eleCheck, document.createTextNode("Elevation"));
+          if (!hasEleData) {
+            eleLabel.title = "Import a GPX with altitude data to enable";
+            eleCheck.disabled = true;
+            eleLabel.style.color = "#bbb";
+          }
+          const eleScaleSlider = document.createElement("input");
+          eleScaleSlider.type = "range"; eleScaleSlider.min = 1; eleScaleSlider.max = 50; eleScaleSlider.step = 1;
+          eleScaleSlider.value = group.elevationScale ?? 5;
+          eleScaleSlider.style.cssText = "flex:1;min-width:40px;";
+          eleScaleSlider.title = "Vertical exaggeration";
+          eleScaleSlider.style.display = group.showElevation ? '' : 'none';
+          const eleScaleVal = document.createElement("span");
+          eleScaleVal.className = "route-width-val";
+          eleScaleVal.textContent = `${eleScaleSlider.value}×`;
+          eleScaleVal.style.display = group.showElevation ? '' : 'none';
+          eleCheck.addEventListener("change", () => {
+            group.showElevation = eleCheck.checked;
+            eleScaleSlider.style.display = eleCheck.checked ? '' : 'none';
+            eleScaleVal.style.display = eleCheck.checked ? '' : 'none';
+            buildRouteEntities(group);
+          });
+          eleScaleSlider.addEventListener("input", () => {
+            group.elevationScale = parseInt(eleScaleSlider.value);
+            eleScaleVal.textContent = `${eleScaleSlider.value}×`;
+            buildRouteEntities(group);
+          });
+          eleRow.append(eleLabel, eleScaleSlider, eleScaleVal);
+
           // ── Route range (start % / end %) ──
           const makeRangeRow = (labelText, field, defaultVal) => {
             const row = document.createElement("div");
@@ -6073,7 +6118,7 @@
             cityUl.appendChild(li);
           });
 
-          card.append(header, styleRow, densityRow, shapeRow, widthRow, startRow, endRow, cityLsToggle, cityLsPanel, glToggle, glPanel, cityAddRow, wpRow, importRow, citiesToggle, cityUl);
+          card.append(header, styleRow, densityRow, shapeRow, widthRow, eleRow, startRow, endRow, cityLsToggle, cityLsPanel, glToggle, glPanel, cityAddRow, wpRow, importRow, citiesToggle, cityUl);
           container.appendChild(card);
         }
       }
@@ -7245,7 +7290,8 @@
             lineStyle: g.lineStyle, lineShape: g.lineShape,
             routeStart: g.routeStart, routeEnd: g.routeEnd, width: g.width, visible: g.visible,
             dashDensity: g.dashDensity,
-            cities: g.cities.map(c => ({ name: c.name, country: c.country, state: c.state, lat: c.lat, lon: c.lon, isWaypoint: c.isWaypoint || undefined })),
+            showElevation: g.showElevation, elevationScale: g.elevationScale,
+            cities: g.cities.map(c => ({ name: c.name, country: c.country, state: c.state, lat: c.lat, lon: c.lon, isWaypoint: c.isWaypoint || undefined, ele: c.ele })),
             showCityLabels: g.showCityLabels, labelColor: g.labelColor, labelFontSize: g.labelFontSize,
             labelFontWeight: g.labelFontWeight, labelFontStyle: g.labelFontStyle, labelFontFamily: g.labelFontFamily,
             labelOffsetX: g.labelOffsetX, labelOffsetY: g.labelOffsetY, labelOutlineWidth: g.labelOutlineWidth,
