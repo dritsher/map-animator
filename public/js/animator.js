@@ -5293,7 +5293,7 @@
 
           if (totalDist === 0 || flatPts.length < 2) return;
 
-          const numDashes = group.dashDensity ?? 20;
+          const numDashes = group.dashDensity ?? 100;
           const periodM   = totalDist / numDashes;
 
           // Binary search: first index where cumDist >= target
@@ -5832,17 +5832,26 @@
           densityRow.style.display = isDashStyle ? '' : 'none';
           densityRow.appendChild(Object.assign(document.createElement("label"), { textContent: "Dashes:" }));
           const densitySlider = document.createElement("input");
-          densitySlider.type = "range"; densitySlider.min = 3; densitySlider.max = 80; densitySlider.step = 1;
-          densitySlider.value = group.dashDensity ?? 20;
-          const densityVal = document.createElement("span");
-          densityVal.className = "route-width-val";
-          densityVal.textContent = densitySlider.value;
+          densitySlider.type = "range"; densitySlider.min = 3; densitySlider.max = 500; densitySlider.step = 1;
+          densitySlider.value = group.dashDensity ?? 100;
+          const densityNum = document.createElement("input");
+          densityNum.type = "number"; densityNum.min = 3; densityNum.step = 1;
+          densityNum.value = densitySlider.value;
+          densityNum.style.cssText = "width:52px;margin-left:4px;";
           densitySlider.addEventListener("input", () => {
             group.dashDensity = parseInt(densitySlider.value);
-            densityVal.textContent = densitySlider.value;
+            densityNum.value = densitySlider.value;
             buildRouteEntities(group);
           });
-          densityRow.append(densitySlider, densityVal);
+          densityNum.addEventListener("change", () => {
+            const v = Math.max(3, parseInt(densityNum.value) || 3);
+            densityNum.value = v;
+            densitySlider.max = Math.max(densitySlider.max, v);
+            densitySlider.value = Math.min(v, densitySlider.max);
+            group.dashDensity = v;
+            buildRouteEntities(group);
+          });
+          densityRow.append(densitySlider, densityNum);
 
           // ── Shape row (line geometry) ──
           const shapeRow = document.createElement("div");
