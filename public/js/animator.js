@@ -4984,9 +4984,226 @@
       };
 
       function routeCityDisplayName(city) {
+        if (city.isWaypoint) {
+          if (city.name) return city.name;
+          const lat = `${Math.abs(city.lat).toFixed(4)}°${city.lat >= 0 ? 'N' : 'S'}`;
+          const lon = `${Math.abs(city.lon).toFixed(4)}°${city.lon >= 0 ? 'E' : 'W'}`;
+          return `${lat} ${lon}`;
+        }
         const country = COUNTRY_ABBREV[city.country] || city.country;
         if (city.state) return `${city.name}, ${city.state} (${country})`;
         return `${city.name} (${country})`;
+      }
+
+      // ── Route import parsers ─────────────────────────────────────────────────
+
+      // Ramer-Douglas-Peucker line simplification (perpendicular distance)
+      function rdpSimplify(points, epsilon) {
+        if (points.length < 3) return points;
+        let maxDist = 0, maxIdx = 0;
+        const [p1, p2] = [points[0], points[points.length - 1]];
+        const dx = p2.lon - p1.lon, dy = p2.lat - p1.lat;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1e-10;
+        for (let i = 1; i < points.length - 1; i++) {
+          const d = Math.abs(dy * points[i].lon - dx * points[i].lat + p2.lon * p1.lat - p2.lat * p1.lon) / len;
+          if (d > maxDist) { maxDist = d; maxIdx = i; }
+        }
+        if (maxDist > epsilon) {
+          const l = rdpSimplify(points.slice(0, maxIdx + 1), epsilon);
+          const r = rdpSimplify(points.slice(maxIdx), epsilon);
+          return [...l.slice(0, -1), ...r];
+        }
+        return [p1, p2];
+      }
+
+      function simplifyTrack(points, targetMax = 300) {
+        if (points.length <= targetMax) return points;
+        // Start with a coarse epsilon and tighten until we're under targetMax
+        let eps = 0.01;
+        let result = points;
+        for (let i = 0; i < 20; i++) {
+          result = rdpSimplify(points, eps);
+          if (result.length <= targetMax) break;
+          eps *= 2;
+        }
+        return result;
+      }
+
+      function parseGPX(text) {
+        const doc = new DOMParser().parseFromString(text, 'application/xml');
+        const pts = [];
+        // Track points (ordered path)
+        doc.querySelectorAll('trkpt').forEach(p => {
+          const lat = parseFloat(p.getAttribute('lat'));
+          const lon = parseFloat(p.getAttribute('lon'));
+          if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, name: p.querySelector('name')?.textContent?.trim() || '' });
+        });
+        // Route points (rte/rtept)
+        if (!pts.length) doc.querySelectorAll('rtept').forEach(p => {
+          const lat = parseFloat(p.getAttribute('lat'));
+          const lon = parseFloat(p.getAttribute('lon'));
+          if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, name: p.querySelector('name')?.textContent?.trim() || '' });
+        });
+        // Standalone waypoints (wpt) - keep names, don't simplify
+        if (!pts.length) doc.querySelectorAll('wpt').forEach(p => {
+          const lat = parseFloat(p.getAttribute('lat'));
+          const lon = parseFloat(p.getAttribute('lon'));
+          if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, name: p.querySelector('name')?.textContent?.trim() || '' });
+        });
+        return pts;
+      }
+
+      function parseKML(text) {
+        const doc = new DOMParser().parseFromString(text, 'application/xml');
+        const pts = [];
+        // LineString / MultiGeometry tracks
+        doc.querySelectorAll('LineString coordinates, Track coord, MultiTrack Track coord').forEach(el => {
+          el.textContent.trim().split(/\s+/).forEach(coord => {
+            const [lon, lat] = coord.split(',').map(Number);
+            if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, name: '' });
+          });
+        });
+        // gx:coord (Google Earth extended data)
+        if (!pts.length) doc.querySelectorAll('coord').forEach(el => {
+          const [lon, lat] = el.textContent.trim().split(/\s+/).map(Number);
+          if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, name: '' });
+        });
+        // Named Placemarks (Points)
+        doc.querySelectorAll('Placemark').forEach(pm => {
+          const name = pm.querySelector('name')?.textContent?.trim() || '';
+          const pointCoords = pm.querySelector('Point coordinates');
+          if (pointCoords) {
+            const [lon, lat] = pointCoords.textContent.trim().split(',').map(Number);
+            if (!isNaN(lat) && !isNaN(lon)) pts.push({ lat, lon, name });
+          }
+        });
+        return pts;
+      }
+
+      function parseGeoJSON(obj) {
+        const pts = [];
+        function processGeometry(geo, name = '') {
+          if (!geo) return;
+          if (geo.type === 'Point') {
+            pts.push({ lat: geo.coordinates[1], lon: geo.coordinates[0], name });
+          } else if (geo.type === 'LineString') {
+            geo.coordinates.forEach(c => pts.push({ lat: c[1], lon: c[0], name: '' }));
+          } else if (geo.type === 'MultiLineString') {
+            geo.coordinates.forEach(line => line.forEach(c => pts.push({ lat: c[1], lon: c[0], name: '' })));
+          } else if (geo.type === 'MultiPoint') {
+            geo.coordinates.forEach(c => pts.push({ lat: c[1], lon: c[0], name }));
+          }
+        }
+        function processFeature(f) {
+          if (f.type === 'Feature') processGeometry(f.geometry, f.properties?.name || '');
+          else if (f.type === 'FeatureCollection') f.features.forEach(processFeature);
+          else processGeometry(f);
+        }
+        processFeature(obj);
+        return pts;
+      }
+
+      function parseCSV(text) {
+        const lines = text.trim().split('\n').map(l => l.trim()).filter(Boolean);
+        if (!lines.length) return [];
+        // Detect delimiter
+        const delim = lines[0].includes('\t') ? '\t' : ',';
+        const rows = lines.map(l => l.split(delim).map(c => c.trim().replace(/^"|"$/g, '')));
+        const headers = rows[0].map(h => h.toLowerCase());
+
+        // Find lat/lon columns by header name
+        const latCol = headers.findIndex(h => /^lat(itude)?$/.test(h));
+        const lonCol = headers.findIndex(h => /^lo?n(gitude)?$/.test(h));
+        const nameCol = headers.findIndex(h => /^name|port|location|place|city/.test(h));
+
+        if (latCol >= 0 && lonCol >= 0) {
+          return rows.slice(1).map(r => {
+            const lat = parseFloat(r[latCol]);
+            const lon = parseFloat(r[lonCol]);
+            if (isNaN(lat) || isNaN(lon)) return null;
+            return { lat, lon, name: nameCol >= 0 ? (r[nameCol] || '') : '' };
+          }).filter(Boolean);
+        }
+
+        // No headers found — try parsing each line as "lat, lon [, name]"
+        return rows.map(r => {
+          const lat = parseFloat(r[0]);
+          const lon = parseFloat(r[1]);
+          if (isNaN(lat) || isNaN(lon)) return null;
+          return { lat, lon, name: r[2] || '' };
+        }).filter(Boolean);
+      }
+
+      // Parse pasted free-form text: one coord pair per line
+      // Handles: "34.05, -118.25", "34.05 -118.25", "34.05°N 118.25°W", etc.
+      function parsePastedCoords(text) {
+        const pts = [];
+        for (const rawLine of text.split('\n')) {
+          const line = rawLine.trim();
+          if (!line) continue;
+          // Try degree-symbol format: 34.05°N 118.25°W
+          const degMatch = line.match(/(-?[\d.]+)°?\s*([NS])[\s,]+(-?[\d.]+)°?\s*([EW])/i);
+          if (degMatch) {
+            const lat = parseFloat(degMatch[1]) * (degMatch[2].toUpperCase() === 'S' ? -1 : 1);
+            const lon = parseFloat(degMatch[3]) * (degMatch[4].toUpperCase() === 'W' ? -1 : 1);
+            if (!isNaN(lat) && !isNaN(lon)) { pts.push({ lat, lon, name: '' }); continue; }
+          }
+          // Try plain numbers: "34.05, -118.25" or "34.05 -118.25"
+          const nums = line.match(/(-?[\d.]+)/g);
+          if (nums && nums.length >= 2) {
+            const lat = parseFloat(nums[0]);
+            const lon = parseFloat(nums[1]);
+            if (!isNaN(lat) && !isNaN(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+              pts.push({ lat, lon, name: '' });
+            }
+          }
+        }
+        return pts;
+      }
+
+      function importPointsToGroup(group, rawPoints) {
+        if (!rawPoints.length) return 0;
+        const simplified = simplifyTrack(rawPoints);
+        for (const p of simplified) {
+          group.cities.push({ name: p.name || '', lat: p.lat, lon: p.lon, isWaypoint: true });
+        }
+        buildRouteEntities(group); buildRouteLabels(group);
+        renderRouteGroupList();
+        return simplified.length;
+      }
+
+      async function importRouteFile(group, file) {
+        const text = await file.text();
+        const name = file.name.toLowerCase();
+        let pts = [];
+        try {
+          if (name.endsWith('.gpx')) {
+            pts = parseGPX(text);
+          } else if (name.endsWith('.kml')) {
+            pts = parseKML(text);
+          } else if (name.endsWith('.geojson') || name.endsWith('.json')) {
+            pts = parseGeoJSON(JSON.parse(text));
+          } else if (name.endsWith('.csv') || name.endsWith('.txt') || name.endsWith('.tsv')) {
+            // Try CSV first; if few results, also try as pasted coords
+            pts = parseCSV(text);
+            if (pts.length < 2) pts = parsePastedCoords(text);
+          } else {
+            // Unknown extension — sniff content
+            const trimmed = text.trim();
+            if (trimmed.startsWith('<')) {
+              pts = trimmed.includes('<gpx') ? parseGPX(trimmed) : parseKML(trimmed);
+            } else if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+              pts = parseGeoJSON(JSON.parse(trimmed));
+            } else {
+              pts = parseCSV(text);
+              if (pts.length < 2) pts = parsePastedCoords(text);
+            }
+          }
+        } catch (e) {
+          console.warn('Route import error:', e);
+        }
+        const count = importPointsToGroup(group, pts);
+        if (!count) alert('No coordinates found in that file. Supported formats: GPX, KML, GeoJSON, CSV.');
       }
 
       let cityRouteGroups   = [];
@@ -5128,7 +5345,7 @@
               show,
             }),
             label: new Cesium.LabelGraphics({
-              ..._routeLabelProps(group, city.name, group.labelOffsetX ?? 4, group.labelOffsetY ?? 0),
+              ..._routeLabelProps(group, routeCityDisplayName(city), group.labelOffsetX ?? 4, group.labelOffsetY ?? 0),
               show,
               horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
               verticalOrigin: Cesium.VerticalOrigin.CENTER,
@@ -5575,6 +5792,97 @@
           });
           cityAddRow.append(cityInput, cityAddBtn);
 
+          // ── Waypoint (lat/lon) input ──
+          const wpRow = document.createElement("div");
+          wpRow.className = "route-city-add-row";
+          wpRow.style.marginTop = "3px";
+          const wpLat = document.createElement("input");
+          wpLat.type = "number"; wpLat.placeholder = "Lat"; wpLat.step = "any";
+          wpLat.style.cssText = "width:72px;font-size:11px;";
+          const wpLon = document.createElement("input");
+          wpLon.type = "number"; wpLon.placeholder = "Lon"; wpLon.step = "any";
+          wpLon.style.cssText = "width:72px;font-size:11px;";
+          const wpLabel = document.createElement("input");
+          wpLabel.type = "text"; wpLabel.placeholder = "Label (opt)";
+          wpLabel.style.cssText = "flex:1;font-size:11px;";
+          const wpAddBtn = document.createElement("button");
+          wpAddBtn.textContent = "+";
+          wpAddBtn.title = "Add waypoint";
+          const doAddWaypoint = () => {
+            const lat = parseFloat(wpLat.value);
+            const lon = parseFloat(wpLon.value);
+            if (isNaN(lat) || isNaN(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return;
+            group.cities.push({ name: wpLabel.value.trim(), lat, lon, isWaypoint: true });
+            wpLat.value = ""; wpLon.value = ""; wpLabel.value = "";
+            buildRouteEntities(group); buildRouteLabels(group);
+            renderRouteGroupList();
+          };
+          wpAddBtn.addEventListener("click", doAddWaypoint);
+          [wpLat, wpLon, wpLabel].forEach(el => el.addEventListener("keydown", e => { if (e.key === "Enter") doAddWaypoint(); }));
+          wpRow.append(wpLat, wpLon, wpLabel, wpAddBtn);
+
+          // ── Import file / paste ──
+          const importRow = document.createElement("div");
+          importRow.style.cssText = "display:flex;gap:4px;margin-top:3px;";
+
+          const fileInput = document.createElement("input");
+          fileInput.type = "file";
+          fileInput.accept = ".gpx,.kml,.geojson,.json,.csv,.txt,.tsv";
+          fileInput.style.display = "none";
+          fileInput.addEventListener("change", async () => {
+            if (!fileInput.files[0]) return;
+            await importRouteFile(group, fileInput.files[0]);
+            fileInput.value = "";
+          });
+
+          const importFileBtn = document.createElement("button");
+          importFileBtn.textContent = "⬆ Import file";
+          importFileBtn.title = "Import GPX, KML, GeoJSON, or CSV";
+          importFileBtn.style.cssText = "flex:1;font-size:11px;padding:3px 6px;";
+          importFileBtn.addEventListener("click", () => fileInput.click());
+
+          const pasteBtn = document.createElement("button");
+          pasteBtn.textContent = "Paste coords";
+          pasteBtn.title = "Paste a list of lat,lon coordinates";
+          pasteBtn.style.cssText = "flex:1;font-size:11px;padding:3px 6px;";
+          pasteBtn.addEventListener("click", () => {
+            const modal = document.createElement("div");
+            modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2000;display:flex;align-items:center;justify-content:center;";
+            const box = document.createElement("div");
+            box.style.cssText = "background:#fff;border-radius:8px;padding:16px;width:340px;display:flex;flex-direction:column;gap:8px;";
+            const title = document.createElement("div");
+            title.style.cssText = "font-weight:600;font-size:13px;";
+            title.textContent = "Paste coordinates";
+            const hint = document.createElement("div");
+            hint.style.cssText = "font-size:11px;color:#888;line-height:1.5;";
+            hint.textContent = "One pair per line. Accepts: \"lat, lon\", \"34.05°N 118.25°W\", or CSV with lat/lon columns.";
+            const ta = document.createElement("textarea");
+            ta.rows = 8;
+            ta.style.cssText = "font-family:monospace;font-size:11px;resize:vertical;border:1px solid #ccc;border-radius:4px;padding:6px;";
+            ta.placeholder = "34.0522, -118.2437\n48.8566, 2.3522\n…";
+            const btns = document.createElement("div");
+            btns.style.cssText = "display:flex;gap:6px;justify-content:flex-end;";
+            const cancelBtn = document.createElement("button");
+            cancelBtn.textContent = "Cancel";
+            cancelBtn.addEventListener("click", () => document.body.removeChild(modal));
+            const okBtn = document.createElement("button");
+            okBtn.textContent = "Import";
+            okBtn.className = "primary";
+            okBtn.addEventListener("click", () => {
+              const pts = parsePastedCoords(ta.value);
+              document.body.removeChild(modal);
+              const count = importPointsToGroup(group, pts);
+              if (!count) alert("No valid coordinates found.");
+            });
+            btns.append(cancelBtn, okBtn);
+            box.append(title, hint, ta, btns);
+            modal.append(box);
+            document.body.appendChild(modal);
+            ta.focus();
+          });
+
+          importRow.append(fileInput, importFileBtn, pasteBtn);
+
           // ── City list toggle ──
           const citiesToggle = document.createElement("div");
           citiesToggle.className = "route-cities-toggle";
@@ -5603,7 +5911,8 @@
             numSpan.textContent = idx + 1;
 
             const nameSpan = document.createElement("span");
-            nameSpan.textContent = routeCityDisplayName(city);
+            nameSpan.textContent = (city.isWaypoint ? '📍 ' : '') + routeCityDisplayName(city);
+            if (city.isWaypoint) nameSpan.style.cssText = "color:#666;font-size:11px;";
 
             const upBtn = document.createElement("button");
             upBtn.className = "route-city-reorder"; upBtn.textContent = "↑"; upBtn.title = "Move up";
@@ -5637,7 +5946,7 @@
             cityUl.appendChild(li);
           });
 
-          card.append(header, styleRow, shapeRow, widthRow, startRow, endRow, cityLsToggle, cityLsPanel, glToggle, glPanel, cityAddRow, citiesToggle, cityUl);
+          card.append(header, styleRow, shapeRow, widthRow, startRow, endRow, cityLsToggle, cityLsPanel, glToggle, glPanel, cityAddRow, wpRow, importRow, citiesToggle, cityUl);
           container.appendChild(card);
         }
       }
@@ -6808,7 +7117,7 @@
             id: g.id, name: g.name, color: g.color,
             lineStyle: g.lineStyle, lineShape: g.lineShape,
             routeStart: g.routeStart, routeEnd: g.routeEnd, width: g.width, visible: g.visible,
-            cities: g.cities.map(c => ({ name: c.name, country: c.country, state: c.state, lat: c.lat, lon: c.lon })),
+            cities: g.cities.map(c => ({ name: c.name, country: c.country, state: c.state, lat: c.lat, lon: c.lon, isWaypoint: c.isWaypoint || undefined })),
             showCityLabels: g.showCityLabels, labelColor: g.labelColor, labelFontSize: g.labelFontSize,
             labelFontWeight: g.labelFontWeight, labelFontStyle: g.labelFontStyle, labelFontFamily: g.labelFontFamily,
             labelOffsetX: g.labelOffsetX, labelOffsetY: g.labelOffsetY, labelOutlineWidth: g.labelOutlineWidth,
