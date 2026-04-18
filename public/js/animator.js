@@ -5949,7 +5949,7 @@
 
           // ── Label styling panels ──
           const { toggle: cityLsToggle, panel: cityLsPanel } = makeRouteLabelStyleSection(
-            group, 'label', 'cityLabelStyleCollapsed', "City label style", () => buildRouteCityMarkers(group)
+            group, 'label', 'cityLabelStyleCollapsed', "Label style", () => buildRouteCityMarkers(group)
           );
           const { toggle: glToggle, panel: glPanel } = makeRouteLabelStyleSection(
             group, 'gl', 'glStyleCollapsed', "Group label style", () => buildRouteGroupLabel(group)
@@ -5961,7 +5961,7 @@
           const cityInput = document.createElement("input");
           cityInput.type = "text";
           cityInput.setAttribute("list", "cityDatalist");
-          cityInput.placeholder = "Add city…";
+          cityInput.placeholder = "Add place…";
           cityInput.autocomplete = "off";
           const cityAddBtn = document.createElement("button");
           cityAddBtn.textContent = "+";
@@ -6081,7 +6081,7 @@
           const arrow = document.createElement("span");
           arrow.textContent = group.citiesCollapsed ? "▶" : "▼";
           const toggleLabel = document.createElement("span");
-          toggleLabel.textContent = `Cities (${group.cities.length})`;
+          toggleLabel.textContent = `Stops (${group.cities.length})`;
           citiesToggle.append(arrow, toggleLabel);
 
           const cityUl = document.createElement("ul");
