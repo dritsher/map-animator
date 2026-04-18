@@ -5888,7 +5888,6 @@
           widthRow.append(widthLabel, widthSlider, widthVal);
 
           // ── Elevation toggle + scale ──
-          const hasEleData = group.cities.some(c => c.ele !== undefined);
           const eleRow = document.createElement("div");
           eleRow.className = "route-width-row";
           const eleCheck = document.createElement("input");
@@ -5898,11 +5897,6 @@
           const eleLabel = document.createElement("label");
           eleLabel.style.cssText = "display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;flex:1;";
           eleLabel.append(eleCheck, document.createTextNode("Elevation"));
-          if (!hasEleData) {
-            eleLabel.title = "Import a GPX with altitude data to enable";
-            eleCheck.disabled = true;
-            eleLabel.style.color = "#bbb";
-          }
           const eleScaleSlider = document.createElement("input");
           eleScaleSlider.type = "range"; eleScaleSlider.min = 1; eleScaleSlider.max = 50; eleScaleSlider.step = 1;
           eleScaleSlider.value = group.elevationScale ?? 5;
