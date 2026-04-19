@@ -1228,6 +1228,7 @@
       // ── Keyframes ───────────────────────────────────────────────────────────
       function addKeyframe() {
         if (!viewer) return;
+        pushUndo();
         const t = parseFloat(playbackT.toFixed(2));
         let count = 0;
         for (const trackId of selectedTrackIds) {
@@ -1257,6 +1258,7 @@
       function deleteTrackKeyframe(trackId, kfId) {
         const track = tracks[trackId];
         if (!track) return;
+        pushUndo();
         track.keyframes = track.keyframes.filter(k => k.id !== kfId);
         if (tlSelectedKf?.kfId === kfId) { tlSelectedKf = null; updateEaseBar(); }
         if (trackId === 'camera') {
@@ -2392,7 +2394,7 @@
         const entry = regionLookup.get(displayStr);
         if (!entry || !entry.polygons.length) return;
         if (highlights.some(h => h.key === entry.key)) return; // no duplicates
-
+        pushUndo();
         const type  = entry.key.startsWith("country||") ? "country" : "state";
         const color = nextRegionColor();
         const DEFAULT_FILL_OPACITY = 0.25;
@@ -2428,6 +2430,7 @@
       function removeHighlight(key) {
         const idx = highlights.findIndex(h => h.key === key);
         if (idx === -1) return;
+        pushUndo();
         const h = highlights[idx];
         const hlKey = h.key;
         h.outlineEntities.forEach(e => viewer.entities.remove(e));
@@ -3327,6 +3330,7 @@
 
       function createGroup(name, aiMeta = null) {
         if (!name) return;
+        pushUndo();
         regionGroups.push({
           id: nextGroupId++,
           name,
@@ -3357,6 +3361,7 @@
       function deleteGroup(id) {
         const idx = regionGroups.findIndex(g => g.id === id);
         if (idx === -1) return;
+        pushUndo();
         const g = regionGroups[idx];
         const gid = g.id;
         g.entities.forEach(e => viewer.entities.remove(e));
@@ -3417,6 +3422,7 @@
         const entry = regionLookup.get(displayStr);
         if (!entry) return;
         if (group.members.some(m => m.key === entry.key)) return;
+        pushUndo();
         group.members.push({ key: entry.key, name: entry.name, fillRef: null, fillEntities: [] });
         // Create a per-member animation track (hidden under group's expand triangle)
         const memberTrackId = `gmember_${group.id}_${entry.key}`;
@@ -3431,6 +3437,7 @@
       function removeMemberFromGroup(groupId, memberKey) {
         const group = regionGroups.find(g => g.id === groupId);
         if (!group) return;
+        pushUndo();
         const removing = group.members.find(m => m.key === memberKey);
         if (removing) {
           (removing.fillEntities || []).forEach(removeFillItem);
@@ -4097,6 +4104,7 @@
       }
 
       function createAnnotation(fields) {
+        pushUndo();
         const ann = Object.assign({
           id: nextAnnotationId++, text: 'Annotation', type: 'screen',
           anchor: 'bottom-left', offsetX: 40, offsetY: -70,
@@ -4120,6 +4128,7 @@
       function deleteAnnotation(id) {
         const idx = annotations.findIndex(a => a.id === id);
         if (idx === -1) return;
+        pushUndo();
         const ann = annotations[idx];
         if (ann.el) ann.el.remove();
         if (ann.entity) (Array.isArray(ann.entity)?ann.entity:[ann.entity]).forEach(e=>viewer.entities.remove(e));
@@ -4947,6 +4956,7 @@
       document.getElementById("addCityBtn").addEventListener("click", () => {
         const val = document.getElementById("citySearch").value.trim();
         if (!val) return;
+        pushUndo();
         if (!addCity(val)) geocodeAndShow(val);
         else document.getElementById("citySearch").value = "";
       });
@@ -4955,6 +4965,7 @@
         if (e.key !== "Enter") return;
         const val = e.target.value.trim();
         if (!val) return;
+        pushUndo();
         if (!addCity(val)) geocodeAndShow(val);
         else e.target.value = "";
       });
@@ -5177,6 +5188,7 @@
       }
 
       async function importRouteFile(group, file) {
+        pushUndo();
         const text = await file.text();
         const name = file.name.toLowerCase();
         let pts = [];
@@ -5509,6 +5521,7 @@
 
       function createCityRouteGroup(name, cities = [], aiMeta = null) {
         if (!name) return;
+        pushUndo();
         const group = {
           id: nextRouteGroupId++,
           name,
@@ -5575,6 +5588,7 @@
       function deleteCityRouteGroup(id) {
         const idx = cityRouteGroups.findIndex(g => g.id === id);
         if (idx === -1) return;
+        pushUndo();
         const g = cityRouteGroups[idx];
         g.entities.forEach(e => viewer.entities.remove(e));
         g.cityEntities.forEach(e => viewer.entities.remove(e));
@@ -5972,6 +5986,7 @@
           cityAddBtn.addEventListener("click", () => {
             const found = lookupRouteCity(cityInput.value.trim());
             if (!found) return;
+            pushUndo();
             group.cities.push({ name: found.name, country: found.country, lat: found.lat, lon: found.lon });
             cityInput.value = "";
             buildRouteEntities(group); buildRouteLabels(group);
@@ -5981,6 +5996,7 @@
             if (e.key !== "Enter") return;
             const found = lookupRouteCity(cityInput.value.trim());
             if (!found) return;
+            pushUndo();
             group.cities.push({ name: found.name, country: found.country, lat: found.lat, lon: found.lon });
             cityInput.value = "";
             buildRouteEntities(group); buildRouteLabels(group);
@@ -6008,6 +6024,7 @@
             const lat = parseFloat(wpLat.value);
             const lon = parseFloat(wpLon.value);
             if (isNaN(lat) || isNaN(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return;
+            pushUndo();
             group.cities.push({ name: wpLabel.value.trim(), lat, lon, isWaypoint: true });
             wpLat.value = ""; wpLon.value = ""; wpLabel.value = "";
             buildRouteEntities(group); buildRouteLabels(group);
@@ -6067,6 +6084,7 @@
             okBtn.addEventListener("click", () => {
               const pts = parsePastedCoords(ta.value);
               document.body.removeChild(modal);
+              pushUndo();
               const count = importPointsToGroup(group, pts);
               if (!count) alert("No valid coordinates found.");
             });
@@ -6115,6 +6133,7 @@
             upBtn.disabled = idx === 0;
             upBtn.addEventListener("click", () => {
               if (idx === 0) return;
+              pushUndo();
               [group.cities[idx - 1], group.cities[idx]] = [group.cities[idx], group.cities[idx - 1]];
               buildRouteEntities(group); buildRouteLabels(group);
               renderRouteGroupList();
@@ -6125,6 +6144,7 @@
             downBtn.disabled = idx === group.cities.length - 1;
             downBtn.addEventListener("click", () => {
               if (idx >= group.cities.length - 1) return;
+              pushUndo();
               [group.cities[idx], group.cities[idx + 1]] = [group.cities[idx + 1], group.cities[idx]];
               buildRouteEntities(group); buildRouteLabels(group);
               renderRouteGroupList();
@@ -6133,6 +6153,7 @@
             const removeBtn = document.createElement("button");
             removeBtn.className = "route-city-remove"; removeBtn.textContent = "×"; removeBtn.title = "Remove";
             removeBtn.addEventListener("click", () => {
+              pushUndo();
               group.cities.splice(idx, 1);
               buildRouteEntities(group); buildRouteLabels(group);
               renderRouteGroupList();
@@ -7359,6 +7380,25 @@
           nextAnnotationId,
         };
       }
+
+      // ── Undo stack ───────────────────────────────────────────────────────────
+      const _undoStack = [];
+      function pushUndo() {
+        _undoStack.push(JSON.stringify(buildProjectJson()));
+        if (_undoStack.length > 50) _undoStack.shift();
+      }
+      async function popUndo() {
+        if (!_undoStack.length) return;
+        await loadProject(JSON.parse(_undoStack.pop()));
+        scheduleAutosave();
+      }
+      document.addEventListener('keydown', e => {
+        if (!(e.metaKey || e.ctrlKey) || e.key !== 'z' || e.shiftKey) return;
+        const tag = document.activeElement?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        e.preventDefault();
+        popUndo();
+      });
 
       // ── Autosave to localStorage ─────────────────────────────────────────────
       let _autosaveTimer = null;
