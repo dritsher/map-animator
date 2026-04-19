@@ -6203,12 +6203,20 @@
           if (!res.ok) { statusEl.textContent = data.error || "Query failed"; return; }
           if (!data.cities?.length) { statusEl.textContent = "No cities found"; return; }
 
-          // Merge AI coordinates with local cities.json where available
+          // Merge AI coordinates with local cities.json where available.
+          // Normalize common country name variants before matching so "United States"
+          // matches "United States of America", etc. Fall back to AI coordinates
+          // (never a name-only match) so Cambridge MA doesn't resolve to Cambridge UK.
+          const normCountry = s => (s || '').toLowerCase()
+            .replace(/^united states$|^usa$|^u\.s\.a\.?$|^u\.s\.$/, 'united states of america')
+            .replace(/^uk$|^u\.k\.?$|^great britain$/, 'united kingdom')
+            .replace(/^republic of korea$|^korea, south$/, 'south korea')
+            .replace(/^russian federation$/, 'russia');
           const cities = data.cities.map(c => {
             const local = cityData.find(d =>
               d.name.toLowerCase() === c.name.toLowerCase() &&
-              d.country.toLowerCase() === c.country.toLowerCase()
-            ) || cityData.find(d => d.name.toLowerCase() === c.name.toLowerCase());
+              normCountry(d.country) === normCountry(c.country)
+            );
             return local ? { name: local.name, country: local.country, state: c.state || undefined, lat: local.lat, lon: local.lon }
                          : { name: c.name, country: c.country, state: c.state || undefined, lat: c.lat, lon: c.lon };
           });
