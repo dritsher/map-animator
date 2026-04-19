@@ -1319,6 +1319,7 @@
           });
           list.appendChild(li);
         });
+        scheduleAutosave();
       }
 
       // ── Animation ───────────────────────────────────────────────────────────
@@ -2794,6 +2795,7 @@
           card.appendChild(body);
           container.appendChild(card);
         });
+        scheduleAutosave();
       }
 
       // ── Event Listeners ─────────────────────────────────────────────────────
@@ -4459,6 +4461,7 @@
           });
           span.appendChild(sel);
         });
+        scheduleAutosave();
       }
 
       let cityStyleClipboard = null;
@@ -4935,6 +4938,7 @@
           li.appendChild(copyStyleBtn);
           ul.appendChild(li);
         });
+        scheduleAutosave();
       }
 
       document.getElementById("applyStyleToAllBtn").addEventListener("click", applyStyleToAll);
@@ -6141,6 +6145,7 @@
           card.append(header, styleRow, densityRow, shapeRow, widthRow, eleRow, startRow, endRow, cityLsToggle, cityLsPanel, glToggle, glPanel, cityAddRow, wpRow, importRow, citiesToggle, cityUl);
           container.appendChild(card);
         }
+        scheduleAutosave();
       }
 
       // ── City Route AI Query ──────────────────────────────────────────────────
@@ -7355,6 +7360,33 @@
         };
       }
 
+      // ── Autosave to localStorage ─────────────────────────────────────────────
+      let _autosaveTimer = null;
+      function scheduleAutosave() {
+        clearTimeout(_autosaveTimer);
+        _autosaveTimer = setTimeout(() => {
+          try {
+            localStorage.setItem('map-animator-autosave', JSON.stringify(buildProjectJson()));
+          } catch (e) {
+            console.warn('Autosave failed:', e);
+          }
+        }, 1500);
+      }
+
+      async function restoreAutosave() {
+        const raw = localStorage.getItem('map-animator-autosave');
+        if (!raw) return;
+        try {
+          const project = JSON.parse(raw);
+          if (confirm('Restore your previous session?')) {
+            await loadProject(project);
+          }
+        } catch (e) {
+          console.warn('Autosave restore failed:', e);
+          localStorage.removeItem('map-animator-autosave');
+        }
+      }
+
       async function saveProject() {
         const project = buildProjectJson();
         const defaultName = 'map-animator-project';
@@ -7690,6 +7722,7 @@
       });
       document.getElementById('resetProjectBtn').addEventListener('click', () => {
         if (!confirm('Reset to a blank map? All unsaved changes will be lost.')) return;
+        localStorage.removeItem('map-animator-autosave');
         loadProject({
           version: 1, totalDuration: 10, playbackT: 0,
           currentBasemap: 'eox-s2', basemapShowLabels: true, basemapMaxLevelOverride: null,
@@ -7714,6 +7747,7 @@
         reader.onload = (ev) => {
           try {
             const project = JSON.parse(ev.target.result);
+            localStorage.removeItem('map-animator-autosave');
             loadProject(project);
           } catch (err) {
             setStatus('Failed to load project: invalid JSON.');
@@ -7973,7 +8007,7 @@
         setViewerResolution(w, h);
       })();
       setTimeOfDay(720);
-      loadRegionData();
+      loadRegionData().then(restoreAutosave);
       tlBuildLabels();
       tlInitEvents();
       tlRenderLoop();
