@@ -272,6 +272,9 @@
               style="width:auto;padding:2px 10px;font-size:11px;">Ask AI</button>
           </div>
           <div id="regionQueryStatus" style="font-size:10px;color:#888;margin-top:2px;display:none;"></div>
+          <div class="csv-import-btn-row" style="margin-top:4px;">
+            <button class="csv-import-link" id="csvImportGroupBtn">Import CSV…</button>
+          </div>
           <div id="groupList"></div>
           </div><!-- /section-body Region Groups -->
         </div>
@@ -284,12 +287,21 @@
             <button id="applyStyleToAllBtn" style="font-size:10px;padding:2px 6px;width:auto;margin:0;">Apply to all</button>
             <button id="clearClipboardBtn" style="font-size:10px;padding:2px 5px;width:auto;margin:0;color:#888;background:none;border:1px solid #555;">✕</button>
           </div>
+          <div id="cityBulkBar" style="display:flex;align-items:center;gap:4px;margin-bottom:4px;flex-wrap:wrap;">
+            <span style="font-size:10px;color:#aaa;white-space:nowrap;">All:</span>
+            <button id="allLabelsBtn" style="font-size:10px;padding:2px 6px;width:auto;margin:0;" title="Show labels on all cities">Labels</button>
+            <button id="allDotsBtn" style="font-size:10px;padding:2px 6px;width:auto;margin:0;" title="Show dots only on all cities">Dots</button>
+            <button id="pasteStyleToAllBtn" style="font-size:10px;padding:2px 6px;width:auto;margin:0;opacity:0.4;cursor:default;" title="Paste copied style to all cities" disabled>Paste style to all</button>
+          </div>
           <div id="citySearchRow">
             <input type="text" id="citySearch" list="cityDatalist"
               placeholder="Search city…" autocomplete="off" />
             <datalist id="cityDatalist"></datalist>
             <button id="addCityBtn">+</button>
             <div id="geocodeResults"></div>
+          </div>
+          <div class="csv-import-btn-row">
+            <button class="csv-import-link" id="csvImportCitiesBtn">Import CSV…</button>
           </div>
           <ul id="cityList"></ul>
           </div><!-- /section-body Cities -->
@@ -310,6 +322,9 @@
             <button id="cityRouteQueryBtn" style="width:auto;padding:2px 10px;font-size:11px;">Ask AI</button>
           </div>
           <div id="cityRouteQueryStatus" style="font-size:10px;color:#888;margin-top:2px;display:none;"></div>
+          <div class="csv-import-btn-row" style="margin-top:4px;">
+            <button class="csv-import-link" id="csvImportRouteBtn">Import CSV…</button>
+          </div>
           <div id="routeGroupList"></div>
           </div><!-- /section-body City Routes -->
         </div>
@@ -544,6 +559,45 @@
           <button id="modalCancelBtn">Cancel</button>
           <button id="modalConfirmBtn" class="primary">Save</button>
         </div>
+      </div>
+    </div>
+
+    <!-- CSV Import Modal -->
+    <input type="file" id="csvFileInput" accept=".csv,text/csv" style="display:none;">
+    <div id="csvImportOverlay">
+      <div id="csvImportBox">
+
+        <!-- Step 1: Column mapper -->
+        <div id="csvStep1">
+          <div class="csv-title">Import CSV</div>
+          <div id="csvStep1Body"></div>
+          <div class="csv-actions">
+            <button class="csv-cancel-btn" id="csvCancelBtn1">Cancel</button>
+            <button class="primary" id="csvNextBtn">Next →</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Geocoding progress -->
+        <div id="csvStep2" style="display:none">
+          <div class="csv-title">Geocoding places…</div>
+          <div id="csvProgressLabel" style="font-size:12px;color:#555;margin:6px 0;"></div>
+          <progress id="csvProgressBar" value="0" max="100"></progress>
+          <div class="csv-actions" style="margin-top:8px;">
+            <button class="csv-cancel-btn" id="csvCancelGeocodeBtn">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Disambiguation -->
+        <div id="csvStep3" style="display:none">
+          <div class="csv-title">Clarify ambiguous places</div>
+          <div id="csvDisambigSummary" style="font-size:11px;color:#666;margin-bottom:8px;"></div>
+          <div id="csvDisambigList"></div>
+          <div class="csv-actions">
+            <button class="csv-cancel-btn" id="csvBackBtn">← Back</button>
+            <button class="primary" id="csvDoImportBtn">Import</button>
+          </div>
+        </div>
+
       </div>
     </div>
 

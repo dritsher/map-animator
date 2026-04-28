@@ -28,7 +28,17 @@ function getRegionData() {
 // Download with: node scripts/download-geonames.js
 
 const GEONAMES_PATH = path.join(__dirname, "../server/data/cities500.txt");
-let geoPlaces = null; // flat array sorted by lat, each: [lat, lon, name, country, featureCode, population]
+let geoPlaces    = null; // flat array sorted by lat, each: [lat, lon, name, country, featureCode, population, admin1]
+let geoPlacesByName = null; // Map: lowercase name → place[]
+
+// GeoNames admin1 codes for US states match postal abbreviations (e.g. "CO" for Colorado).
+// For other countries admin1 codes are country-specific.
+const US_STATE_ABBR = new Set([
+  "AL","AK","AZ","AR","CA","CO","CT","DE","DC","FL","GA","HI","ID","IL","IN",
+  "IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH",
+  "NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT",
+  "VT","VA","WA","WV","WI","WY",
+]);
 
 function loadGeoNames() {
   if (geoPlaces || !fs.existsSync(GEONAMES_PATH)) return;
@@ -40,12 +50,21 @@ function loadGeoNames() {
     const lat = parseFloat(f[4]);
     const lon = parseFloat(f[5]);
     if (isNaN(lat) || isNaN(lon)) continue;
-    places.push([lat, lon, f[1], f[8], f[7], parseInt(f[14], 10) || 0]);
-    // indices:    0    1    2    3     4     5
-    // fields:   lat  lon name ctry fcode  pop
+    places.push([lat, lon, f[1], f[8], f[7], parseInt(f[14], 10) || 0, f[10] || ""]);
+    // indices:    0    1    2    3     4     5                            6
+    // fields:   lat  lon name ctry fcode  pop                          admin1
   }
   places.sort((a, b) => a[0] - b[0]); // sort by lat for binary search
   geoPlaces = places;
+
+  // Build name index for forward geocoding
+  geoPlacesByName = new Map();
+  for (const p of places) {
+    const key = p[2].toLowerCase();
+    if (!geoPlacesByName.has(key)) geoPlacesByName.set(key, []);
+    geoPlacesByName.get(key).push(p);
+  }
+
   console.log(`GeoNames: loaded ${geoPlaces.length.toLocaleString()} places`);
 }
 
@@ -1038,6 +1057,59 @@ router.get("/api/export/download/:sessionId", (req, res) => {
       sessions.delete(req.params.sessionId);
     }
   });
+});
+
+// ── /api/forward-geocode ─────────────────────────────────────────────────────
+// Name → lat/lon using the local GeoNames database. Used by CSV import.
+// Query format: "City" or "City, ST" (US state abbr) or "City, CountryCode".
+
+router.get("/api/forward-geocode", (req, res) => {
+  loadGeoNames();
+  if (!geoPlaces) return res.status(503).json({ error: "GeoNames not loaded" });
+
+  const q = (req.query.q || "").trim();
+  if (!q) return res.status(400).json({ error: "Missing query" });
+
+  const parts = q.split(/,\s*/);
+  const cityName   = parts[0].trim().toLowerCase();
+  const contextRaw = (parts[1] || "").trim().toUpperCase();
+
+  // Exact name match first, then prefix fallback
+  let candidates = geoPlacesByName.get(cityName) || [];
+  if (!candidates.length) {
+    // Prefix search (e.g. "St. Louis" vs "St Louis")
+    for (const [k, v] of geoPlacesByName) {
+      if (k.startsWith(cityName) && cityName.length >= 3) candidates = candidates.concat(v);
+      if (candidates.length > 200) break;
+    }
+  }
+
+  // Filter by context (US state abbr or 2-letter country code)
+  if (contextRaw && candidates.length > 1) {
+    let narrowed;
+    if (US_STATE_ABBR.has(contextRaw)) {
+      // Match US state via admin1 code (GeoNames uses postal abbr for US)
+      narrowed = candidates.filter(p => p[3] === "US" && p[6].toUpperCase() === contextRaw);
+    } else {
+      narrowed = candidates.filter(p => p[3].toUpperCase() === contextRaw);
+    }
+    if (narrowed.length) candidates = narrowed;
+  }
+
+  // Sort by population desc, return top 5
+  candidates = candidates.slice().sort((a, b) => b[5] - a[5]).slice(0, 5);
+
+  const features = candidates.map(p => {
+    const statePart = (p[3] === "US" && p[6]) ? `, ${p[6]}` : "";
+    return {
+      place_name: `${p[2]}${statePart}, ${p[3]}`,
+      center: [p[1], p[0]],
+      relevance: 1.0,
+      text: p[2],
+    };
+  });
+
+  res.json({ features });
 });
 
 // ── /api/reverse-geocode ─────────────────────────────────────────────────────

@@ -4509,10 +4509,20 @@
         'bgPadX','bgPadY','dotOpacity','labelOpacity',
       ];
 
+      function _updatePasteStyleToAllBtn() {
+        const btn = document.getElementById('pasteStyleToAllBtn');
+        if (!btn) return;
+        const has = !!cityStyleClipboard;
+        btn.disabled = !has;
+        btn.style.opacity = has ? '1' : '0.4';
+        btn.style.cursor = has ? 'pointer' : 'default';
+      }
+
       function copyCityStyle(marker) {
         cityStyleClipboard = {};
         CITY_STYLE_FIELDS.forEach(k => { cityStyleClipboard[k] = marker[k]; });
         document.getElementById('cityClipboardBar').style.display = 'flex';
+        _updatePasteStyleToAllBtn();
         renderCityList();
       }
 
@@ -4538,6 +4548,19 @@
       function clearStyleClipboard() {
         cityStyleClipboard = null;
         document.getElementById('cityClipboardBar').style.display = 'none';
+        _updatePasteStyleToAllBtn();
+        renderCityList();
+      }
+
+      function setAllCitiesLabel(show) {
+        if (!cityMarkers.length) return;
+        pushUndo();
+        cityMarkers.forEach(m => {
+          m.showLabel = show;
+          if (m.entity && m.entity.label) {
+            m.entity.label.show = show && (m.labelOpacity ?? 1) > 0;
+          }
+        });
         renderCityList();
       }
 
@@ -4981,6 +5004,9 @@
 
       document.getElementById("applyStyleToAllBtn").addEventListener("click", applyStyleToAll);
       document.getElementById("clearClipboardBtn").addEventListener("click", clearStyleClipboard);
+      document.getElementById("allLabelsBtn").addEventListener("click", () => setAllCitiesLabel(true));
+      document.getElementById("allDotsBtn").addEventListener("click", () => setAllCitiesLabel(false));
+      document.getElementById("pasteStyleToAllBtn").addEventListener("click", () => { if (cityStyleClipboard) applyStyleToAll(); });
 
       document.getElementById("addCityBtn").addEventListener("click", () => {
         const val = document.getElementById("citySearch").value.trim();
@@ -6606,6 +6632,559 @@
         document.getElementById('addImageOverlayBtn').style.display = '';
       });
 
+      // ── CSV Import ───────────────────────────────────────────────────────────
+
+      let _csvAllRows = [];   // every parsed row (including potential header)
+      let _csvRows    = [];   // data rows only
+      let _csvHeaders = [];
+      let _csvHasHeader = true;
+      let _csvDest    = 'cities'; // 'cities' | 'route' | 'group'
+      let _csvResults = [];   // { original, status:'ok'|'ambiguous'|'unresolved', chosen, candidates }
+      let _csvCancelGeocode = false;
+
+      function _csvParseText(text) {
+        // Simple RFC-4180-ish CSV parser
+        const rows = [];
+        let i = 0;
+        while (i < text.length) {
+          const row = [];
+          while (i < text.length && text[i] !== '\n' && text[i] !== '\r') {
+            if (text[i] === '"') {
+              i++; let f = '';
+              while (i < text.length) {
+                if (text[i] === '"' && text[i+1] === '"') { f += '"'; i += 2; }
+                else if (text[i] === '"') { i++; break; }
+                else f += text[i++];
+              }
+              row.push(f);
+            } else {
+              let f = '';
+              while (i < text.length && text[i] !== ',' && text[i] !== '\n' && text[i] !== '\r') f += text[i++];
+              row.push(f.trim());
+            }
+            if (i < text.length && text[i] === ',') i++;
+          }
+          // skip \r\n
+          while (i < text.length && (text[i] === '\n' || text[i] === '\r')) i++;
+          if (row.some(f => f !== '')) rows.push(row);
+        }
+        return rows;
+      }
+
+      function _csvDetectCols(headers) {
+        const h = headers.map(s => s.toLowerCase().trim());
+        const nameIdx = h.findIndex(s => /^(name|city|place|location|label|title|stop|address)$/.test(s));
+        const latIdx  = h.findIndex(s => /^(lat|latitude|y)$/.test(s));
+        const lonIdx  = h.findIndex(s => /^(lon|lng|long|longitude|x)$/.test(s));
+        return { nameIdx: nameIdx === -1 ? 0 : nameIdx, latIdx, lonIdx };
+      }
+
+      function _csvShowStep(n) {
+        [1,2,3].forEach(i => {
+          document.getElementById('csvStep' + i).style.display = i === n ? '' : 'none';
+        });
+      }
+
+      function _csvOpen(defaultDest) {
+        _csvDest = defaultDest;
+        document.getElementById('csvFileInput').value = '';
+        document.getElementById('csvFileInput').click();
+      }
+
+      function _csvClose() {
+        document.getElementById('csvImportOverlay').classList.remove('open');
+        _csvCancelGeocode = true;
+      }
+
+      function _csvApplyHeaderMode() {
+        if (_csvHasHeader) {
+          _csvHeaders = _csvAllRows[0] || [];
+          _csvRows    = _csvAllRows.slice(1);
+        } else {
+          const cols   = (_csvAllRows[0] || []).length;
+          _csvHeaders  = Array.from({ length: cols }, (_, i) => `Column ${i + 1}`);
+          _csvRows     = _csvAllRows;
+        }
+      }
+
+      async function _csvOnFileChange(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const text = await file.text();
+        _csvAllRows = _csvParseText(text);
+        if (!_csvAllRows.length) { alert('CSV appears empty.'); return; }
+        _csvHasHeader = true; // reset to default on each new file
+        _csvApplyHeaderMode();
+        _csvShowStep(1);
+        _csvRenderStep1();
+        document.getElementById('csvImportOverlay').classList.add('open');
+      }
+
+      function _csvRenderStep1() {
+        const { nameIdx, latIdx, lonIdx } = _csvDetectCols(_csvHeaders);
+        const hasCoords = latIdx !== -1 && lonIdx !== -1;
+        const dest = _csvDest;
+        const hasHeader = _csvHasHeader;
+
+        const colOptions = _csvHeaders.map((h, i) =>
+          `<option value="${i}" ${i === nameIdx ? 'selected' : ''}>${h || '(column ' + (i+1) + ')'}</option>`
+        ).join('');
+        const colOptionsLat = _csvHeaders.map((h, i) =>
+          `<option value="${i}" ${i === latIdx ? 'selected' : ''}>${h || '(column ' + (i+1) + ')'}</option>`
+        ).join('');
+        const colOptionsLon = _csvHeaders.map((h, i) =>
+          `<option value="${i}" ${i === lonIdx ? 'selected' : ''}>${h || '(column ' + (i+1) + ')'}</option>`
+        ).join('');
+
+        const existingGroups = regionGroups.map(g =>
+          `<option value="${g.id}">${g.name}</option>`
+        ).join('');
+        const existingRoutes = cityRouteGroups.map(g =>
+          `<option value="${g.id}">${g.name}</option>`
+        ).join('');
+
+        const destGroupExtra = dest === 'group' ? `
+          <div class="csv-section-label">Region Group</div>
+          <div class="csv-field-row"><label>Group name</label>
+            <input type="text" id="csvGroupName" value="Imported Group" style="flex:1;" /></div>
+          ${regionGroups.length ? `<div class="csv-field-row"><label>Or add to</label>
+            <select id="csvGroupExisting"><option value="">— create new —</option>${existingGroups}</select></div>` : ''}
+        ` : '';
+
+        const destRouteExtra = dest === 'route' ? `
+          <div class="csv-section-label">Route</div>
+          <div class="csv-field-row"><label>Route name</label>
+            <input type="text" id="csvRouteName" value="Imported Route" style="flex:1;" /></div>
+          ${cityRouteGroups.length ? `<div class="csv-field-row"><label>Or add to</label>
+            <select id="csvRouteExisting"><option value="">— create new —</option>${existingRoutes}</select></div>` : ''}
+        ` : '';
+
+        const coordSection = (dest === 'cities' || dest === 'route') ? `
+          <div class="csv-section-label">Coordinates</div>
+          <div class="csv-field-row"><label>Latitude col</label>
+            <select id="csvLatCol"><option value="">— geocode names —</option>${colOptionsLat}</select></div>
+          <div class="csv-field-row"><label>Longitude col</label>
+            <select id="csvLonCol"><option value="">— geocode names —</option>${colOptionsLon}</select></div>
+          ${!hasCoords ? '<div class="csv-note" style="margin-top:2px;">No lat/lon columns detected — place names will be geocoded automatically.</div>' : ''}
+        ` : '';
+
+        const previewRows = _csvRows.slice(0, 4).map(r =>
+          '<tr>' + _csvHeaders.map((_, i) => `<td title="${(r[i]||'').replace(/"/g,'&quot;')}">${r[i] || ''}</td>`).join('') + '</tr>'
+        ).join('');
+
+        document.getElementById('csvStep1Body').innerHTML = `
+          <div class="csv-field-row" style="margin-bottom:6px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;width:auto;">
+              <input type="checkbox" id="csvHasHeaderChk" ${hasHeader ? 'checked' : ''} style="margin:0;" />
+              First row is a header
+            </label>
+          </div>
+          <div class="csv-section-label">Destination</div>
+          <div class="csv-field-row"><label>Import as</label>
+            <select id="csvDestSel">
+              <option value="cities" ${dest==='cities'?'selected':''}>Cities (Stops)</option>
+              <option value="route"  ${dest==='route' ?'selected':''}>Routes & Places</option>
+              <option value="group"  ${dest==='group' ?'selected':''}>Region Group</option>
+            </select></div>
+          <div id="csvDestExtras">
+            ${destGroupExtra}${destRouteExtra}
+          </div>
+          <div class="csv-section-label">Columns</div>
+          <div class="csv-field-row"><label>Name col</label>
+            <select id="csvNameCol">${colOptions}</select></div>
+          ${coordSection}
+          <div class="csv-section-label">Preview <span style="font-weight:400;color:#aaa;">(first ${Math.min(4,_csvRows.length)} of ${_csvRows.length} rows)</span></div>
+          <div class="csv-preview-wrap">
+            <table class="csv-preview-table">
+              <thead><tr>${_csvHeaders.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+              <tbody>${previewRows}</tbody>
+            </table>
+          </div>
+        `;
+
+        // Header toggle
+        document.getElementById('csvHasHeaderChk').addEventListener('change', e => {
+          _csvHasHeader = e.target.checked;
+          _csvApplyHeaderMode();
+          _csvRenderStep1();
+        });
+
+        // Re-render extras when dest changes
+        document.getElementById('csvDestSel').addEventListener('change', e => {
+          _csvDest = e.target.value;
+          _csvRenderStep1();
+        });
+
+        // Pre-select lat/lon if found
+        if (latIdx !== -1) document.getElementById('csvLatCol').value = latIdx;
+        if (lonIdx !== -1) document.getElementById('csvLonCol').value = lonIdx;
+      }
+
+      function _csvGetChosenCandidate(rowIdx) {
+        const radios = document.querySelectorAll(`input[name="csvDisambig_${rowIdx}"]`);
+        for (const r of radios) if (r.checked) return r.value; // 'skip', 'manual', or candidate index
+        return 'skip';
+      }
+
+      function _csvResolveManual(rowIdx, originalName) {
+        const lat = parseFloat(document.getElementById(`csv_lat_${rowIdx}`)?.value);
+        const lon = parseFloat(document.getElementById(`csv_lon_${rowIdx}`)?.value);
+        if (isNaN(lat) || isNaN(lon)) return null;
+        return { name: originalName.split(',')[0].trim(), country: '', lat, lon };
+      }
+
+      async function _csvNext() {
+        const dest     = document.getElementById('csvDestSel').value;
+        const nameIdx  = parseInt(document.getElementById('csvNameCol').value);
+        const latColEl = document.getElementById('csvLatCol');
+        const lonColEl = document.getElementById('csvLonCol');
+        const latIdx   = latColEl ? (latColEl.value !== '' ? parseInt(latColEl.value) : -1) : -1;
+        const lonIdx   = lonColEl ? (lonColEl.value !== '' ? parseInt(lonColEl.value) : -1) : -1;
+        const hasCoords = latIdx !== -1 && lonIdx !== -1;
+        _csvDest = dest;
+
+        if (dest === 'group') {
+          // Region lookup — instant, no geocoding needed
+          _csvLookupRegions(nameIdx);
+          const ambig = _csvResults.filter(r => r.status !== 'ok');
+          if (ambig.length) { _csvRenderStep3(); _csvShowStep(3); }
+          else _csvExecuteImport();
+        } else if (hasCoords) {
+          // Direct coordinate import — no geocoding
+          _csvResults = _csvRows.map(row => ({
+            original: row[nameIdx] || '',
+            status: 'ok',
+            chosen: {
+              name: row[nameIdx] || 'Place',
+              lat: parseFloat(row[latIdx]),
+              lon: parseFloat(row[lonIdx]),
+              country: '',
+            },
+            candidates: [],
+          })).filter(r => !isNaN(r.chosen.lat) && !isNaN(r.chosen.lon));
+          _csvExecuteImport();
+        } else {
+          // Geocode all rows
+          _csvShowStep(2);
+          _csvCancelGeocode = false;
+          await _csvGeocodeBatch(nameIdx);
+          if (_csvCancelGeocode) return;
+          const ambig = _csvResults.filter(r => r.status !== 'ok');
+          if (ambig.length) { _csvRenderStep3(); _csvShowStep(3); }
+          else _csvExecuteImport();
+        }
+      }
+
+      function _csvLookupRegions(nameIdx) {
+        _csvResults = _csvRows.map(row => {
+          const name = (row[nameIdx] || '').trim();
+          const candidates = _csvFindRegionCandidates(name);
+          if (candidates.length === 1) {
+            return { original: name, status: 'ok', chosen: candidates[0], candidates };
+          } else if (candidates.length > 1) {
+            return { original: name, status: 'ambiguous', chosen: candidates[0], candidates };
+          } else {
+            return { original: name, status: 'unresolved', chosen: null, candidates: [] };
+          }
+        });
+      }
+
+      function _csvFindRegionCandidates(name) {
+        if (!name) return [];
+        const lower = name.toLowerCase();
+        // Exact case-insensitive match
+        for (const [key] of regionLookup) {
+          if (key.toLowerCase() === lower) return [{ key, label: key }];
+        }
+        // Partial: name appears at the start of a key (before the parenthetical country/state)
+        const partials = [];
+        for (const [key] of regionLookup) {
+          const base = key.split(' (')[0].toLowerCase();
+          if (base === lower) partials.push({ key, label: key });
+        }
+        if (partials.length) return partials;
+        // Fuzzy: key starts with name (catches "United States" → "United States of America")
+        const fuzzy = [];
+        for (const [key] of regionLookup) {
+          if (key.toLowerCase().startsWith(lower) || lower.startsWith(key.split(' (')[0].toLowerCase())) {
+            fuzzy.push({ key, label: key });
+          }
+        }
+        return fuzzy.slice(0, 5);
+      }
+
+      async function _csvFetchGeocode(query) {
+        try {
+          const res = await fetch(`/api/forward-geocode?q=${encodeURIComponent(query)}`);
+          if (!res.ok) return [];
+          return (await res.json()).features || [];
+        } catch { return []; }
+      }
+
+      function _csvIsAmbiguous(features) {
+        if (!features.length) return true; // unresolved
+        if (features.length < 2) return false;
+        const top    = features[0];
+        const second = features[1];
+        // Only flag if the runner-up is competitive (within 30% of top) AND in a different country
+        if (second.relevance < top.relevance * 0.7) return false;
+        const tail = f => (f.place_name || '').split(',').pop().trim().toLowerCase();
+        return tail(top) !== tail(second);
+      }
+
+      function _csvFeatureLabel(f) {
+        return f.place_name || f.text || '';
+      }
+
+      function _csvFeatureToChosen(f) {
+        const [lon, lat] = f.center || f.geometry?.coordinates || [];
+        const parts = (f.place_name || f.text || '').split(',');
+        return {
+          name: parts[0].trim(),
+          country: parts[parts.length - 1].trim(),
+          lat, lon,
+        };
+      }
+
+      async function _csvGeocodeBatch(nameIdx) {
+        const total = _csvRows.length;
+        _csvResults = [];
+        const progLabel = document.getElementById('csvProgressLabel');
+        const progBar   = document.getElementById('csvProgressBar');
+
+        for (let i = 0; i < total; i++) {
+          if (_csvCancelGeocode) return;
+          const name = (_csvRows[i][nameIdx] || '').trim();
+          progLabel.textContent = `Geocoding ${i + 1} of ${total}: ${name}`;
+          progBar.value = Math.round((i / total) * 100);
+
+          const features = await _csvFetchGeocode(name);
+          const ambiguous = _csvIsAmbiguous(features);
+
+          _csvResults.push({
+            original: name,
+            status: !features.length ? 'unresolved' : ambiguous ? 'ambiguous' : 'ok',
+            chosen: features.length ? _csvFeatureToChosen(features[0]) : null,
+            candidates: features.slice(0, 4),
+          });
+
+          await new Promise(r => setTimeout(r, 80)); // small delay between requests
+        }
+        progBar.value = 100;
+      }
+
+      function _csvRenderStep3() {
+        const ambig = _csvResults.map((r, i) => ({ ...r, idx: i })).filter(r => r.status !== 'ok');
+        const okCount = _csvResults.filter(r => r.status === 'ok').length;
+
+        document.getElementById('csvDisambigSummary').textContent =
+          `${okCount} place${okCount !== 1 ? 's' : ''} resolved automatically. ` +
+          `${ambig.length} need${ambig.length !== 1 ? '' : 's'} clarification.`;
+
+        const list = document.getElementById('csvDisambigList');
+        list.innerHTML = '';
+
+        for (const r of ambig) {
+          const div = document.createElement('div');
+          div.className = 'csv-disambig-row';
+
+          const isRegion = _csvDest === 'group';
+          const candidates = isRegion
+            ? r.candidates.map((c, ci) => ({
+                value: ci,
+                label: c.label,
+                detail: '',
+              }))
+            : r.candidates.map((c, ci) => ({
+                value: ci,
+                label: _csvFeatureLabel(c),
+                detail: c.relevance != null ? `(relevance: ${c.relevance.toFixed(2)})` : '',
+              }));
+
+          const skipLabel = r.status === 'unresolved' ? 'Not found — skip' : 'Skip this row';
+          const geSearch = encodeURIComponent(r.original);
+
+          div.innerHTML = `<div class="csv-disambig-orig">${r.original}
+              <a href="https://www.google.com/maps/search/${geSearch}" target="_blank"
+                style="font-size:10px;color:#888;margin-left:8px;text-decoration:none;" title="Right-click the map → click coordinates to copy">🗺 Google Maps</a>
+            </div>` +
+            candidates.map((c, ci) => `
+              <div class="csv-disambig-cand">
+                <input type="radio" name="csvDisambig_${r.idx}" id="cdc_${r.idx}_${ci}" value="${ci}"
+                  ${ci === 0 && r.status === 'ambiguous' ? 'checked' : ''} />
+                <label for="cdc_${r.idx}_${ci}">${c.label}
+                  ${c.detail ? `<span class="csv-disambig-cand-detail">${c.detail}</span>` : ''}</label>
+              </div>`).join('') +
+            `<div class="csv-disambig-cand" style="align-items:center;gap:4px;flex-wrap:wrap;">
+              <input type="radio" name="csvDisambig_${r.idx}" id="cdc_${r.idx}_manual" value="manual" />
+              <label for="cdc_${r.idx}_manual" style="flex-shrink:0;">Enter coordinates:</label>
+              <input type="number" id="csv_lat_${r.idx}" placeholder="Lat (paste both)" step="any"
+                style="width:80px;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;" />
+              <input type="number" id="csv_lon_${r.idx}" placeholder="Lon" step="any"
+                style="width:80px;font-size:11px;padding:2px 4px;border:1px solid #ccc;border-radius:3px;" />
+            </div>
+            <div class="csv-disambig-cand">
+              <input type="radio" name="csvDisambig_${r.idx}" id="cdc_${r.idx}_skip" value="skip"
+                ${r.status === 'unresolved' ? 'checked' : ''} />
+              <label for="cdc_${r.idx}_skip" style="color:#999;">${skipLabel}</label>
+            </div>`;
+
+          list.appendChild(div);
+
+          // Auto-select "manual" radio when user focuses lat/lon
+          for (const field of ['lat', 'lon']) {
+            const input = document.getElementById(`csv_${field}_${r.idx}`);
+            if (input) input.addEventListener('focus', () => {
+              const radio = document.getElementById(`cdc_${r.idx}_manual`);
+              if (radio) radio.checked = true;
+            });
+          }
+
+          // Paste "lat, lon" from Google Maps into the lat field → fills both
+          const latInput = document.getElementById(`csv_lat_${r.idx}`);
+          if (latInput) latInput.addEventListener('paste', e => {
+            const text = (e.clipboardData || window.clipboardData).getData('text').trim();
+            const m = text.match(/^(-?\d+\.?\d*)[,\s]+(-?\d+\.?\d*)$/);
+            if (m) {
+              e.preventDefault();
+              document.getElementById(`csv_lat_${r.idx}`).value = m[1];
+              document.getElementById(`csv_lon_${r.idx}`).value = m[2];
+              document.getElementById(`cdc_${r.idx}_manual`).checked = true;
+            }
+          });
+        }
+
+        // Update import button label
+        document.getElementById('csvDoImportBtn').textContent = `Import ${_csvResults.length} items`;
+      }
+
+      function _csvExecuteImport() {
+        pushUndo(); // capture pre-import state as single undo point
+        _suppressPushUndo = true;
+        try { _csvDoImport(); } finally { _suppressPushUndo = false; }
+      }
+
+      function _csvDoImport() {
+
+        if (_csvDest === 'group') {
+          // Resolve user choices for ambiguous rows
+          const ambig = _csvResults.map((r, i) => ({ ...r, idx: i })).filter(r => r.status !== 'ok');
+          for (const r of ambig) {
+            const choice = _csvGetChosenCandidate(r.idx);
+            if (choice === 'skip')        _csvResults[r.idx].chosen = null;
+            else if (choice === 'manual') _csvResults[r.idx].chosen = _csvResolveManual(r.idx, r.original);
+            else                          _csvResults[r.idx].chosen = r.candidates[parseInt(choice)];
+          }
+
+          // Create or find group
+          const nameInput  = document.getElementById('csvGroupName');
+          const existingEl = document.getElementById('csvGroupExisting');
+          const existingId = existingEl ? parseInt(existingEl.value) : NaN;
+          let group;
+          if (!isNaN(existingId) && existingId) {
+            group = regionGroups.find(g => g.id === existingId);
+          }
+          if (!group) {
+            createGroup((nameInput?.value.trim()) || 'Imported Group');
+            group = regionGroups[regionGroups.length - 1];
+          }
+
+          let added = 0;
+          for (const r of _csvResults) {
+            if (!r.chosen) continue;
+            addMemberToGroup(group.id, r.chosen.key);
+            added++;
+          }
+          setStatus(`Imported ${added} region${added !== 1 ? 's' : ''} into "${group.name}".`);
+
+        } else if (_csvDest === 'route') {
+          const ambig = _csvResults.map((r, i) => ({ ...r, idx: i })).filter(r => r.status !== 'ok');
+          for (const r of ambig) {
+            const choice = _csvGetChosenCandidate(r.idx);
+            if (choice === 'skip')        _csvResults[r.idx].chosen = null;
+            else if (choice === 'manual') _csvResults[r.idx].chosen = _csvResolveManual(r.idx, r.original);
+            else                          _csvResults[r.idx].chosen = _csvFeatureToChosen(r.candidates[parseInt(choice)]);
+          }
+
+          const cities = _csvResults.filter(r => r.chosen).map(r => ({
+            name: r.chosen.name, country: r.chosen.country || '',
+            lat: r.chosen.lat, lon: r.chosen.lon,
+          }));
+
+          const nameInput  = document.getElementById('csvRouteName');
+          const existingEl = document.getElementById('csvRouteExisting');
+          const existingId = existingEl ? parseInt(existingEl.value) : NaN;
+          let rGroup;
+          if (!isNaN(existingId) && existingId) {
+            rGroup = cityRouteGroups.find(g => g.id === existingId);
+            if (rGroup) {
+              for (const c of cities) rGroup.cities.push(c);
+              buildRouteEntities(rGroup);
+              buildRouteCityMarkers(rGroup);
+              renderRouteGroupList();
+            }
+          }
+          if (!rGroup) {
+            rGroup = createCityRouteGroup((nameInput?.value.trim()) || 'Imported Route', cities);
+          }
+          setStatus(`Imported ${cities.length} stop${cities.length !== 1 ? 's' : ''} into "${rGroup.name}".`);
+
+        } else {
+          // Cities
+          const ambig = _csvResults.map((r, i) => ({ ...r, idx: i })).filter(r => r.status !== 'ok');
+          for (const r of ambig) {
+            const choice = _csvGetChosenCandidate(r.idx);
+            if (choice === 'skip')        _csvResults[r.idx].chosen = null;
+            else if (choice === 'manual') _csvResults[r.idx].chosen = _csvResolveManual(r.idx, r.original);
+            else                          _csvResults[r.idx].chosen = _csvFeatureToChosen(r.candidates[parseInt(choice)]);
+          }
+
+          // Batch-add without re-rendering after every city (avoids 398× DOM rebuild)
+          let added = 0;
+          for (const r of _csvResults) {
+            const found = r.chosen;
+            if (!found) continue;
+            if (cityMarkers.some(m => m.name === found.name && m.lat === found.lat)) continue;
+            const marker = {
+              id: nextCityId++,
+              name: found.name, country: found.country || '',
+              lat: found.lat, lon: found.lon,
+              color: defaultCityColor, labelColor: defaultCityColor, dotSize: defaultCityDotSize,
+              showLabel: true, fontSize: 13, fontWeight: 'normal', fontStyle: 'normal', fontFamily: 'Arial',
+              offsetX: 0, offsetY: 0, outlineWidth: 2,
+              dotOpacity: 1.0, labelOpacity: 1.0,
+              showBackground: false, backgroundColor: '#000000', backgroundOpacity: 0.5,
+              bgPadX: 5, bgPadY: 3,
+            };
+            marker.entity = makeCityEntity(marker);
+            cityMarkers.push(marker);
+            tracks['city_'+marker.id] = { id:'city_'+marker.id, label:marker.name, category:'city',
+              color: defaultCityColor, h:22, keyframes:[], collapsed:true };
+            selectedTrackIds.add('city_'+marker.id);
+            added++;
+          }
+          if (added) { tlBuildLabels(); renderCityList(); }
+          setStatus(`Imported ${added} cit${added !== 1 ? 'ies' : 'y'}.`);
+        }
+
+        _csvClose();
+      }
+
+      // Wiring
+      document.getElementById('csvFileInput').addEventListener('change', _csvOnFileChange);
+      document.getElementById('csvImportCitiesBtn').addEventListener('click', () => _csvOpen('cities'));
+      document.getElementById('csvImportGroupBtn').addEventListener('click',  () => _csvOpen('group'));
+      document.getElementById('csvImportRouteBtn').addEventListener('click',  () => _csvOpen('route'));
+      document.getElementById('csvCancelBtn1').addEventListener('click', _csvClose);
+      document.getElementById('csvCancelGeocodeBtn').addEventListener('click', () => { _csvCancelGeocode = true; _csvClose(); });
+      document.getElementById('csvBackBtn').addEventListener('click', () => { _csvShowStep(1); _csvRenderStep1(); });
+      document.getElementById('csvNextBtn').addEventListener('click', _csvNext);
+      document.getElementById('csvDoImportBtn').addEventListener('click', _csvExecuteImport);
+      // Close on overlay click
+      document.getElementById('csvImportOverlay').addEventListener('click', e => {
+        if (e.target === document.getElementById('csvImportOverlay')) _csvClose();
+      });
+
       document.getElementById('addKmlBtn').addEventListener('click', () => document.getElementById('kmlFileInput').click());
       document.getElementById('kmlFileInput').addEventListener('change', async e => {
         const file = e.target.files[0];
@@ -7421,7 +8000,9 @@
 
       // ── Undo stack ───────────────────────────────────────────────────────────
       const _undoStack = [];
+      let _suppressPushUndo = false;
       function pushUndo() {
+        if (_suppressPushUndo) return;
         _undoStack.push(JSON.stringify(buildProjectJson()));
         if (_undoStack.length > 50) _undoStack.shift();
       }
