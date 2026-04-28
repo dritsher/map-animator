@@ -442,6 +442,17 @@
               <option value="1080x1080">1080 × 1080 (1:1 Square)</option>
             </optgroup>
           </select>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
+            <label style="margin:0;flex-shrink:0;">Format</label>
+            <select id="imageFormatSelect" style="flex:1;">
+              <option value="image/png">PNG</option>
+              <option value="image/jpeg">JPG</option>
+              <option value="image/webp">WebP</option>
+            </select>
+          </div>
+          <button id="exportImageBtn">Export Image</button>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #e0e0e0;">
+            <div style="font-size:11px;font-weight:600;color:#666;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.04em;">Video</div>
           <label style="margin-bottom: 2px;">Frame rate</label>
           <select id="framerateSelect">
             <option value="24">24 fps</option>
@@ -449,6 +460,7 @@
             <option value="60">60 fps</option>
           </select>
           <button id="exportBtn">Export Frames</button>
+          </div><!-- /video section -->
           <div style="margin-top:8px;padding-top:8px;border-top:1px solid #e0e0e0;">
             <div style="font-size:11px;font-weight:600;color:#666;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.04em;">After Effects</div>
             <div style="font-size:11px;color:#888;margin-bottom:5px;line-height:1.4;">Exports a <code style="font-size:10px;background:#eee;padding:1px 3px;border-radius:2px;">.jsx</code> script — run it in AE via File → Scripts → Run Script File. Creates null layers at the screen positions of your cities and globe annotations, frame by frame.</div>

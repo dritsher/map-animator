@@ -1781,6 +1781,35 @@
         setStatus("Export complete.");
       }
 
+      // ── Single image export ─────────────────────────────────────────────────
+      async function exportImage() {
+        const format = document.getElementById("imageFormatSelect").value;
+        const ext    = format === "image/jpeg" ? "jpg" : format === "image/webp" ? "webp" : "png";
+        const [w, h] = document.getElementById("resolutionSelect").value.split("x").map(Number);
+        const btn    = document.getElementById("exportImageBtn");
+
+        btn.disabled = true;
+        setViewerResolution(w, h);
+        await new Promise(r => setTimeout(r, 150)); // allow resize repaint
+
+        await new Promise(r => viewer.scene.postRender.addEventListener(function once() {
+          viewer.scene.postRender.removeEventListener(once);
+          r();
+        }));
+
+        const quality = format === "image/jpeg" ? 0.92 : undefined;
+        const dataUrl = viewer.scene.canvas.toDataURL(format, quality);
+
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = `map.${ext}`;
+        a.click();
+
+        setViewerResolution(null);
+        btn.disabled = false;
+        setStatus(`Image exported (${w} × ${h} ${ext.toUpperCase()}).`);
+      }
+
       // ── After Effects null object export ────────────────────────────────────
       async function exportAENulls() {
         const hasTracks = Object.values(tracks).some(tr => tr.keyframes.length >= 2);
@@ -6628,6 +6657,7 @@
       });
 
       document.getElementById("exportBtn").addEventListener("click", exportFrames);
+      document.getElementById("exportImageBtn").addEventListener("click", exportImage);
       document.getElementById("exportAeNullsBtn").addEventListener("click", exportAENulls);
 
       // WYSIWYG preview: resize the viewport immediately when resolution changes
