@@ -1935,17 +1935,35 @@
       // Apply an explicit export resolution to the viewport so the user sees
       // exactly what will be captured (WYSIWYG).  Pass null to restore the
       // default grid-fill behaviour.
+      // We size #cesiumContainer (not #cesiumPane) so that #cesiumPane can act
+      // as a scroll container when the resolution exceeds the screen size.
       function setViewerResolution(w, h) {
-        const pane = document.getElementById("cesiumPane");
+        const pane      = document.getElementById("cesiumPane");
+        const container = document.getElementById("cesiumContainer");
+        const overlay   = document.getElementById("cesiumFrameOverlay");
         if (w === null) {
-          pane.style.width  = "";
-          pane.style.height = "";
+          // Restore natural fill: clear inline overrides, CSS min-width/height:100% takes over
+          container.style.width     = "";
+          container.style.height    = "";
+          container.style.minWidth  = "";
+          container.style.minHeight = "";
+          container.classList.remove("preview-sized");
+          if (overlay) overlay.style.display = "none";
           const badge = document.getElementById("resPreviewBadge");
           if (badge) badge.remove();
         } else {
-          pane.style.width  = w + "px";
-          pane.style.height = h + "px";
-          // Show a small badge so the user knows they're in preview mode
+          // Pin container to exactly the target resolution so Cesium's canvas
+          // matches the export dimensions. Suppress min-width/height so the
+          // container can be smaller than the pane (dark pane bg visible
+          // outside the frame) or larger than the pane (pane scrolls).
+          container.style.minWidth  = "0";
+          container.style.minHeight = "0";
+          container.style.width     = w + "px";
+          container.style.height    = h + "px";
+          container.classList.add("preview-sized");
+          if (overlay) overlay.style.display = "none"; // container edge IS the frame
+          // Badge stays on pane (position:absolute, non-scrolling) so it's
+          // always visible even when the canvas is larger than the screen.
           let badge = document.getElementById("resPreviewBadge");
           if (!badge) {
             badge = document.createElement("div");
@@ -7313,6 +7331,7 @@
       const SCENE_SEG_COLORS = { '3d': '#1a3a5c', 'columbus': '#3a1a5c', '2d': '#1a5c3a' };
 
       let tlOpen        = true;
+      let tlOpenHeight  = 200;  // saved height when timeline is open, px
       let tlZoom        = 80;   // px/sec
       let tlScroll      = 0;    // px from timeline start
       let tlDrag        = null; // { type, trackId?, kfId?, startX, startT, startScroll }
@@ -7779,8 +7798,18 @@
 
       function tlSetOpen(open) {
         tlOpen = open;
-        document.getElementById('tlBody').style.display = open ? 'flex' : 'none';
+        const footer = document.getElementById('tlFooter');
+        const body = document.getElementById('tlBody');
+        if (open) {
+          body.style.display = 'flex';
+          footer.style.height = tlOpenHeight + 'px';
+        } else {
+          tlOpenHeight = Math.max(60, footer.getBoundingClientRect().height);
+          body.style.display = 'none';
+          footer.style.height = ''; // auto-collapses to just bar + handle
+        }
         document.getElementById('tlToggleBtn').textContent = (open ? '▾' : '▸') + ' Timeline';
+        if (open) tlDraw();
       }
 
       // Continuous redraw loop for smooth playhead
@@ -7815,6 +7844,7 @@
           if (!resizing) return;
           resizing = false;
           handle.classList.remove('dragging');
+          tlOpenHeight = Math.max(60, footer.getBoundingClientRect().height);
         });
       })();
 
@@ -8670,6 +8700,8 @@
       tlBuildLabels();
       tlInitEvents();
       tlRenderLoop();
+      // Set an initial explicit height so the timeline doesn't grow unconstrained
+      document.getElementById('tlFooter').style.height = tlOpenHeight + 'px';
 
       // ── Mobile sidebar toggle ─────────────────────────────────────────────
       (() => {
